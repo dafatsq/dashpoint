@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: dashpoint-db
+    environment:
+      POSTGRES_USER: dashpoint
+      POSTGRES_PASSWORD: dashpoint_dev
+      POSTGRES_DB: dashpoint_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashpoint -d dashpoint_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dashpoint-backend
+    environment:
+      DATABASE_URL: postgres://dashpoint:dashpoint_dev@db:5432/dashpoint_dev?sslmode=disable
+      JWT_SECRET: dev-secret-change-in-production
+      PORT: "8080"
+      ENVIRONMENT: development
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local

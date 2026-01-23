@@ -1,0 +1,559 @@
+package handlers
+
+import (
+	"bytes"
+	"encoding/csv"
+	"fmt"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+
+	"dashpoint/backend/internal/middleware"
+	"dashpoint/backend/internal/repository"
+)
+
+// ReportHandler handles report endpoints
+type ReportHandler struct {
+	reportRepo *repository.ReportRepository
+}
+
+// NewReportHandler creates a new report handler
+func NewReportHandler(reportRepo *repository.ReportRepository) *ReportHandler {
+	return &ReportHandler{reportRepo: reportRepo}
+}
+
+// GetDailySalesReport handles GET /api/v1/reports/daily
+func (h *ReportHandler) GetDailySalesReport(c *fiber.Ctx) error {
+	dateStr := c.Query("date", time.Now().Format("2006-01-02"))
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "INVALID_DATE",
+			"message": "Invalid date format. Use YYYY-MM-DD",
+		})
+	}
+
+	report, err := h.reportRepo.GetDailySalesReport(c.Context(), date)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get daily sales report")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to generate report",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"report": report,
+	})
+}
+
+// GetSalesRangeReport handles GET /api/v1/reports/sales
+func (h *ReportHandler) GetSalesRangeReport(c *fiber.Ctx) error {
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
+
+	if startStr == "" || endStr == "" {
+		// Default to last 7 days
+		endDate := time.Now()
+		startDate := endDate.AddDate(0, 0, -7)
+		startStr = startDate.Format("2006-01-02")
+		endStr = endDate.Format("2006-01-02")
+	}
+
+	startDate, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "INVALID_DATE",
+			"message": "Invalid start_date format. Use YYYY-MM-DD",
+		})
+	}
+
+	endDate, err := time.Parse("2006-01-02", endStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "INVALID_DATE",
+			"message": "Invalid end_date format. Use YYYY-MM-DD",
+		})
+	}
+
+	if endDate.Before(startDate) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "INVALID_RANGE",
+			"message": "end_date must be after start_date",
+		})
+	}
+
+	// Limit range to 90 days
+	if endDate.Sub(startDate) > 90*24*time.Hour {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "RANGE_TOO_LARGE",
+			"message": "Date range cannot exceed 90 days",
+		})
+	}
+
+	reports, err := h.reportRepo.GetSalesRangeReport(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get sales range report")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to generate report",
+		})
+	}
+
+	// Calculate totals
+	var totalSales, totalTax, totalDiscount, totalAmount float64
+	var totalTransactions, totalItems int
+	for _, r := range reports {
+		totalSales += r.TotalSales.InexactFloat64()
+		totalTax += r.TotalTax.InexactFloat64()
+		totalDiscount += r.TotalDiscount.InexactFloat64()
+		totalAmount += r.TotalAmount.InexactFloat64()
+		totalTransactions += r.TransactionCount
+		totalItems += r.ItemCount
+	}
+
+	return c.JSON(fiber.Map{
+		"start_date": startStr,
+		"end_date":   endStr,
+		"summary": fiber.Map{
+			"total_sales":        fmt.Sprintf("%.2f", totalSales),
+			"total_tax":          fmt.Sprintf("%.2f", totalTax),
+			"total_discount":     fmt.Sprintf("%.2f", totalDiscount),
+			"total_amount":       fmt.Sprintf("%.2f", totalAmount),
+			"total_transactions": totalTransactions,
+			"total_items":        totalItems,
+		},
+		"daily_reports": reports,
+	})
+}
+
+// GetTopSellers handles GET /api/v1/reports/top-sellers
+func (h *ReportHandler) GetTopSellers(c *fiber.Ctx) error {
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
+	limit := c.QueryInt("limit", 10)
+
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	var startDate, endDate time.Time
+	var err error
+
+	if startStr == "" || endStr == "" {
+		// Default to last 30 days
+		endDate = time.Now()
+		startDate = endDate.AddDate(0, 0, -30)
+	} else {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid start_date format",
+			})
+		}
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid end_date format",
+			})
+		}
+	}
+
+	items, err := h.reportRepo.GetTopSellers(c.Context(), startDate, endDate, limit)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get top sellers")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to generate report",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"start_date":  startDate.Format("2006-01-02"),
+		"end_date":    endDate.Format("2006-01-02"),
+		"limit":       limit,
+		"top_sellers": items,
+	})
+}
+
+// GetInventoryValuation handles GET /api/v1/reports/inventory
+func (h *ReportHandler) GetInventoryValuation(c *fiber.Ctx) error {
+	includeItems := c.QueryBool("include_items", false)
+
+	var categoryID *uuid.UUID
+	if catIDStr := c.Query("category_id"); catIDStr != "" {
+		id, err := uuid.Parse(catIDStr)
+		if err == nil {
+			categoryID = &id
+		}
+	}
+
+	valuation, err := h.reportRepo.GetInventoryValuation(c.Context(), categoryID, includeItems)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get inventory valuation")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to generate report",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"valuation": valuation,
+	})
+}
+
+// GetCashReport handles GET /api/v1/reports/cash
+func (h *ReportHandler) GetCashReport(c *fiber.Ctx) error {
+	dateStr := c.Query("date", time.Now().Format("2006-01-02"))
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "INVALID_DATE",
+			"message": "Invalid date format",
+		})
+	}
+
+	report, err := h.reportRepo.GetCashReport(c.Context(), date)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get cash report")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to generate report",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"report": report,
+	})
+}
+
+// GetEmployeeSalesReport handles GET /api/v1/reports/by-employee
+func (h *ReportHandler) GetEmployeeSalesReport(c *fiber.Ctx) error {
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
+
+	var startDate, endDate time.Time
+	var err error
+
+	if startStr == "" || endStr == "" {
+		endDate = time.Now()
+		startDate = endDate.AddDate(0, 0, -30)
+	} else {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid start_date format",
+			})
+		}
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid end_date format",
+			})
+		}
+	}
+
+	results, err := h.reportRepo.GetEmployeeSalesReport(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get employee sales report")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to generate report",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"start_date": startDate.Format("2006-01-02"),
+		"end_date":   endDate.Format("2006-01-02"),
+		"employees":  results,
+	})
+}
+
+// GetCategorySalesReport handles GET /api/v1/reports/by-category
+func (h *ReportHandler) GetCategorySalesReport(c *fiber.Ctx) error {
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
+
+	var startDate, endDate time.Time
+	var err error
+
+	if startStr == "" || endStr == "" {
+		endDate = time.Now()
+		startDate = endDate.AddDate(0, 0, -30)
+	} else {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid start_date format",
+			})
+		}
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid end_date format",
+			})
+		}
+	}
+
+	results, err := h.reportRepo.GetCategorySalesReport(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get category sales report")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to generate report",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"start_date": startDate.Format("2006-01-02"),
+		"end_date":   endDate.Format("2006-01-02"),
+		"categories": results,
+	})
+}
+
+// ExportSalesCSV handles GET /api/v1/reports/export/sales
+func (h *ReportHandler) ExportSalesCSV(c *fiber.Ctx) error {
+	// Check permission
+	roleName := middleware.GetRoleName(c)
+	if roleName != "owner" && roleName != "manager" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "Only owner or manager can export data",
+		})
+	}
+
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
+
+	var startDate, endDate time.Time
+	var err error
+
+	if startStr == "" || endStr == "" {
+		endDate = time.Now()
+		startDate = endDate.AddDate(0, 0, -30)
+	} else {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid start_date format",
+			})
+		}
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid end_date format",
+			})
+		}
+	}
+
+	items, err := h.reportRepo.GetSalesForExport(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get sales for export")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
+	// Generate CSV
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+
+	// Header
+	writer.Write([]string{
+		"Invoice No", "Date", "Time", "Employee", "Customer",
+		"Items", "Subtotal", "Tax", "Discount", "Total",
+		"Payment Method", "Status",
+	})
+
+	// Data
+	for _, item := range items {
+		customer := ""
+		if item.CustomerName != nil {
+			customer = *item.CustomerName
+		}
+		writer.Write([]string{
+			item.InvoiceNo,
+			item.Date,
+			item.Time,
+			item.EmployeeName,
+			customer,
+			fmt.Sprintf("%d", item.ItemCount),
+			item.Subtotal.String(),
+			item.Tax.String(),
+			item.Discount.String(),
+			item.Total.String(),
+			item.PaymentMethod,
+			item.Status,
+		})
+	}
+
+	writer.Flush()
+
+	// Set response headers
+	filename := fmt.Sprintf("sales_%s_to_%s.csv", startDate.Format("20060102"), endDate.Format("20060102"))
+	c.Set("Content-Type", "text/csv")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+
+	return c.Send(buf.Bytes())
+}
+
+// ExportInventoryCSV handles GET /api/v1/reports/export/inventory
+func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
+	// Check permission
+	roleName := middleware.GetRoleName(c)
+	if roleName != "owner" && roleName != "manager" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "Only owner or manager can export data",
+		})
+	}
+
+	valuation, err := h.reportRepo.GetInventoryValuation(c.Context(), nil, true)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get inventory for export")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
+	// Generate CSV
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+
+	// Header
+	writer.Write([]string{
+		"Product ID", "Product Name", "SKU", "Category",
+		"Quantity", "Cost Price", "Sell Price", "Cost Value", "Retail Value",
+	})
+
+	// Data
+	for _, item := range valuation.Items {
+		sku := ""
+		if item.ProductSKU != nil {
+			sku = *item.ProductSKU
+		}
+		category := ""
+		if item.CategoryName != nil {
+			category = *item.CategoryName
+		}
+		writer.Write([]string{
+			item.ProductID,
+			item.ProductName,
+			sku,
+			category,
+			item.Quantity.String(),
+			item.CostPrice.String(),
+			item.SellPrice.String(),
+			item.CostValue.String(),
+			item.RetailValue.String(),
+		})
+	}
+
+	// Summary row
+	writer.Write([]string{})
+	writer.Write([]string{
+		"TOTAL", "", "", "",
+		valuation.TotalQuantity.String(),
+		"", "",
+		valuation.TotalCostValue.String(),
+		valuation.TotalRetailValue.String(),
+	})
+
+	writer.Flush()
+
+	// Set response headers
+	filename := fmt.Sprintf("inventory_%s.csv", time.Now().Format("20060102"))
+	c.Set("Content-Type", "text/csv")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+
+	return c.Send(buf.Bytes())
+}
+
+// ExportTopSellersCSV handles GET /api/v1/reports/export/top-sellers
+func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
+	// Check permission
+	roleName := middleware.GetRoleName(c)
+	if roleName != "owner" && roleName != "manager" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "Only owner or manager can export data",
+		})
+	}
+
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
+	limit := c.QueryInt("limit", 50)
+
+	var startDate, endDate time.Time
+	var err error
+
+	if startStr == "" || endStr == "" {
+		endDate = time.Now()
+		startDate = endDate.AddDate(0, 0, -30)
+	} else {
+		startDate, _ = time.Parse("2006-01-02", startStr)
+		endDate, _ = time.Parse("2006-01-02", endStr)
+	}
+
+	items, err := h.reportRepo.GetTopSellers(c.Context(), startDate, endDate, limit)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get top sellers for export")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
+	// Generate CSV
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+
+	// Header
+	writer.Write([]string{
+		"Rank", "Product ID", "Product Name", "SKU", "Category",
+		"Quantity Sold", "Total Revenue", "Total Profit",
+	})
+
+	// Data
+	for i, item := range items {
+		sku := ""
+		if item.ProductSKU != nil {
+			sku = *item.ProductSKU
+		}
+		category := ""
+		if item.CategoryName != nil {
+			category = *item.CategoryName
+		}
+		writer.Write([]string{
+			fmt.Sprintf("%d", i+1),
+			item.ProductID,
+			item.ProductName,
+			sku,
+			category,
+			item.QuantitySold.String(),
+			item.TotalRevenue.String(),
+			item.TotalProfit.String(),
+		})
+	}
+
+	writer.Flush()
+
+	// Set response headers
+	filename := fmt.Sprintf("top_sellers_%s_to_%s.csv", startDate.Format("20060102"), endDate.Format("20060102"))
+	c.Set("Content-Type", "text/csv")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+
+	return c.Send(buf.Bytes())
+}
