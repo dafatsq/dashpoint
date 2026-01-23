@@ -1,0 +1,249 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
+import { AccountManager, SavedAccount } from '@/lib/account-manager';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { User, Shield, ShieldCheck, ShieldAlert, X, AlertCircle, Loader2, KeyRound } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface AccountSwitcherProps {
+  onAccountSelect?: () => void;
+  refreshTrigger?: number;
+}
+
+export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwitcherProps) {
+  const router = useRouter();
+  const { pinLogin } = useAuth();
+  const [accounts, setAccounts] = useState<SavedAccount[]>(AccountManager.getSavedAccounts());
+  const [selectedAccount, setSelectedAccount] = useState<SavedAccount | null>(null);
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    // Refresh accounts when component mounts or refreshTrigger changes
+    setAccounts(AccountManager.getSavedAccounts());
+  }, [refreshTrigger]);
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'owner':
+        return <ShieldAlert className="h-5 w-5 text-purple-500" />;
+      case 'manager':
+        return <ShieldCheck className="h-5 w-5 text-blue-500" />;
+      case 'cashier':
+        return <Shield className="h-5 w-5 text-green-500" />;
+      default:
+        return <User className="h-5 w-5 text-muted-foreground" />;
+    }
+  };
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'owner':
+        return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
+      case 'manager':
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+      case 'cashier':
+        return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+      default:
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300';
+    }
+  };
+
+  const handleAccountClick = (account: SavedAccount) => {
+    if (!account.has_pin) {
+      setError('This account does not have a PIN configured');
+      return;
+    }
+    setSelectedAccount(account);
+    setPin('');
+    setError('');
+  };
+
+  const handlePinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAccount) return;
+
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      const result = await pinLogin(selectedAccount.id, pin);
+      
+      if (result.success) {
+        setSelectedAccount(null);
+        setPin('');
+        onAccountSelect?.();
+        router.push('/dashboard');
+      } else {
+        setError(result.error || 'Invalid PIN');
+      }
+    } catch {
+      setError('An unexpected error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRemoveAccount = (accountId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    AccountManager.removeAccount(accountId);
+    setAccounts(AccountManager.getSavedAccounts());
+  };
+
+  if (accounts.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+          <User className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <h3 className="text-lg font-medium mb-2">No Saved Accounts</h3>
+        <p className="text-sm text-muted-foreground mb-6">
+          Accounts with PIN will be saved here for quick switching
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold">Saved Accounts</h3>
+            <p className="text-sm text-muted-foreground">
+              Select an account and enter your PIN
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3">
+          {accounts.map((account) => (
+            <Card
+              key={account.id}
+              className="cursor-pointer hover:bg-accent transition-colors"
+              onClick={() => handleAccountClick(account)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                      {getRoleIcon(account.role_name)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium">{account.name}</h4>
+                        <span className={cn(
+                          'px-2 py-0.5 rounded-full text-xs font-medium capitalize',
+                          getRoleBadgeColor(account.role_name)
+                        )}>
+                          {account.role_name}
+                        </span>
+                      </div>
+                      {account.email && (
+                        <p className="text-sm text-muted-foreground">{account.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {account.has_pin && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <KeyRound className="h-3 w-3" />
+                        <span>PIN</span>
+                      </div>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => handleRemoveAccount(account.id, e)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* PIN Dialog */}
+      <Dialog open={!!selectedAccount} onOpenChange={(open) => !open && setSelectedAccount(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter PIN</DialogTitle>
+            <DialogDescription>
+              Enter your PIN to access {selectedAccount?.name}&apos;s account
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handlePinSubmit} className="space-y-4 mt-4" autoComplete="off">
+            <input type="text" name="username" autoComplete="username" style={{ display: 'none' }} />
+            
+            {error && (
+              <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Input
+                type="password"
+                name="pin-entry"
+                placeholder="Enter your PIN"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                onFocus={(e) => e.target.removeAttribute('readonly')}
+                readOnly
+                required
+                disabled={isSubmitting}
+                autoFocus
+                maxLength={6}
+                pattern="\d*"
+                inputMode="numeric"
+                autoComplete="new-password"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setSelectedAccount(null)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={isSubmitting || !pin}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
