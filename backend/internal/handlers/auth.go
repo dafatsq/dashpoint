@@ -68,6 +68,8 @@ type UserResponse struct {
 	IsActive    bool     `json:"is_active"`
 	HasPIN      bool     `json:"has_pin"`
 	Permissions []string `json:"permissions"`
+	CreatedAt   string   `json:"created_at,omitempty"`
+	UpdatedAt   string   `json:"updated_at,omitempty"`
 }
 
 // Login handles POST /api/v1/auth/login
@@ -351,6 +353,8 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 			IsActive:    user.IsActive,
 			HasPIN:      user.PINHash != nil,
 			Permissions: permissions,
+			CreatedAt:   user.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:   user.UpdatedAt.Format(time.RFC3339),
 		},
 	})
 }

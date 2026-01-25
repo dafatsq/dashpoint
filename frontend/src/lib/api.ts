@@ -90,7 +90,7 @@ class ApiClient {
     localStorage.removeItem('user');
   }
 
-  private async refreshAccessToken(): Promise<boolean> {
+  async refreshTokens(): Promise<boolean> {
     const refreshToken = this.getRefreshToken();
     if (!refreshToken) return false;
 
@@ -108,11 +108,35 @@ class ApiClient {
 
       const data = await response.json();
       this.setTokens(data.access_token, data.refresh_token);
+      
+      // Also update user data in localStorage if returned
+      // The backend returns updated user info with new role/permissions
+      if (data.user) {
+        console.log('[API] Updating user data from refresh response:', data.user.role_name);
+        const userData = {
+          id: data.user.id,
+          email: data.user.email || undefined,
+          name: data.user.name,
+          role_id: data.user.role_id,
+          role_name: data.user.role_name,
+          is_active: data.user.is_active,
+          has_pin: data.user.has_pin || false,
+          permissions: data.user.permissions || [],
+          created_at: data.user.created_at || '',
+          updated_at: data.user.updated_at || '',
+        };
+        localStorage.setItem('user', JSON.stringify(userData));
+      }
+      
       return true;
     } catch {
       this.clearTokens();
       return false;
     }
+  }
+
+  private async refreshAccessToken(): Promise<boolean> {
+    return this.refreshTokens();
   }
 
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {

@@ -1,17 +1,20 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
 import { User } from '@/types';
 import api from '@/lib/api';
 import { AccountManager } from '@/lib/account-manager';
+import { useUserEvents, UserEvent } from '@/hooks/useUserEvents';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isRealtimeConnected: boolean;
   login: (email: string, password: string, saveAccount?: boolean) => Promise<{ success: boolean; error?: string }>;
   pinLogin: (userId: string, pin: string) => Promise<{ success: boolean; error?: string }>;
   logout: (removeFromSaved?: boolean) => Promise<void>;
+  refreshUser: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
   hasAllPermissions: (permissions: string[]) => boolean;
@@ -26,6 +29,153 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isRefreshingRef = useRef(false);
+  const lastProcessedEventRef = useRef<string | null>(null);
+
+  // Refresh user data from server and optionally redirect on role change
+  const refreshUser = useCallback(async (options?: { checkRoleChange?: boolean; previousRole?: string }) => {
+    if (isRefreshingRef.current) return;
+    isRefreshingRef.current = true;
+
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        isRefreshingRef.current = false;
+        return;
+      }
+
+      const result = await api.getMe();
+      if (result.data) {
+        const userData: User = {
+          id: result.data.id,
+          email: result.data.email || undefined,
+          name: result.data.name,
+          role_id: result.data.role_id || '',
+          role_name: result.data.role_name as User['role_name'],
+          is_active: result.data.is_active,
+          has_pin: result.data.has_pin || false,
+          permissions: result.data.permissions || [],
+          created_at: result.data.created_at || '',
+          updated_at: result.data.updated_at || '',
+        };
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+
+        // Update saved account info if has PIN
+        if (userData.has_pin) {
+          AccountManager.saveAccount({
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            role_name: userData.role_name,
+            has_pin: userData.has_pin,
+          });
+        }
+
+        // Check if role changed and redirect to dashboard if needed
+        if (options?.checkRoleChange && options.previousRole && options.previousRole !== userData.role_name) {
+          console.log('[Auth] Role changed from', options.previousRole, 'to', userData.role_name);
+          // Redirect to dashboard to ensure user is on an accessible page
+          if (typeof window !== 'undefined' && window.location.pathname !== '/dashboard') {
+            console.log('[Auth] Redirecting to dashboard due to role change');
+            window.location.href = '/dashboard';
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  }, []);
+
+  // Handle user events from SSE
+  const handleUserEvent = useCallback(async (event: UserEvent) => {
+    console.log('[Auth] Received SSE event:', event.type, 'for user:', event.user_id, 'current user:', user?.id);
+    
+    // Only process events for the current user
+    if (!user || event.user_id !== user.id) {
+      console.log('[Auth] Ignoring event - not for current user');
+      return;
+    }
+
+    // Deduplicate events - the backend may send the same event multiple times for reliability
+    // Use a combination of event type and timestamp to identify duplicates
+    const eventKey = `${event.type}-${event.timestamp}`;
+    if (lastProcessedEventRef.current === eventKey) {
+      console.log('[Auth] Ignoring duplicate event:', eventKey);
+      return;
+    }
+    lastProcessedEventRef.current = eventKey;
+
+    console.log('[Auth] Processing event:', event.type);
+    const previousRole = user.role_name;
+
+    switch (event.type) {
+      case 'role_changed':
+        // Role changed - refresh tokens to get new JWT with updated role
+        console.log('[Auth] Role changed, refreshing tokens to get new permissions');
+        const tokenRefreshed = await api.refreshTokens();
+        if (tokenRefreshed) {
+          console.log('[Auth] Tokens refreshed successfully, forcing full page reload');
+          // Force a full page reload to ensure all components fetch fresh data with new token
+          // This is necessary because the old token is cached in memory by various components
+          if (typeof window !== 'undefined') {
+            window.location.href = '/dashboard?role_updated=true';
+          }
+        } else {
+          console.error('[Auth] Failed to refresh tokens after role change, forcing re-login');
+          // Force re-login if token refresh fails
+          api.clearTokens();
+          localStorage.removeItem('user');
+          setUser(null);
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login?message=role_changed_relogin';
+          }
+        }
+        break;
+
+      case 'user_updated':
+      case 'permissions_changed':
+      case 'user_activated':
+        // Refresh user data to get the latest changes
+        console.log('[Auth] Refreshing user data due to:', event.type);
+        await refreshUser();
+        break;
+
+      case 'user_deactivated':
+      case 'user_deleted':
+      case 'force_logout':
+        // Force logout the user
+        api.clearTokens();
+        localStorage.removeItem('user');
+        setUser(null);
+        // Redirect to login with a message
+        if (typeof window !== 'undefined') {
+          const message = event.type === 'user_deactivated' 
+            ? 'account_deactivated' 
+            : event.type === 'user_deleted' 
+              ? 'account_deleted' 
+              : 'force_logout';
+          window.location.href = `/login?message=${message}`;
+        }
+        break;
+    }
+  }, [user, refreshUser]);
+
+  // Subscribe to real-time user events
+  const { isConnected: isRealtimeConnected } = useUserEvents({
+    onAnyEvent: handleUserEvent,
+    onConnected: () => {
+      console.log('[Auth] SSE connected for real-time updates');
+    },
+    onDisconnected: () => {
+      console.log('[Auth] SSE disconnected');
+    },
+    // Note: SSE "errors" are often just normal disconnects/reconnects
+    // The actual error handling happens inside useUserEvents
+    enabled: !!user,
+  });
 
   // Check for existing session on mount
   useEffect(() => {
@@ -176,9 +326,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     isLoading,
     isAuthenticated: !!user,
+    isRealtimeConnected,
     login,
     pinLogin,
     logout,
+    refreshUser,
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,

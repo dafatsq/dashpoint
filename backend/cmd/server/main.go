@@ -74,7 +74,9 @@ func main() {
 	// Create handlers
 	healthHandler := handlers.NewHealthHandler(db)
 	authHandler := handlers.NewAuthHandler(userRepo, refreshTokenRepo, jwtManager)
+	eventsHandler := handlers.NewEventsHandler(jwtManager)
 	userHandler := handlers.NewUserHandler(userRepo, roleRepo, permissionRepo)
+	userHandler.SetEventsHandler(eventsHandler) // Enable real-time user updates
 	roleHandler := handlers.NewRoleHandler(roleRepo, permissionRepo)
 	productHandler := handlers.NewProductHandler(productRepo, inventoryRepo, categoryRepo)
 	categoryHandler := handlers.NewCategoryHandler(categoryRepo)
@@ -89,7 +91,7 @@ func main() {
 		AppName:      "DashPoint POS API",
 		ErrorHandler: errorHandler,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 0, // Disable write timeout for SSE long-polling connections
 		IdleTimeout:  120 * time.Second,
 	})
 
@@ -100,7 +102,7 @@ func main() {
 	app.Use(middleware.RequestID())
 
 	// Setup routes
-	setupRoutes(app, jwtManager, userRepo, healthHandler, authHandler, userHandler, roleHandler, productHandler, categoryHandler, shiftHandler, saleHandler, reportHandler, auditHandler, expenseHandler)
+	setupRoutes(app, jwtManager, userRepo, healthHandler, authHandler, userHandler, roleHandler, productHandler, categoryHandler, shiftHandler, saleHandler, reportHandler, auditHandler, expenseHandler, eventsHandler)
 
 	// Start server in goroutine
 	go func() {
@@ -157,6 +159,7 @@ func setupRoutes(
 	reportHandler *handlers.ReportHandler,
 	auditHandler *handlers.AuditHandler,
 	expenseHandler *handlers.ExpenseHandler,
+	eventsHandler *handlers.EventsHandler,
 ) {
 	// Root endpoint
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -181,27 +184,16 @@ func setupRoutes(
 	authGroup.Post("/refresh", authHandler.Refresh)
 	authGroup.Post("/logout", authHandler.Logout)
 
+	// SSE events endpoint (token passed via query param for EventSource compatibility)
+	api.Get("/events/subscribe", eventsHandler.Subscribe)
+
 	// Protected routes group
 	protected := api.Group("")
 	protected.Use(middleware.AuthMiddleware(jwtManager, userRepo))
 
 	// Current user endpoint
-	protected.Get("/me", func(c *fiber.Ctx) error {
-		claims := middleware.GetClaims(c)
-		if claims == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"code":    "UNAUTHORIZED",
-				"message": "Authentication required",
-			})
-		}
-
-		return c.JSON(fiber.Map{
-			"user_id":   claims.UserID,
-			"email":     claims.Email,
-			"role_id":   claims.RoleID,
-			"role_name": claims.RoleName,
-		})
-	})
+	// Current user endpoint (returns full user profile with permissions)
+	protected.Get("/me", authHandler.Me)
 
 	// Roles and Permissions endpoints
 	protected.Get("/roles", roleHandler.ListRoles)

@@ -3,6 +3,7 @@ package handlers
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -28,6 +29,7 @@ type UserHandler struct {
 	userRepo       *repository.UserRepository
 	roleRepo       *repository.RoleRepository
 	permissionRepo *repository.PermissionRepository
+	eventsHandler  *EventsHandler
 }
 
 // NewUserHandler creates a new user handler
@@ -41,6 +43,53 @@ func NewUserHandler(
 		roleRepo:       roleRepo,
 		permissionRepo: permissionRepo,
 	}
+}
+
+// SetEventsHandler sets the events handler for broadcasting user updates
+func (h *UserHandler) SetEventsHandler(eventsHandler *EventsHandler) {
+	h.eventsHandler = eventsHandler
+}
+
+// broadcastUserEvent broadcasts a user event if events handler is configured
+// It sends the event multiple times with delays to ensure delivery even if the client
+// is temporarily disconnected/reconnecting
+func (h *UserHandler) broadcastUserEvent(userID uuid.UUID, eventType UserEventType, changedBy uuid.UUID, details interface{}) {
+	if h.eventsHandler == nil {
+		log.Warn().Msg("Events handler not configured, cannot broadcast user event")
+		return
+	}
+
+	log.Info().
+		Str("user_id", userID.String()).
+		Str("event_type", string(eventType)).
+		Str("changed_by", changedBy.String()).
+		Msg("Broadcasting user event")
+
+	event := UserEvent{
+		Type:      eventType,
+		UserID:    userID.String(),
+		ChangedBy: changedBy.String(),
+		Timestamp: time.Now(),
+		Details:   details,
+	}
+
+	// Send immediately
+	h.eventsHandler.BroadcastToUser(userID, event)
+
+	// Also send with delays to catch reconnecting clients
+	// This runs in a goroutine so it doesn't block the response
+	go func() {
+		delays := []time.Duration{500 * time.Millisecond, 1500 * time.Millisecond, 3000 * time.Millisecond}
+		for i, delay := range delays {
+			time.Sleep(delay)
+			log.Debug().
+				Str("user_id", userID.String()).
+				Str("event_type", string(eventType)).
+				Int("retry", i+1).
+				Msg("Retry broadcasting user event")
+			h.eventsHandler.BroadcastToUser(userID, event)
+		}
+	}()
 }
 
 // UserListResponse represents a paginated list of users
@@ -476,6 +525,30 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 		})
 	}
 
+	// Broadcast user update event
+	currentUserID := middleware.GetUserID(c)
+	if req.RoleID != nil {
+		// Role was changed
+		h.broadcastUserEvent(id, EventRoleChanged, currentUserID, map[string]interface{}{
+			"new_role_id":   *req.RoleID,
+			"new_role_name": updatedUser.Role.Name,
+		})
+	} else if req.IsActive != nil {
+		// Active status was changed
+		if *req.IsActive {
+			h.broadcastUserEvent(id, EventUserActivated, currentUserID, nil)
+		} else {
+			h.broadcastUserEvent(id, EventUserDeactivated, currentUserID, nil)
+			// Also disconnect the user if deactivated
+			if h.eventsHandler != nil {
+				h.eventsHandler.DisconnectUser(id)
+			}
+		}
+	} else {
+		// General update (name, email, etc.)
+		h.broadcastUserEvent(id, EventUserUpdated, currentUserID, nil)
+	}
+
 	return c.JSON(fiber.Map{
 		"message": "User updated successfully",
 		"user":    h.toUserDetailResponse(updatedUser),
@@ -643,6 +716,11 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 	permissions, _ := h.userRepo.GetUserPermissions(c.Context(), id)
 	overrides, _ := h.userRepo.GetUserPermissionOverrides(c.Context(), id)
 
+	// Broadcast permissions changed event
+	h.broadcastUserEvent(id, EventPermissionsChanged, grantedBy, map[string]interface{}{
+		"permissions": permissions,
+	})
+
 	return c.JSON(fiber.Map{
 		"message":               "Permissions updated successfully",
 		"effective_permissions": permissions,
@@ -679,9 +757,11 @@ func (h *UserHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
-	// Revoke all active sessions for the user
-	// Note: refreshTokenRepo is not available in this handler, this should be done in a service layer
-	// For now, the auth middleware will catch inactive users on their next request
+	// Broadcast deactivation event and disconnect the user
+	h.broadcastUserEvent(id, EventUserDeactivated, currentUserID, nil)
+	if h.eventsHandler != nil {
+		h.eventsHandler.DisconnectUser(id)
+	}
 
 	return c.JSON(fiber.Map{
 		"message": "User deactivated successfully",
@@ -731,6 +811,12 @@ func (h *UserHandler) PermanentDelete(c *fiber.Ctx) error {
 			"code":    "INTERNAL_ERROR",
 			"message": "Failed to permanently delete user",
 		})
+	}
+
+	// Broadcast delete event and disconnect the user
+	h.broadcastUserEvent(id, EventUserDeleted, currentUserID, nil)
+	if h.eventsHandler != nil {
+		h.eventsHandler.DisconnectUser(id)
 	}
 
 	return c.JSON(fiber.Map{
