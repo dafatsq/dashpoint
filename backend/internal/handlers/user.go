@@ -51,8 +51,6 @@ func (h *UserHandler) SetEventsHandler(eventsHandler *EventsHandler) {
 }
 
 // broadcastUserEvent broadcasts a user event if events handler is configured
-// It sends the event multiple times with delays to ensure delivery even if the client
-// is temporarily disconnected/reconnecting
 func (h *UserHandler) broadcastUserEvent(userID uuid.UUID, eventType UserEventType, changedBy uuid.UUID, details interface{}) {
 	if h.eventsHandler == nil {
 		log.Warn().Msg("Events handler not configured, cannot broadcast user event")
@@ -73,23 +71,8 @@ func (h *UserHandler) broadcastUserEvent(userID uuid.UUID, eventType UserEventTy
 		Details:   details,
 	}
 
-	// Send immediately
+	// Send the event once - the frontend handles deduplication via localStorage
 	h.eventsHandler.BroadcastToUser(userID, event)
-
-	// Also send with delays to catch reconnecting clients
-	// This runs in a goroutine so it doesn't block the response
-	go func() {
-		delays := []time.Duration{500 * time.Millisecond, 1500 * time.Millisecond, 3000 * time.Millisecond}
-		for i, delay := range delays {
-			time.Sleep(delay)
-			log.Debug().
-				Str("user_id", userID.String()).
-				Str("event_type", string(eventType)).
-				Int("retry", i+1).
-				Msg("Retry broadcasting user event")
-			h.eventsHandler.BroadcastToUser(userID, event)
-		}
-	}()
 }
 
 // UserListResponse represents a paginated list of users
