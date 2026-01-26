@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Sidebar } from '@/components/layout/sidebar';
+import { RouteGuard } from '@/components/route-guard';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -36,7 +37,7 @@ export default function DashboardLayout({
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <main className="flex-1 overflow-y-auto bg-muted/30">
-        {children}
+        <RouteGuard>{children}</RouteGuard>
       </main>
     </div>
   );
