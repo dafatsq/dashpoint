@@ -30,7 +30,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isRefreshingRef = useRef(false);
-  const lastProcessedEventRef = useRef<string | null>(null);
+  const isProcessingEventRef = useRef(false);
 
   // Refresh user data from server and optionally redirect on role change
   const refreshUser = useCallback(async (options?: { checkRoleChange?: boolean; previousRole?: string }) => {
@@ -91,25 +91,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Handle user events from SSE
   const handleUserEvent = useCallback(async (event: UserEvent) => {
-    console.log('[Auth] Received SSE event:', event.type, 'for user:', event.user_id, 'current user:', user?.id);
+    console.log('[Auth] Received SSE event:', event.type, 'for user:', event.user_id);
     
-    // Only process events for the current user
-    if (!user || event.user_id !== user.id) {
+    // Prevent processing multiple events at once (e.g., from multiple tabs)
+    if (isProcessingEventRef.current) {
+      console.log('[Auth] Already processing an event, skipping');
+      return;
+    }
+
+    // Get current user from localStorage since the closure might have stale data
+    const storedUser = localStorage.getItem('user');
+    if (!storedUser) {
+      console.log('[Auth] No user in localStorage, ignoring event');
+      return;
+    }
+    
+    const currentUser = JSON.parse(storedUser);
+    if (event.user_id !== currentUser.id) {
       console.log('[Auth] Ignoring event - not for current user');
       return;
     }
 
-    // Deduplicate events - the backend may send the same event multiple times for reliability
-    // Use a combination of event type and timestamp to identify duplicates
-    const eventKey = `${event.type}-${event.timestamp}`;
-    if (lastProcessedEventRef.current === eventKey) {
-      console.log('[Auth] Ignoring duplicate event:', eventKey);
-      return;
-    }
-    lastProcessedEventRef.current = eventKey;
-
+    isProcessingEventRef.current = true;
     console.log('[Auth] Processing event:', event.type);
-    const previousRole = user.role_name;
+    const previousRole = currentUser.role_name;
 
     switch (event.type) {
       case 'role_changed':
@@ -141,6 +146,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Refresh user data to get the latest changes
         console.log('[Auth] Refreshing user data due to:', event.type);
         await refreshUser();
+        isProcessingEventRef.current = false;
         break;
 
       case 'user_deactivated':
@@ -160,8 +166,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           window.location.href = `/login?message=${message}`;
         }
         break;
+
+      default:
+        isProcessingEventRef.current = false;
     }
-  }, [user, refreshUser]);
+  }, [refreshUser]);
 
   // Subscribe to real-time user events
   const { isConnected: isRealtimeConnected } = useUserEvents({
