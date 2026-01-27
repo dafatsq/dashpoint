@@ -79,3 +79,9 @@ temp/
 credentials.json
 secrets.json
 service-account.json
+
+# Skills
+.agents/
+.agent/
+.github/
+.opencode/
