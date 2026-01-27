@@ -40,12 +40,13 @@ const ADJUSTMENT_TYPES = {
   add: [
     { value: 'purchase', label: 'Restock / Purchase' },
     { value: 'adjustment', label: 'Inventory Correction' },
-    { value: 'count', label: 'Stock Count' },
   ],
   remove: [
     { value: 'damage', label: 'Damaged / Expired' },
     { value: 'loss', label: 'Lost / Stolen' },
     { value: 'adjustment', label: 'Inventory Correction' },
+  ],
+  count: [
     { value: 'count', label: 'Stock Count' },
   ],
 };
@@ -125,11 +126,13 @@ export default function InventoryPage() {
   );
 
   // Open adjustment dialog
-  const openAdjustDialog = (product: Product, type: 'add' | 'remove') => {
+  const openAdjustDialog = (product: Product, type: 'add' | 'remove' | 'count') => {
     setSelectedProduct(product);
     setAdjustmentType(type);
     setAdjustmentQuantity('');
-    setAdjustmentTypeValue(type === 'add' ? 'purchase' : 'damage');
+    setAdjustmentTypeValue(
+      type === 'add' ? 'purchase' : type === 'remove' ? 'damage' : 'count'
+    );
     setAdjustmentNotes('');
     setAdjustDialogOpen(true);
   };
@@ -148,18 +151,61 @@ export default function InventoryPage() {
   const handleAdjustment = async () => {
     if (!selectedProduct || !adjustmentQuantity) return;
 
-    setIsSubmitting(true);
-
-    const quantity = parseInt(adjustmentQuantity);
+    const inputQuantity = parseInt(adjustmentQuantity);
+    const currentStock = getProductQuantity(selectedProduct);
     
-    // Backend expects positive quantity for purchase/adjustment/count
-    // and will auto-negate for damage/loss
+    console.log('[Adjustment Debug]', {
+      adjustmentType,
+      adjustmentTypeValue,
+      inputQuantity,
+      currentStock,
+    });
+    
+    let finalQuantity: number;
+    
+    if (adjustmentTypeValue === 'count') {
+      // Stock count: input is the ABSOLUTE final quantity desired
+      // User enters what they want the stock to BE, not how much to add/remove
+      finalQuantity = inputQuantity;
+      console.log('[Adjustment] Count type - setting to absolute quantity:', finalQuantity);
+      
+      // Validate that the new quantity is not negative
+      if (finalQuantity < 0) {
+        alert('Stock quantity cannot be negative');
+        return;
+      }
+    } else if (adjustmentTypeValue === 'adjustment') {
+      // Inventory correction: send negative for remove, positive for add
+      finalQuantity = adjustmentType === 'remove' ? -inputQuantity : inputQuantity;
+      console.log('[Adjustment] Adjustment type - delta:', finalQuantity);
+      
+      // Validate that we won't go negative
+      if (currentStock + finalQuantity < 0) {
+        alert(`Cannot remove ${inputQuantity} items. Only ${currentStock} available.`);
+        return;
+      }
+    } else {
+      // damage, loss, purchase: send positive (backend handles negation for damage/loss)
+      finalQuantity = inputQuantity;
+      console.log('[Adjustment] Other type - quantity:', finalQuantity);
+      
+      // For damage/loss, validate we have enough stock
+      if ((adjustmentTypeValue === 'damage' || adjustmentTypeValue === 'loss') && finalQuantity > currentStock) {
+        alert(`Cannot remove ${inputQuantity} items. Only ${currentStock} available.`);
+        return;
+      }
+    }
+    
     const adjustment = {
       product_id: selectedProduct.id,
       adjustment_type: adjustmentTypeValue,
-      quantity: quantity.toString(),
+      quantity: finalQuantity.toString(),
       reason: adjustmentNotes || undefined,
     };
+    
+    console.log('[Adjustment] Sending:', adjustment);
+
+    setIsSubmitting(true);
 
     try {
       const result = await api.adjustInventory(adjustment);
@@ -388,12 +434,12 @@ export default function InventoryPage() {
                           </td>
                           <td className="py-3 text-center">
                             <span
-                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                                 isOutOfStock
-                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                  ? 'bg-red-600 text-white dark:bg-red-600/90 dark:text-white'
                                   : isLowStock
-                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                  : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                  ? 'bg-yellow-600 text-white dark:bg-yellow-600/90 dark:text-white'
+                                  : 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
                               }`}
                             >
                               {isOutOfStock ? 'Out of Stock' : isLowStock ? 'Low Stock' : 'In Stock'}
@@ -417,6 +463,16 @@ export default function InventoryPage() {
                                 >
                                   <Minus className="h-3 w-3" />
                                 </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openAdjustDialog(product, 'count')}
+                                  title="Stock Count"
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                  </svg>
+                                </Button>
                               </div>
                             </td>
                           )}
@@ -436,17 +492,26 @@ export default function InventoryPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {adjustmentType === 'add' ? 'Add Stock' : 'Remove Stock'}
+              {adjustmentType === 'add' ? 'Add Stock' : adjustmentType === 'remove' ? 'Remove Stock' : 'Stock Count'}
             </DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-2">
                 <div>
                   {selectedProduct?.name} - Current stock: {selectedProduct ? getProductQuantity(selectedProduct) : 0}
                 </div>
-                <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-500 text-xs">
-                  <AlertTriangle className="h-3 w-3" />
-                  <span>Stock updates in real-time. Current value may change if others adjust inventory.</span>
-                </div>
+                {adjustmentType === 'count' ? (
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Enter the exact quantity counted. This will update inventory to match your physical count.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-500 text-xs">
+                    <AlertTriangle className="h-3 w-3" />
+                    <span>Stock updates in real-time. Current value may change if others adjust inventory.</span>
+                  </div>
+                )}
               </div>
             </DialogDescription>
           </DialogHeader>
@@ -464,24 +529,26 @@ export default function InventoryPage() {
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="adjustmentType">Adjustment Type</Label>
-              <Select 
-                value={adjustmentTypeValue} 
-                onValueChange={(value: AdjustmentType) => setAdjustmentTypeValue(value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ADJUSTMENT_TYPES[adjustmentType].map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {adjustmentType !== 'count' && (
+              <div className="grid gap-2">
+                <Label htmlFor="adjustmentType">Adjustment Type</Label>
+                <Select 
+                  value={adjustmentTypeValue} 
+                  onValueChange={(value: AdjustmentType) => setAdjustmentTypeValue(value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ADJUSTMENT_TYPES[adjustmentType].map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="grid gap-2">
               <Label htmlFor="notes">Notes (optional)</Label>
@@ -496,13 +563,25 @@ export default function InventoryPage() {
             {adjustmentQuantity && (
               <div className="rounded-lg bg-muted p-3">
                 <p className="text-sm">
-                  New stock level:{' '}
-                  <span className="font-bold">
-                    {selectedProduct
-                      ? getProductQuantity(selectedProduct) +
-                        (adjustmentType === 'add' ? 1 : -1) * parseInt(adjustmentQuantity || '0')
-                      : 0}
-                  </span>
+                  {adjustmentTypeValue === 'count' ? (
+                    <>
+                      Setting stock to:{' '}
+                      <span className="font-bold">{parseInt(adjustmentQuantity || '0')}</span>
+                      <span className="text-muted-foreground ml-2">
+                        (Current: {selectedProduct ? getProductQuantity(selectedProduct) : 0})
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      New stock level:{' '}
+                      <span className="font-bold">
+                        {selectedProduct
+                          ? getProductQuantity(selectedProduct) +
+                            (adjustmentType === 'add' ? 1 : -1) * parseInt(adjustmentQuantity || '0')
+                          : 0}
+                      </span>
+                    </>
+                  )}
                 </p>
               </div>
             )}
@@ -524,8 +603,10 @@ export default function InventoryPage() {
                 </>
               ) : adjustmentType === 'add' ? (
                 'Add Stock'
-              ) : (
+              ) : adjustmentType === 'remove' ? (
                 'Remove Stock'
+              ) : (
+                'Update Count'
               )}
             </Button>
           </DialogFooter>

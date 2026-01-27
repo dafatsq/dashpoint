@@ -460,7 +460,7 @@ export default function ExpensesPage() {
                           </div>
                         </td>
                         <td className="py-3 text-sm">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-600 text-white dark:bg-blue-600/90 dark:text-white">
                             {expense.category_name || 'Uncategorized'}
                           </span>
                         </td>

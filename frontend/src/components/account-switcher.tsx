@@ -46,13 +46,13 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'owner':
-        return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
+        return 'bg-purple-600 text-white dark:bg-purple-600/90 dark:text-white';
       case 'manager':
-        return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+        return 'bg-blue-600 text-white dark:bg-blue-600/90 dark:text-white';
       case 'cashier':
-        return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+        return 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white';
       default:
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300';
+        return 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white';
     }
   };
 
