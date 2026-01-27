@@ -122,20 +122,20 @@ export default function AuditLogsPage() {
   const getActionBadgeColor = (action: string) => {
     if (action.includes('login')) {
       return action.includes('failed')
-        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+        ? 'bg-red-600 text-white dark:bg-red-600/90 dark:text-white'
+        : 'bg-blue-600 text-white dark:bg-blue-600/90 dark:text-white';
     }
     switch (action) {
       case 'create':
-        return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+        return 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white';
       case 'update':
-        return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+        return 'bg-yellow-600 text-white dark:bg-yellow-600/90 dark:text-white';
       case 'delete':
-        return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+        return 'bg-red-600 text-white dark:bg-red-600/90 dark:text-white';
       case 'void':
-        return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400';
+        return 'bg-orange-600 text-white dark:bg-orange-600/90 dark:text-white';
       default:
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400';
+        return 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white';
     }
   };
 

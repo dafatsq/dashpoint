@@ -284,11 +284,11 @@ export default function UsersPage() {
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
       case 'owner':
-        return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
+        return 'bg-purple-600 text-white dark:bg-purple-600/90 dark:text-white';
       case 'manager':
-        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+        return 'bg-blue-600 text-white dark:bg-blue-600/90 dark:text-white';
       case 'cashier':
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400';
+        return 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white';
     }
   };
 
@@ -416,8 +416,8 @@ export default function UsersPage() {
                           <span
                             className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                               user.has_pin
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
                             }`}
                           >
                             {user.has_pin ? 'Yes' : 'No'}
@@ -427,8 +427,8 @@ export default function UsersPage() {
                           <span
                             className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                               user.is_active
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
                             }`}
                           >
                             {user.is_active ? 'Active' : 'Archived'}
