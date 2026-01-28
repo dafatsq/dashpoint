@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/auth"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
@@ -122,6 +123,7 @@ type UpdateUserRequest struct {
 	RoleID   *string `json:"role_id"`
 	IsActive *bool   `json:"is_active"`
 	PIN      *string `json:"pin"`
+	Password *string `json:"password"`
 }
 
 // UpdatePasswordRequest represents the request to update a password
@@ -364,6 +366,18 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 		user = createdUser
 	}
 
+	// Audit log with new values
+	newValues := map[string]interface{}{
+		"name": user.Name,
+	}
+	if user.Role != nil {
+		newValues["role"] = user.Role.Name
+	}
+	if user.Email != nil {
+		newValues["email"] = *user.Email
+	}
+	audit.LogWithValues(c, models.AuditActionUserCreate, models.AuditEntityUser, user.ID.String(), "Created user: "+user.Name, nil, newValues)
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "User created successfully",
 		"user":    h.toUserDetailResponse(user),
@@ -395,6 +409,19 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 			"code":    "NOT_FOUND",
 			"message": "User not found",
 		})
+	}
+
+	// Capture old values for audit (include affected user name at top)
+	oldValues := map[string]interface{}{
+		"affected_user": user.Name,
+		"name":          user.Name,
+		"is_active":     user.IsActive,
+	}
+	if user.Role != nil {
+		oldValues["role"] = user.Role.Name
+	}
+	if user.Email != nil {
+		oldValues["email"] = *user.Email
 	}
 
 	var req UpdateUserRequest
@@ -465,6 +492,25 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 		user.IsActive = *req.IsActive
 	}
 
+	// Handle Password update if provided
+	if req.Password != nil && *req.Password != "" {
+		hash, err := auth.HashPassword(*req.Password)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to hash password")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to process password",
+			})
+		}
+		if err := h.userRepo.UpdatePassword(c.Context(), id, hash); err != nil {
+			log.Error().Err(err).Msg("Failed to update password")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to update password",
+			})
+		}
+	}
+
 	// Handle PIN update if provided
 	if req.PIN != nil {
 		var pinHash *string
@@ -496,6 +542,37 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 			"message": "Failed to update user",
 		})
 	}
+
+	// Fetch updated user with Role join for audit
+	updatedForAudit, _ := h.userRepo.GetByID(c.Context(), id)
+
+	// Audit log with old and new values
+	newValues := map[string]interface{}{
+		"affected_user": user.Name,
+		"name":          user.Name,
+		"is_active":     user.IsActive,
+	}
+	if updatedForAudit != nil && updatedForAudit.Role != nil {
+		newValues["role"] = updatedForAudit.Role.Name
+	}
+	if user.Email != nil {
+		newValues["email"] = *user.Email
+	}
+	// Track PIN change (don't log actual value for security)
+	if req.PIN != nil {
+		oldValues["pin"] = "[set]"
+		if *req.PIN == "" {
+			newValues["pin"] = "[removed]"
+		} else {
+			newValues["pin"] = "[changed]"
+		}
+	}
+	// Track Password change (don't log actual value for security)
+	if req.Password != nil && *req.Password != "" {
+		oldValues["password"] = "[set]"
+		newValues["password"] = "[changed]"
+	}
+	audit.LogWithValues(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(), "Updated user: "+user.Name, oldValues, newValues)
 
 	// Fetch updated user with Role join
 	updatedUser, err := h.userRepo.GetByID(c.Context(), id)
@@ -582,6 +659,18 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get user name for audit
+	user, _ := h.userRepo.GetByID(c.Context(), id)
+	userName := "Unknown"
+	if user != nil {
+		userName = user.Name
+	}
+
+	// Audit log (don't log actual password for security)
+	audit.LogWithValues(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(), "Updated password for: "+userName,
+		map[string]interface{}{"affected_user": userName, "password": "[set]"},
+		map[string]interface{}{"affected_user": userName, "password": "[changed]"})
+
 	return c.JSON(fiber.Map{
 		"message": "Password updated successfully",
 	})
@@ -626,6 +715,22 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 			"message": "Failed to update PIN",
 		})
 	}
+
+	// Get user name for audit
+	user, _ := h.userRepo.GetByID(c.Context(), id)
+	userName := "Unknown"
+	if user != nil {
+		userName = user.Name
+	}
+
+	// Audit log (don't log actual PIN for security)
+	newPinStatus := "[changed]"
+	if pinHash == nil {
+		newPinStatus = "[removed]"
+	}
+	audit.LogWithValues(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(), "Updated PIN for: "+userName,
+		map[string]interface{}{"affected_user": userName, "pin": "[set]"},
+		map[string]interface{}{"affected_user": userName, "pin": newPinStatus})
 
 	message := "PIN updated successfully"
 	if pinHash == nil {

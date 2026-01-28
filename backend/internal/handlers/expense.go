@@ -8,6 +8,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/audit"
+	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
 )
@@ -246,12 +248,7 @@ func (h *ExpenseHandler) Create(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from context
-	userID, ok := c.Locals("user_id").(uuid.UUID)
-	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"message": "Unauthorized",
-		})
-	}
+	userID := middleware.GetUserID(c)
 
 	expense := &models.Expense{
 		Amount:          amount,
@@ -354,6 +351,23 @@ func (h *ExpenseHandler) Create(c *fiber.Ctx) error {
 	response := expenseToResponse(created)
 	log.Info().Msgf("Response: %+v", response)
 
+	// Audit log with new values
+	newValues := map[string]interface{}{
+		"amount":       created.Amount.String(),
+		"description":  created.Description,
+		"expense_date": created.ExpenseDate.Format("2006-01-02"),
+	}
+	if created.CategoryID != nil {
+		newValues["category_id"] = created.CategoryID.String()
+	}
+	if created.ProductID != nil {
+		newValues["product_id"] = created.ProductID.String()
+	}
+	if created.Vendor != nil {
+		newValues["vendor"] = *created.Vendor
+	}
+	audit.LogWithValues(c, models.AuditActionExpenseCreate, models.AuditEntityExpense, created.ID.String(), "Created expense: "+created.Description, nil, newValues)
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"data": response,
 	})
@@ -401,12 +415,7 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from context
-	userID, ok := c.Locals("user_id").(uuid.UUID)
-	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"message": "Unauthorized",
-		})
-	}
+	userID := middleware.GetUserID(c)
 
 	var req UpdateExpenseRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -439,9 +448,62 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 		})
 	}
 
+	// Capture old values for audit BEFORE any modifications
+	oldValues := map[string]interface{}{
+		"amount":       existing.Amount.String(),
+		"description":  existing.Description,
+		"expense_date": existing.ExpenseDate.Format("2006-01-02"),
+	}
+	if existing.Vendor != nil {
+		oldValues["vendor"] = *existing.Vendor
+	}
+	if existing.ReferenceNumber != nil {
+		oldValues["reference_number"] = *existing.ReferenceNumber
+	}
+	if existing.Notes != nil {
+		oldValues["notes"] = *existing.Notes
+	}
+	if existing.CategoryID != nil {
+		if existing.CategoryName != nil {
+			oldValues["category"] = *existing.CategoryName
+		} else {
+			oldValues["category"] = existing.CategoryID.String()
+		}
+	}
+	if existing.ProductID != nil {
+		if existing.ProductName != nil {
+			oldValues["product"] = *existing.ProductName
+		} else {
+			oldValues["product"] = existing.ProductID.String()
+		}
+	}
+	if existing.Quantity != nil {
+		oldValues["quantity"] = existing.Quantity.String()
+	}
+
+	// Check if category is changing to a non-Inventory Purchase category
+	// If so, we need to clear product and quantity
+	isChangingToNonInventoryCategory := false
+	if req.CategoryID != nil && *req.CategoryID != "" {
+		newCatID, err := uuid.Parse(*req.CategoryID)
+		if err == nil {
+			// Get the new category name to check if it's Inventory Purchase
+			categories, _ := h.repo.ListCategories(c.Context(), false)
+			for _, cat := range categories {
+				if cat.ID == newCatID && cat.Name != "Inventory Purchase" {
+					isChangingToNonInventoryCategory = true
+					break
+				}
+			}
+		}
+	}
+
 	// Determine final state for inventory logic
 	finalProductID := existing.ProductID
-	if req.ProductID != nil {
+	if isChangingToNonInventoryCategory {
+		// Clear product when switching to non-inventory category
+		finalProductID = nil
+	} else if req.ProductID != nil {
 		if *req.ProductID == "" {
 			finalProductID = nil
 		} else {
@@ -453,7 +515,10 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	}
 
 	finalQuantity := existing.Quantity
-	if req.Quantity != nil {
+	if isChangingToNonInventoryCategory {
+		// Clear quantity when switching to non-inventory category
+		finalQuantity = nil
+	} else if req.Quantity != nil {
 		if *req.Quantity == "" {
 			finalQuantity = nil
 		} else {
@@ -636,6 +701,46 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 		})
 	}
 
+	// Audit log with old and new values
+	newValues := map[string]interface{}{
+		"amount":       updated.Amount.String(),
+		"description":  updated.Description,
+		"expense_date": updated.ExpenseDate.Format("2006-01-02"),
+	}
+	if updated.Vendor != nil {
+		newValues["vendor"] = *updated.Vendor
+	}
+	if updated.ReferenceNumber != nil {
+		newValues["reference_number"] = *updated.ReferenceNumber
+	}
+	if updated.Notes != nil {
+		newValues["notes"] = *updated.Notes
+	}
+	if updated.CategoryID != nil {
+		if updated.CategoryName != nil {
+			newValues["category"] = *updated.CategoryName
+		} else {
+			newValues["category"] = updated.CategoryID.String()
+		}
+	}
+	if updated.ProductID != nil {
+		if updated.ProductName != nil {
+			newValues["product"] = *updated.ProductName
+		} else {
+			newValues["product"] = updated.ProductID.String()
+		}
+	} else if oldValues["product"] != nil {
+		// Product was removed
+		newValues["product"] = "[removed]"
+	}
+	if updated.Quantity != nil {
+		newValues["quantity"] = updated.Quantity.String()
+	} else if oldValues["quantity"] != nil {
+		// Quantity was removed
+		newValues["quantity"] = "[removed]"
+	}
+	audit.LogWithValues(c, models.AuditActionExpenseUpdate, models.AuditEntityExpense, id.String(), "Updated expense: "+updated.Description, oldValues, newValues)
+
 	return c.JSON(fiber.Map{
 		"data": expenseToResponse(updated),
 	})
@@ -651,12 +756,7 @@ func (h *ExpenseHandler) Delete(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from context for the adjustment record
-	userID, ok := c.Locals("user_id").(uuid.UUID)
-	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"message": "Unauthorized",
-		})
-	}
+	userID := middleware.GetUserID(c)
 
 	// Start transaction
 	tx, err := h.repo.BeginTx(c.Context())
@@ -723,6 +823,9 @@ func (h *ExpenseHandler) Delete(c *fiber.Ctx) error {
 			"message": "Failed to delete expense",
 		})
 	}
+
+	// Audit log
+	audit.LogFromFiber(c, models.AuditActionExpenseDelete, models.AuditEntityExpense, id.String(), "Deleted expense")
 
 	return c.JSON(fiber.Map{
 		"message": "Expense deleted successfully",

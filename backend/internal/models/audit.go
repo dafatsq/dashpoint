@@ -48,6 +48,11 @@ const (
 	AuditActionShiftStart AuditAction = "shift.start"
 	AuditActionShiftClose AuditAction = "shift.close"
 
+	// Expense actions
+	AuditActionExpenseCreate AuditAction = "expense.create"
+	AuditActionExpenseUpdate AuditAction = "expense.update"
+	AuditActionExpenseDelete AuditAction = "expense.delete"
+
 	// Report actions
 	AuditActionReportExport AuditAction = "report.export"
 
@@ -65,6 +70,7 @@ const (
 	AuditEntityInventory AuditEntityType = "inventory"
 	AuditEntitySale      AuditEntityType = "sale"
 	AuditEntityShift     AuditEntityType = "shift"
+	AuditEntityExpense   AuditEntityType = "expense"
 	AuditEntityPayment   AuditEntityType = "payment"
 	AuditEntityReport    AuditEntityType = "report"
 	AuditEntitySystem    AuditEntityType = "system"

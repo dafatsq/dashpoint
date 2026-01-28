@@ -438,6 +438,7 @@ export default function ExpensesPage() {
                       <th className="pb-3 font-medium">Date</th>
                       <th className="pb-3 font-medium">Description</th>
                       <th className="pb-3 font-medium">Category</th>
+                      <th className="pb-3 font-medium">User</th>
                       <th className="pb-3 font-medium">Vendor</th>
                       <th className="pb-3 font-medium text-right">Amount</th>
                       <th className="pb-3 font-medium text-right">Actions</th>
@@ -463,6 +464,9 @@ export default function ExpensesPage() {
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-600 text-white dark:bg-blue-600/90 dark:text-white">
                             {expense.category_name || 'Uncategorized'}
                           </span>
+                        </td>
+                        <td className="py-3 text-sm">
+                          {expense.created_by_name || 'Unknown'}
                         </td>
                         <td className="py-3 text-sm text-muted-foreground">
                           {expense.vendor || '-'}

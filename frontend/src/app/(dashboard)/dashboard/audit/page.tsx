@@ -151,9 +151,37 @@ export default function AuditLogsPage() {
       return <p className="text-muted-foreground text-sm">No detailed changes recorded</p>;
     }
 
+    // Fields to always show at the top (even if unchanged) as context
+    const contextFields = ['affected_user', 'affected_product', 'affected_category', 'affected_expense'];
+    const contextItems: { key: string; value: unknown }[] = [];
+    
+    contextFields.forEach(field => {
+      if (oldValues?.[field] || newValues?.[field]) {
+        contextItems.push({ key: field, value: oldValues?.[field] || newValues?.[field] });
+      }
+    });
+
     return (
       <div className="space-y-2">
+        {/* Show context fields (affected entity) at the top */}
+        {contextItems.length > 0 && (
+          <div className="bg-muted/50 rounded-md p-2 mb-2">
+            {contextItems.map(({ key, value }) => (
+              <div key={key} className="text-sm">
+                <span className="font-medium capitalize">{key.replace(/_/g, ' ')}: </span>
+                <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                  {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* Show changed fields */}
         {Array.from(allKeys).map((key) => {
+          // Skip context fields as they're shown above
+          if (contextFields.includes(key)) return null;
+          
           const oldVal = oldValues?.[key];
           const newVal = newValues?.[key];
           

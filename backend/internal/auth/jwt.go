@@ -20,6 +20,7 @@ const (
 type Claims struct {
 	UserID    uuid.UUID `json:"user_id"`
 	Email     string    `json:"email"`
+	Name      string    `json:"name"`
 	RoleID    uuid.UUID `json:"role_id"`
 	RoleName  string    `json:"role_name"`
 	TokenType TokenType `json:"token_type"`
@@ -51,7 +52,7 @@ type TokenPair struct {
 }
 
 // GenerateTokenPair generates both access and refresh tokens
-func (m *JWTManager) GenerateTokenPair(userID uuid.UUID, email string, roleID uuid.UUID, roleName string) (*TokenPair, error) {
+func (m *JWTManager) GenerateTokenPair(userID uuid.UUID, email, name string, roleID uuid.UUID, roleName string) (*TokenPair, error) {
 	now := time.Now()
 
 	// Generate access token
@@ -59,6 +60,7 @@ func (m *JWTManager) GenerateTokenPair(userID uuid.UUID, email string, roleID uu
 	accessClaims := Claims{
 		UserID:    userID,
 		Email:     email,
+		Name:      name,
 		RoleID:    roleID,
 		RoleName:  roleName,
 		TokenType: AccessToken,
@@ -83,6 +85,7 @@ func (m *JWTManager) GenerateTokenPair(userID uuid.UUID, email string, roleID uu
 	refreshClaims := Claims{
 		UserID:    userID,
 		Email:     email,
+		Name:      name,
 		RoleID:    roleID,
 		RoleName:  roleName,
 		TokenType: RefreshToken,

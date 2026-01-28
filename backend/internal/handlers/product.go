@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
@@ -419,6 +420,16 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 		product = created
 	}
 
+	// Audit log with new values
+	newValues := map[string]interface{}{
+		"name":  product.Name,
+		"price": product.Price.String(),
+	}
+	if product.SKU != nil {
+		newValues["sku"] = *product.SKU
+	}
+	audit.LogWithValues(c, models.AuditActionProductCreate, models.AuditEntityProduct, product.ID.String(), "Created product: "+product.Name, nil, newValues)
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Product created successfully",
 		"product": h.toProductResponse(product),
@@ -450,6 +461,16 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 			"code":    "NOT_FOUND",
 			"message": "Product not found",
 		})
+	}
+
+	// Capture old values for audit
+	oldValues := map[string]interface{}{
+		"name":      product.Name,
+		"price":     product.Price.String(),
+		"is_active": product.IsActive,
+	}
+	if product.SKU != nil {
+		oldValues["sku"] = *product.SKU
 	}
 
 	var req UpdateProductRequest
@@ -545,6 +566,17 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 		})
 	}
 
+	// Audit log with old/new values
+	newValues := map[string]interface{}{
+		"name":      product.Name,
+		"price":     product.Price.String(),
+		"is_active": product.IsActive,
+	}
+	if product.SKU != nil {
+		newValues["sku"] = *product.SKU
+	}
+	audit.LogWithValues(c, models.AuditActionProductUpdate, models.AuditEntityProduct, id.String(), "Updated product: "+product.Name, oldValues, newValues)
+
 	updated, _ := h.productRepo.GetByID(c.Context(), id)
 	if updated != nil {
 		product = updated
@@ -574,6 +606,9 @@ func (h *ProductHandler) Delete(c *fiber.Ctx) error {
 			"message": "Failed to delete product",
 		})
 	}
+
+	// Audit log
+	audit.LogFromFiber(c, models.AuditActionProductDelete, models.AuditEntityProduct, id.String(), "Deleted product")
 
 	return c.JSON(fiber.Map{
 		"message": "Product deleted successfully",
