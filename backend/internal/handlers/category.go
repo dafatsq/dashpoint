@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
 )
@@ -154,6 +155,12 @@ func (h *CategoryHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
+	// Audit log with new values
+	newValues := map[string]interface{}{
+		"name": category.Name,
+	}
+	audit.LogWithValues(c, models.AuditActionCategoryCreate, models.AuditEntityCategory, category.ID.String(), "Created category: "+category.Name, nil, newValues)
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message":  "Category created successfully",
 		"category": h.toCategoryResponse(category),
@@ -184,6 +191,12 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 			"code":    "NOT_FOUND",
 			"message": "Category not found",
 		})
+	}
+
+	// Capture old values for audit
+	oldValues := map[string]interface{}{
+		"name":      category.Name,
+		"is_active": category.IsActive,
 	}
 
 	var req UpdateCategoryRequest
@@ -229,6 +242,13 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 		})
 	}
 
+	// Audit log with old/new values
+	newValues := map[string]interface{}{
+		"name":      category.Name,
+		"is_active": category.IsActive,
+	}
+	audit.LogWithValues(c, models.AuditActionCategoryUpdate, models.AuditEntityCategory, id.String(), "Updated category: "+category.Name, oldValues, newValues)
+
 	return c.JSON(fiber.Map{
 		"message":  "Category updated successfully",
 		"category": h.toCategoryResponse(category),
@@ -262,6 +282,9 @@ func (h *CategoryHandler) Delete(c *fiber.Ctx) error {
 			"message": "Failed to delete category",
 		})
 	}
+
+	// Audit log
+	audit.LogFromFiber(c, models.AuditActionCategoryDelete, models.AuditEntityCategory, id.String(), "Deleted category")
 
 	return c.JSON(fiber.Map{
 		"message": "Category deleted successfully",

@@ -370,6 +370,7 @@ func (h *AuthHandler) generateAuthResponse(c *fiber.Ctx, user *models.User) erro
 			}
 			return ""
 		}(),
+		user.Name,
 		user.RoleID,
 		user.Role.Name,
 	)

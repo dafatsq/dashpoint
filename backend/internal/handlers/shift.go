@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
@@ -97,6 +98,9 @@ func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 		shift = created
 	}
 
+	// Audit log
+	audit.LogFromFiber(c, models.AuditActionShiftStart, models.AuditEntityShift, shift.ID.String(), "Started shift")
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Shift started successfully",
 		"shift":   shift,
@@ -150,6 +154,9 @@ func (h *ShiftHandler) CloseShift(c *fiber.Ctx) error {
 
 	// Fetch the closed shift
 	closed, _ := h.shiftRepo.GetByID(c.Context(), shift.ID)
+
+	// Audit log
+	audit.LogFromFiber(c, models.AuditActionShiftClose, models.AuditEntityShift, shift.ID.String(), "Closed shift")
 
 	return c.JSON(fiber.Map{
 		"message": "Shift closed successfully",

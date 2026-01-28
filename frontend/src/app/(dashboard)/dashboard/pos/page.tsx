@@ -60,7 +60,7 @@ function getProductMinQuantity(product: Product): number {
 }
 
 export default function POSPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const canApplyDiscount = hasPermission(PERMISSIONS.SALES_DISCOUNT);
 
   // Product state
@@ -425,6 +425,10 @@ export default function POSPage() {
 
             {/* Totals */}
             <div className="space-y-2 text-sm">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-muted-foreground">Cashier</span>
+                <span className="font-medium">{user?.name || 'Unknown'}</span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatCurrency(subtotal)}</span>

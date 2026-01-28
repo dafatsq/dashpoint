@@ -70,6 +70,7 @@ func LogFromFiber(c *fiber.Ctx, action models.AuditAction, entityType models.Aud
 	if claims := middleware.GetClaims(c); claims != nil {
 		entry.UserID = &claims.UserID
 		entry.UserEmail = claims.Email
+		entry.UserName = claims.Name
 		entry.UserRole = claims.RoleName
 	}
 
@@ -101,6 +102,7 @@ func LogWithValues(c *fiber.Ctx, action models.AuditAction, entityType models.Au
 	if claims := middleware.GetClaims(c); claims != nil {
 		entry.UserID = &claims.UserID
 		entry.UserEmail = claims.Email
+		entry.UserName = claims.Name
 		entry.UserRole = claims.RoleName
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
@@ -238,6 +239,9 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 		})
 	}
 
+	// Audit log
+	audit.LogFromFiber(c, models.AuditActionSaleCreate, models.AuditEntitySale, sale.ID.String(), "Created sale")
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Sale completed successfully",
 		"sale":    h.toSaleResponse(sale),
@@ -423,6 +427,9 @@ func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
 			"message": err.Error(),
 		})
 	}
+
+	// Audit log
+	audit.LogFromFiber(c, models.AuditActionSaleVoid, models.AuditEntitySale, id.String(), "Voided sale: "+req.Reason)
 
 	// Fetch the updated sale
 	sale, _ := h.saleRepo.GetByID(c.Context(), id)
