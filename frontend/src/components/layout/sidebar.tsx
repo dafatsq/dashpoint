@@ -77,7 +77,7 @@ const navItems: NavItem[] = [
     href: '/dashboard/sales',
     label: 'Sales History',
     icon: <Receipt className="h-5 w-5" />,
-    permission: PERMISSIONS.SALES_CREATE, // Uses same permission as POS - if you can create, you can view
+    permission: PERMISSIONS.SALES_VIEW,
   },
   {
     href: '/dashboard/reports',

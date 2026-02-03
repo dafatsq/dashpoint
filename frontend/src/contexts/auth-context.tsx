@@ -369,18 +369,15 @@ export const PERMISSIONS = {
   PRODUCTS_CREATE: 'can_create_product',
   PRODUCTS_EDIT: 'can_edit_product',
   PRODUCTS_DELETE: 'can_delete_product',
-  PRODUCTS_EDIT_PRICE: 'can_edit_price',
   
   // Inventory management
   INVENTORY_VIEW: 'can_view_inventory',
-  INVENTORY_ADJUST: 'can_adjust_stock',
-  INVENTORY_RECEIVE: 'can_receive_stock',
+  INVENTORY_EDIT: 'can_edit_inventory',
   
   // Sales
   SALES_CREATE: 'can_create_sale',
+  SALES_VIEW: 'can_view_sales',
   SALES_VOID: 'can_void_sale',
-  SALES_DISCOUNT: 'can_apply_discount',
-  SALES_REFUND: 'can_refund',
   
   // Reports
   REPORTS_VIEW: 'can_view_reports',
@@ -391,5 +388,4 @@ export const PERMISSIONS = {
   
   // Settings
   SETTINGS_MANAGE: 'can_manage_settings',
-  SETTINGS_BACKUP: 'can_backup_data',
 } as const;

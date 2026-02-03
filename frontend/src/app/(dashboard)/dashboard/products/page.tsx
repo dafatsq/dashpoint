@@ -30,10 +30,25 @@ import {
   Package,
   RotateCcw,
   Archive,
+  ImageIcon,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Product, Category, CreateProductRequest, UpdateProductRequest } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
+import { ImageUpload } from '@/components/ui/image-upload';
+
+// Helper to get full image URL
+function getImageUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  // Use window.location for dynamic base URL, fallback to localhost:8080
+  const baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? `${window.location.protocol}//${window.location.hostname}:8080`
+    : 'http://localhost:8080';
+  return `${baseUrl}${path}`;
+}
 
 // Helper to get numeric values from Product
 function getProductPrice(product: Product): number {
@@ -64,6 +79,7 @@ interface FormData {
   initial_quantity: string;
   low_stock_threshold: string;
   category_id: string;
+  image_url: string;
 }
 
 export default function ProductsPage() {
@@ -99,6 +115,7 @@ export default function ProductsPage() {
     initial_quantity: '',
     low_stock_threshold: '5',
     category_id: '',
+    image_url: '',
   });
   const [formErrors, setFormErrors] = useState<{ name?: string; price?: string; sku?: string; barcode?: string; general?: string }>({});
 
@@ -147,6 +164,7 @@ export default function ProductsPage() {
       initial_quantity: '',
       low_stock_threshold: '5',
       category_id: '',
+      image_url: '',
     });
     setEditingProduct(null);
     setFormErrors({});
@@ -171,6 +189,7 @@ export default function ProductsPage() {
       initial_quantity: '',  // Not editable on update
       low_stock_threshold: product.inventory?.low_stock_threshold || '5',
       category_id: product.category_id || '',
+      image_url: product.image_url || '',
     });
     setDialogOpen(true);
   };
@@ -204,6 +223,7 @@ export default function ProductsPage() {
           price: formData.price,
           cost: formData.cost || undefined,
           category_id: formData.category_id || undefined,
+          image_url: formData.image_url, // Empty string clears, undefined skips update
         };
         const result = await api.updateProduct(editingProduct.id, updateData);
         if (result.error) {
@@ -233,6 +253,7 @@ export default function ProductsPage() {
           initial_quantity: formData.initial_quantity || undefined,
           low_stock_threshold: formData.low_stock_threshold || undefined,
           category_id: formData.category_id || undefined,
+          image_url: formData.image_url || undefined,
         };
         const result = await api.createProduct(createData);
         if (result.error) {
@@ -436,13 +457,35 @@ export default function ProductsPage() {
                       return (
                         <tr key={product.id} className="border-b last:border-0">
                           <td className="py-3">
-                            <div>
-                              <p className="font-medium">{product.name}</p>
-                              {product.description && (
-                                <p className="text-xs text-muted-foreground truncate max-w-xs">
-                                  {product.description}
-                                </p>
+                            <div className="flex items-center gap-3">
+                              {product.image_url ? (
+                                <div className="relative h-10 w-10 rounded border overflow-hidden flex-shrink-0 bg-muted">
+                                  <img
+                                    src={getImageUrl(product.image_url)}
+                                    alt={product.name}
+                                    className="h-full w-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                      ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                                    }}
+                                  />
+                                  <div className="absolute inset-0 hidden items-center justify-center bg-muted">
+                                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="h-10 w-10 rounded border flex items-center justify-center bg-muted flex-shrink-0">
+                                  <Package className="h-4 w-4 text-muted-foreground" />
+                                </div>
                               )}
+                              <div className="min-w-0">
+                                <p className="font-medium">{product.name}</p>
+                                {product.description && (
+                                  <p className="text-xs text-muted-foreground truncate max-w-xs">
+                                    {product.description}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="py-3 text-sm text-muted-foreground">
@@ -705,6 +748,14 @@ export default function ProductsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Product Image</Label>
+              <ImageUpload
+                value={formData.image_url}
+                onChange={(url) => setFormData({ ...formData, image_url: url })}
+              />
             </div>
           </div>
 

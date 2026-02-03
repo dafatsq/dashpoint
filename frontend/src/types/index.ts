@@ -3,9 +3,20 @@ export type UserRole = 'owner' | 'manager' | 'cashier';
 
 export interface Permission {
   id: string;
+  key: string;
   name: string;
-  description: string;
+  description?: string;
   category: string;
+}
+
+export interface PermissionOverride {
+  permission_id: string;
+  permission_key: string;
+  permission_name: string;
+  allowed: boolean;
+  granted_by?: string;
+  granted_by_name?: string;
+  created_at?: string;
 }
 
 export interface Role {
@@ -99,6 +110,7 @@ export interface CreateProductRequest {
   initial_quantity?: string;
   low_stock_threshold?: string;
   category_id?: string;
+  image_url?: string;
 }
 
 export interface UpdateProductRequest {
@@ -110,6 +122,7 @@ export interface UpdateProductRequest {
   cost?: string;
   category_id?: string;
   is_active?: boolean;
+  image_url?: string;
 }
 
 // Inventory types
@@ -312,6 +325,52 @@ export interface InventoryValuationItem {
 
 // Keep InventoryReport as alias for backwards compatibility
 export type InventoryReport = InventoryValuation;
+
+// Cash report types
+export interface CashReport {
+  date: string;
+  opening_cash: string;
+  cash_sales: string;
+  cash_refunds: string;
+  expected_cash: string;
+  actual_cash: string;
+  difference: string;
+  shift_count: number;
+}
+
+// Employee sales report
+export interface EmployeeSales {
+  employee_id: string;
+  employee_name: string;
+  transaction_count: number;
+  item_count: number;
+  total_sales: string;
+  avg_transaction: string;
+}
+
+// Category sales report
+export interface CategorySales {
+  category_id: string;
+  category_name: string;
+  items_sold: number;
+  quantity_sold: string;
+  total_revenue: string;
+}
+
+// Sales range report
+export interface SalesRangeReport {
+  start_date: string;
+  end_date: string;
+  summary: {
+    total_sales: string;
+    total_tax: string;
+    total_discount: string;
+    total_amount: string;
+    total_transactions: number;
+    total_items: number;
+  };
+  daily_reports: DailyReport[];
+}
 
 // Audit log types
 export interface AuditLog {

@@ -1,98 +1,122 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Loader2,
   BarChart3,
   TrendingUp,
+  TrendingDown,
   Package,
   DollarSign,
   Calendar,
   ShoppingCart,
+  Users,
+  Download,
+  RefreshCw,
+  Banknote,
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  FolderOpen,
+  AlertTriangle,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { DailyReport, TopSeller, InventoryValuation } from '@/types';
+import { 
+  DailyReport, 
+  TopSeller, 
+  InventoryValuation,
+  CashReport,
+  EmployeeSales,
+  CategorySales,
+  SalesRangeReport,
+} from '@/types';
+import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
 
-type ReportType = 'daily' | 'top-sellers' | 'inventory';
+type ReportType = 'overview' | 'sales' | 'top-sellers' | 'inventory' | 'cash' | 'employees' | 'categories';
+
+// Date range presets
+const DATE_PRESETS = {
+  today: { label: 'Today', days: 0 },
+  yesterday: { label: 'Yesterday', days: 1 },
+  last7: { label: 'Last 7 Days', days: 7 },
+  last30: { label: 'Last 30 Days', days: 30 },
+  last90: { label: 'Last 90 Days', days: 90 },
+  thisMonth: { label: 'This Month', days: -1 }, // Special case
+  lastMonth: { label: 'Last Month', days: -2 }, // Special case
+};
+
+function getDateRange(preset: string): { start: string; end: string } {
+  const today = new Date();
+  const endDate = new Date(today);
+  let startDate = new Date(today);
+
+  switch (preset) {
+    case 'today':
+      break;
+    case 'yesterday':
+      startDate.setDate(today.getDate() - 1);
+      endDate.setDate(today.getDate() - 1);
+      break;
+    case 'last7':
+      startDate.setDate(today.getDate() - 6);
+      break;
+    case 'last30':
+      startDate.setDate(today.getDate() - 29);
+      break;
+    case 'last90':
+      startDate.setDate(today.getDate() - 89);
+      break;
+    case 'thisMonth':
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      break;
+    case 'lastMonth':
+      startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      endDate.setDate(0); // Last day of previous month
+      break;
+    default:
+      startDate.setDate(today.getDate() - 29);
+  }
+
+  return {
+    start: startDate.toISOString().split('T')[0],
+    end: endDate.toISOString().split('T')[0],
+  };
+}
 
 export default function ReportsPage() {
-  const [activeReport, setActiveReport] = useState<ReportType>('daily');
+  const { hasPermission, user } = useAuth();
+  const canExport = hasPermission(PERMISSIONS.REPORTS_EXPORT);
+  
+  // Debug: log permission check
+  console.log('[Reports] User:', user?.role_name, 'Permissions:', user?.permissions, 'canExport:', canExport);
+
+  const [activeTab, setActiveTab] = useState<ReportType>('overview');
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [datePreset, setDatePreset] = useState('last30');
+  const [dateRange, setDateRange] = useState(getDateRange('last30'));
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Report data
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
+  const [salesRangeReport, setSalesRangeReport] = useState<SalesRangeReport | null>(null);
   const [topSellers, setTopSellers] = useState<TopSeller[]>([]);
   const [inventoryReport, setInventoryReport] = useState<InventoryValuation | null>(null);
-
-  // Fetch daily report
-  useEffect(() => {
-    if (activeReport !== 'daily') return;
-
-    const fetchDailyReport = async () => {
-      setIsLoading(true);
-      try {
-        const result = await api.getDailyReport(selectedDate);
-        if (result.data) setDailyReport(result.data);
-      } catch (error) {
-        console.error('Failed to fetch daily report:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchDailyReport();
-  }, [activeReport, selectedDate]);
-
-  // Fetch top sellers
-  useEffect(() => {
-    if (activeReport !== 'top-sellers') return;
-
-    const fetchTopSellers = async () => {
-      setIsLoading(true);
-      try {
-        const params: { from?: string; to?: string; limit?: number } = { limit: 20 };
-        if (dateFrom) params.from = dateFrom;
-        if (dateTo) params.to = dateTo;
-
-        const result = await api.getTopSellers(params);
-        if (result.data) setTopSellers(result.data);
-      } catch (error) {
-        console.error('Failed to fetch top sellers:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchTopSellers();
-  }, [activeReport, dateFrom, dateTo]);
-
-  // Fetch inventory report
-  useEffect(() => {
-    if (activeReport !== 'inventory') return;
-
-    const fetchInventoryReport = async () => {
-      setIsLoading(true);
-      try {
-        const result = await api.getInventoryReport();
-        if (result.data) setInventoryReport(result.data);
-      } catch (error) {
-        console.error('Failed to fetch inventory report:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchInventoryReport();
-  }, [activeReport]);
+  const [cashReport, setCashReport] = useState<CashReport | null>(null);
+  const [employeeSales, setEmployeeSales] = useState<EmployeeSales[]>([]);
+  const [categorySales, setCategorySales] = useState<CategorySales[]>([]);
 
   const formatCurrency = (amount: number | string) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -103,426 +127,1185 @@ export default function ReportsPage() {
     }).format(num || 0);
   };
 
+  const formatNumber = (num: number | string) => {
+    const n = typeof num === 'string' ? parseFloat(num) : num;
+    return new Intl.NumberFormat('id-ID').format(n || 0);
+  };
+
+  // Handle date preset change
+  const handlePresetChange = (preset: string) => {
+    setDatePreset(preset);
+    setDateRange(getDateRange(preset));
+  };
+
+  // Fetch overview data
+  const fetchOverviewData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [salesRes, topRes] = await Promise.all([
+        api.getSalesRangeReport({
+          start_date: dateRange.start,
+          end_date: dateRange.end,
+        }),
+        api.getTopSellers({ from: dateRange.start, to: dateRange.end, limit: 5 }),
+      ]);
+
+      if (salesRes.data) setSalesRangeReport(salesRes.data);
+      if (topRes.data) setTopSellers(topRes.data);
+    } catch (error) {
+      console.error('Failed to fetch overview data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateRange]);
+
+  // Fetch sales range data
+  const fetchSalesData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.getSalesRangeReport({
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      });
+      if (result.data) setSalesRangeReport(result.data);
+    } catch (error) {
+      console.error('Failed to fetch sales data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateRange]);
+
+  // Fetch top sellers
+  const fetchTopSellers = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.getTopSellers({
+        from: dateRange.start,
+        to: dateRange.end,
+        limit: 50,
+      });
+      if (result.data) setTopSellers(result.data);
+    } catch (error) {
+      console.error('Failed to fetch top sellers:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateRange]);
+
+  // Fetch inventory report
+  const fetchInventoryReport = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.getInventoryReport(true);
+      if (result.data) setInventoryReport(result.data);
+    } catch (error) {
+      console.error('Failed to fetch inventory report:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Fetch cash report
+  const fetchCashReport = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.getCashReport(selectedDate);
+      if (result.data) setCashReport(result.data);
+    } catch (error) {
+      console.error('Failed to fetch cash report:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedDate]);
+
+  // Fetch employee sales
+  const fetchEmployeeSales = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.getEmployeeSalesReport({
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      });
+      if (result.data) setEmployeeSales(result.data);
+    } catch (error) {
+      console.error('Failed to fetch employee sales:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateRange]);
+
+  // Fetch category sales
+  const fetchCategorySales = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.getCategorySalesReport({
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      });
+      if (result.data) setCategorySales(result.data);
+    } catch (error) {
+      console.error('Failed to fetch category sales:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateRange]);
+
+  // Fetch data based on active tab
+  useEffect(() => {
+    switch (activeTab) {
+      case 'overview':
+        fetchOverviewData();
+        break;
+      case 'sales':
+        fetchSalesData();
+        break;
+      case 'top-sellers':
+        fetchTopSellers();
+        break;
+      case 'inventory':
+        fetchInventoryReport();
+        break;
+      case 'cash':
+        fetchCashReport();
+        break;
+      case 'employees':
+        fetchEmployeeSales();
+        break;
+      case 'categories':
+        fetchCategorySales();
+        break;
+    }
+  }, [activeTab, fetchOverviewData, fetchSalesData, fetchTopSellers, fetchInventoryReport, fetchCashReport, fetchEmployeeSales, fetchCategorySales]);
+
+  // Export handlers
+  const handleExportComprehensive = async () => {
+    try {
+      const url = await api.exportComprehensiveReportCSV({
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `comprehensive_report_${dateRange.start}_to_${dateRange.end}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export comprehensive report:', error);
+    }
+  };
+
+  const handleExportSales = async () => {
+    try {
+      const url = await api.exportSalesCSV({
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales_${dateRange.start}_to_${dateRange.end}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export sales data:', error);
+    }
+  };
+
+  const handleExportInventory = async () => {
+    try {
+      const url = await api.exportInventoryCSV();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export inventory data:', error);
+    }
+  };
+
+  const handleExportTopSellers = async () => {
+    try {
+      const url = await api.exportTopSellersCSV({
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+        limit: 100,
+      });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `top_sellers_${dateRange.start}_to_${dateRange.end}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export top sellers data:', error);
+    }
+  };
+
+  const renderOverview = () => (
+    <div className="space-y-6">
+      {/* Date range controls */}
+      <div className="flex flex-wrap items-center gap-4">
+        <Select value={datePreset} onValueChange={handlePresetChange}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(DATE_PRESETS).map(([key, { label }]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={dateRange.start}
+            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+            className="w-40"
+          />
+          <span className="text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={dateRange.end}
+            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+            className="w-40"
+          />
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchOverviewData} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+        {canExport && (
+          <Button variant="outline" size="sm" onClick={handleExportComprehensive}>
+            <Download className="h-4 w-4 mr-2" />
+            Export All Analytics
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : salesRangeReport ? (
+        <>
+          {/* Summary cards */}
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(salesRangeReport.summary.total_amount)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {salesRangeReport.summary.total_transactions} transactions
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Items Sold</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatNumber(salesRangeReport.summary.total_items)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Avg {salesRangeReport.summary.total_transactions > 0 
+                    ? (salesRangeReport.summary.total_items / salesRangeReport.summary.total_transactions).toFixed(1) 
+                    : 0} per sale
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Tax Collected</CardTitle>
+                <Banknote className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(salesRangeReport.summary.total_tax)}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Discounts</CardTitle>
+                <TrendingDown className="h-4 w-4 text-orange-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {formatCurrency(salesRangeReport.summary.total_discount)}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Daily breakdown mini chart */}
+          {salesRangeReport.daily_reports && salesRangeReport.daily_reports.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Daily Sales Trend</CardTitle>
+                <CardDescription>{dateRange.start} to {dateRange.end}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-end gap-1 h-32">
+                  {(() => {
+                    const maxAmount = Math.max(...salesRangeReport.daily_reports.map(d => parseFloat(d.total_amount) || 0), 1);
+                    return salesRangeReport.daily_reports.map((day) => {
+                      const height = (parseFloat(day.total_amount) / maxAmount) * 100;
+                      return (
+                        <div 
+                          key={day.date} 
+                          className="flex-1 min-w-[4px] max-w-[24px] bg-primary rounded-t hover:bg-primary/80 transition-colors cursor-pointer"
+                          style={{ height: `${Math.max(height, 2)}%` }}
+                          title={`${day.date}: ${formatCurrency(day.total_amount)} (${day.transaction_count} tx)`}
+                        />
+                      );
+                    });
+                  })()}
+                </div>
+                <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                  <span>{salesRangeReport.daily_reports[0]?.date}</span>
+                  <span>{salesRangeReport.daily_reports[salesRangeReport.daily_reports.length - 1]?.date}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Quick top sellers */}
+          {topSellers.length > 0 && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Top Sellers</CardTitle>
+                  <CardDescription>Best performing products in this period</CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setActiveTab('top-sellers')}>
+                  View All
+                  <ArrowUpRight className="h-4 w-4 ml-1" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {topSellers.slice(0, 5).map((item, index) => (
+                    <div key={item.product_id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                          {index + 1}
+                        </span>
+                        <div>
+                          <p className="font-medium text-sm">{item.product_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatNumber(item.quantity_sold)} sold
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-bold text-sm">{formatCurrency(item.total_revenue)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No data for selected period</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderSalesReport = () => (
+    <div className="space-y-6">
+      {/* Date range controls */}
+      <div className="flex flex-wrap items-center gap-4">
+        <Select value={datePreset} onValueChange={handlePresetChange}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(DATE_PRESETS).map(([key, { label }]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={dateRange.start}
+            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+            className="w-40"
+          />
+          <span className="text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={dateRange.end}
+            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+            className="w-40"
+          />
+        </div>
+        {canExport && (
+          <Button variant="outline" size="sm" onClick={handleExportSales}>
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : salesRangeReport ? (
+        <>
+          {/* Summary cards */}
+          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold">{formatCurrency(salesRangeReport.summary.total_amount)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Transactions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold">{formatNumber(salesRangeReport.summary.total_transactions)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Items Sold</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold">{formatNumber(salesRangeReport.summary.total_items)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Avg/Day</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold">
+                  {formatCurrency(
+                    parseFloat(salesRangeReport.summary.total_amount) / Math.max(salesRangeReport.daily_reports.length, 1)
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Tax</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold">{formatCurrency(salesRangeReport.summary.total_tax)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Discounts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold text-orange-600">{formatCurrency(salesRangeReport.summary.total_discount)}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Daily breakdown table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Daily Breakdown</CardTitle>
+              <CardDescription>
+                {salesRangeReport.start_date} to {salesRangeReport.end_date}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b text-left text-sm text-muted-foreground">
+                      <th className="pb-3 font-medium">Date</th>
+                      <th className="pb-3 font-medium text-right">Transactions</th>
+                      <th className="pb-3 font-medium text-right">Items</th>
+                      <th className="pb-3 font-medium text-right">Revenue</th>
+                      <th className="pb-3 font-medium text-right">Tax</th>
+                      <th className="pb-3 font-medium text-right">Discounts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesRangeReport.daily_reports.map((day) => (
+                      <tr key={day.date} className="border-b last:border-0 hover:bg-muted/50">
+                        <td className="py-3 font-medium">{day.date}</td>
+                        <td className="py-3 text-right">{day.transaction_count}</td>
+                        <td className="py-3 text-right">{day.item_count}</td>
+                        <td className="py-3 text-right font-bold">{formatCurrency(day.total_amount)}</td>
+                        <td className="py-3 text-right">{formatCurrency(day.total_tax)}</td>
+                        <td className="py-3 text-right text-orange-600">{formatCurrency(day.total_discount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No sales data available</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderTopSellers = () => (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-4">
+        <Select value={datePreset} onValueChange={handlePresetChange}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(DATE_PRESETS).map(([key, { label }]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={dateRange.start}
+            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+            className="w-40"
+          />
+          <span className="text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={dateRange.end}
+            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+            className="w-40"
+          />
+        </div>
+        {canExport && (
+          <Button variant="outline" size="sm" onClick={handleExportTopSellers}>
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : topSellers.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Selling Products</CardTitle>
+            <CardDescription>
+              {dateRange.start} to {dateRange.end}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b text-left text-sm text-muted-foreground">
+                    <th className="pb-3 font-medium w-12">#</th>
+                    <th className="pb-3 font-medium">Product</th>
+                    <th className="pb-3 font-medium">Category</th>
+                    <th className="pb-3 font-medium text-right">Qty Sold</th>
+                    <th className="pb-3 font-medium text-right">Revenue</th>
+                    <th className="pb-3 font-medium text-right">Profit</th>
+                    <th className="pb-3 font-medium text-right">Margin</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topSellers.map((item, index) => {
+                    const margin = parseFloat(item.total_revenue) > 0 
+                      ? (parseFloat(item.total_profit) / parseFloat(item.total_revenue)) * 100 
+                      : 0;
+                    return (
+                      <tr key={`${item.product_id}-${index}`} className="border-b last:border-0 hover:bg-muted/50">
+                        <td className="py-3">
+                          <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                            index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                          }`}>
+                            {index + 1}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <div>
+                            <p className="font-medium">{item.product_name}</p>
+                            {item.product_sku && (
+                              <p className="text-xs text-muted-foreground">{item.product_sku}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 text-muted-foreground">{item.category_name || '-'}</td>
+                        <td className="py-3 text-right font-medium">{formatNumber(item.quantity_sold)}</td>
+                        <td className="py-3 text-right font-bold">{formatCurrency(item.total_revenue)}</td>
+                        <td className="py-3 text-right text-green-600">{formatCurrency(item.total_profit)}</td>
+                        <td className="py-3 text-right">
+                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                            margin > 30 
+                              ? 'bg-primary text-primary-foreground ring-primary/20' 
+                              : margin > 15 
+                                ? 'bg-muted text-muted-foreground ring-muted-foreground/20' 
+                                : 'bg-transparent text-muted-foreground ring-muted-foreground/30'
+                          }`}>
+                            {margin.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No sales data available</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderInventory = () => (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="sm" onClick={fetchInventoryReport} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+        {canExport && (
+          <Button variant="outline" size="sm" onClick={handleExportInventory}>
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : inventoryReport ? (
+        <>
+          {/* Summary cards */}
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatNumber(inventoryReport.total_products)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Units</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatNumber(inventoryReport.total_quantity)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Cost Value</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(inventoryReport.total_cost_value)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Retail Value</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(inventoryReport.total_retail_value)}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Potential profit */}
+          <Card className="border-green-200 bg-green-50/50 dark:bg-green-950/20">
+            <CardHeader>
+              <CardTitle className="text-base text-green-700 dark:text-green-400">Potential Profit</CardTitle>
+              <CardDescription>If all inventory is sold at retail price</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-green-600">
+                {formatCurrency(inventoryReport.potential_profit)}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Inventory items table */}
+          {inventoryReport.items && inventoryReport.items.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Inventory Items</CardTitle>
+                <CardDescription>Sorted by retail value</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-sm text-muted-foreground">
+                        <th className="pb-3 font-medium">Product</th>
+                        <th className="pb-3 font-medium">Category</th>
+                        <th className="pb-3 font-medium text-right">Qty</th>
+                        <th className="pb-3 font-medium text-right">Cost</th>
+                        <th className="pb-3 font-medium text-right">Price</th>
+                        <th className="pb-3 font-medium text-right">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventoryReport.items.map((item) => (
+                        <tr key={item.product_id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="py-3">
+                            <div>
+                              <p className="font-medium">{item.product_name}</p>
+                              {item.product_sku && (
+                                <p className="text-xs text-muted-foreground">{item.product_sku}</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 text-muted-foreground">{item.category_name || '-'}</td>
+                          <td className="py-3 text-right">{formatNumber(item.quantity)}</td>
+                          <td className="py-3 text-right">{formatCurrency(item.cost_price)}</td>
+                          <td className="py-3 text-right">{formatCurrency(item.sell_price)}</td>
+                          <td className="py-3 text-right font-bold">{formatCurrency(item.retail_value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Package className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No inventory data available</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderCashReport = () => (
+    <div className="space-y-6">
+      {/* Date selector */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+          <Input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="w-48"
+          />
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchCashReport} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : cashReport ? (
+        <>
+          {/* Cash flow summary */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Opening Cash</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(cashReport.opening_cash)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  From {cashReport.shift_count} shift(s)
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Cash Sales</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  +{formatCurrency(cashReport.cash_sales)}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Cash Refunds</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  -{formatCurrency(cashReport.cash_refunds)}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Expected vs Actual */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Expected Cash</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(cashReport.expected_cash)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Opening + Sales - Refunds
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Actual Cash</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(cashReport.actual_cash)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Closing cash from shifts
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Difference */}
+          <Card className={parseFloat(cashReport.difference) !== 0 
+            ? 'border-yellow-200 bg-yellow-50/50 dark:bg-yellow-950/20' 
+            : 'border-green-200 bg-green-50/50 dark:bg-green-950/20'
+          }>
+            <CardHeader>
+              <CardTitle className="text-base">Cash Difference</CardTitle>
+              <CardDescription>Actual minus Expected</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-3xl font-bold flex items-center gap-2 ${
+                parseFloat(cashReport.difference) > 0 
+                  ? 'text-green-600' 
+                  : parseFloat(cashReport.difference) < 0 
+                    ? 'text-red-600' 
+                    : 'text-green-600'
+              }`}>
+                {parseFloat(cashReport.difference) > 0 && <ArrowUpRight className="h-8 w-8" />}
+                {parseFloat(cashReport.difference) < 0 && <ArrowDownRight className="h-8 w-8" />}
+                {parseFloat(cashReport.difference) === 0 && <Minus className="h-8 w-8" />}
+                {formatCurrency(Math.abs(parseFloat(cashReport.difference)))}
+                {parseFloat(cashReport.difference) > 0 && ' over'}
+                {parseFloat(cashReport.difference) < 0 && ' short'}
+                {parseFloat(cashReport.difference) === 0 && ' (balanced)'}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Banknote className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No cash data available</p>
+            <p className="text-xs text-muted-foreground mt-1">Shifts must be closed to appear here</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderEmployeeReport = () => (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-4">
+        <Select value={datePreset} onValueChange={handlePresetChange}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(DATE_PRESETS).map(([key, { label }]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={dateRange.start}
+            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+            className="w-40"
+          />
+          <span className="text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={dateRange.end}
+            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+            className="w-40"
+          />
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : employeeSales.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sales by Employee</CardTitle>
+            <CardDescription>
+              {dateRange.start} to {dateRange.end}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b text-left text-sm text-muted-foreground">
+                    <th className="pb-3 font-medium">#</th>
+                    <th className="pb-3 font-medium">Employee</th>
+                    <th className="pb-3 font-medium text-right">Transactions</th>
+                    <th className="pb-3 font-medium text-right">Items Sold</th>
+                    <th className="pb-3 font-medium text-right">Total Sales</th>
+                    <th className="pb-3 font-medium text-right">Avg/Transaction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeeSales.map((emp, index) => (
+                    <tr key={emp.employee_id} className="border-b last:border-0 hover:bg-muted/50">
+                      <td className="py-3">
+                        <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                          index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                        }`}>
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className="py-3 font-medium">{emp.employee_name}</td>
+                      <td className="py-3 text-right">{formatNumber(emp.transaction_count)}</td>
+                      <td className="py-3 text-right">{formatNumber(emp.item_count)}</td>
+                      <td className="py-3 text-right font-bold">{formatCurrency(emp.total_sales)}</td>
+                      <td className="py-3 text-right">{formatCurrency(emp.avg_transaction)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Users className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No employee sales data available</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderCategoryReport = () => (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-4">
+        <Select value={datePreset} onValueChange={handlePresetChange}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(DATE_PRESETS).map(([key, { label }]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={dateRange.start}
+            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+            className="w-40"
+          />
+          <span className="text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={dateRange.end}
+            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+            className="w-40"
+          />
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : categorySales.length > 0 ? (
+        <>
+          {/* Category cards */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {categorySales.map((cat, index) => (
+              <Card key={cat.category_id} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{cat.category_name}</CardTitle>
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                      index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                    }`}>
+                      {index + 1}
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(cat.total_revenue)}</div>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                    <span>{formatNumber(cat.quantity_sold)} units</span>
+                    <span>•</span>
+                    <span>{cat.items_sold} line items</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Table view */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Category Breakdown</CardTitle>
+              <CardDescription>
+                {dateRange.start} to {dateRange.end}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b text-left text-sm text-muted-foreground">
+                      <th className="pb-3 font-medium">#</th>
+                      <th className="pb-3 font-medium">Category</th>
+                      <th className="pb-3 font-medium text-right">Line Items</th>
+                      <th className="pb-3 font-medium text-right">Qty Sold</th>
+                      <th className="pb-3 font-medium text-right">Revenue</th>
+                      <th className="pb-3 font-medium text-right">% of Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const totalRevenue = categorySales.reduce((sum, c) => sum + parseFloat(c.total_revenue), 0);
+                      return categorySales.map((cat, index) => {
+                        const percentage = totalRevenue > 0 
+                          ? (parseFloat(cat.total_revenue) / totalRevenue) * 100 
+                          : 0;
+                        return (
+                          <tr key={cat.category_id} className="border-b last:border-0 hover:bg-muted/50">
+                            <td className="py-3">
+                              <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                                index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                              }`}>
+                                {index + 1}
+                              </span>
+                            </td>
+                            <td className="py-3 font-medium">{cat.category_name}</td>
+                            <td className="py-3 text-right">{formatNumber(cat.items_sold)}</td>
+                            <td className="py-3 text-right">{formatNumber(cat.quantity_sold)}</td>
+                            <td className="py-3 text-right font-bold">{formatCurrency(cat.total_revenue)}</td>
+                            <td className="py-3 text-right">
+                              <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset bg-transparent text-muted-foreground ring-muted-foreground/30">
+                                {percentage.toFixed(1)}%
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No category sales data available</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full">
       <Header title="Reports" />
 
       <div className="flex-1 p-6 overflow-auto">
-        {/* Report type selector */}
-        <div className="flex gap-2 mb-6">
-          <Button
-            variant={activeReport === 'daily' ? 'default' : 'outline'}
-            onClick={() => setActiveReport('daily')}
-          >
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Daily Report
-          </Button>
-          <Button
-            variant={activeReport === 'top-sellers' ? 'default' : 'outline'}
-            onClick={() => setActiveReport('top-sellers')}
-          >
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Top Sellers
-          </Button>
-          <Button
-            variant={activeReport === 'inventory' ? 'default' : 'outline'}
-            onClick={() => setActiveReport('inventory')}
-          >
-            <Package className="h-4 w-4 mr-2" />
-            Inventory
-          </Button>
-        </div>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ReportType)}>
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-flex mb-6">
+            <TabsTrigger value="overview" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="sales" className="gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Sales</span>
+            </TabsTrigger>
+            <TabsTrigger value="top-sellers" className="gap-2">
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">Top Sellers</span>
+            </TabsTrigger>
+            <TabsTrigger value="inventory" className="gap-2">
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline">Inventory</span>
+            </TabsTrigger>
+            <TabsTrigger value="cash" className="gap-2">
+              <Banknote className="h-4 w-4" />
+              <span className="hidden sm:inline">Cash</span>
+            </TabsTrigger>
+            <TabsTrigger value="employees" className="gap-2">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Employees</span>
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="gap-2">
+              <FolderOpen className="h-4 w-4" />
+              <span className="hidden sm:inline">Categories</span>
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Daily Report */}
-        {activeReport === 'daily' && (
-          <>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-48"
-                />
-              </div>
-            </div>
-
-            {isLoading ? (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : dailyReport ? (
-              <div className="space-y-6">
-                {/* Summary cards */}
-                <div className="grid gap-4 md:grid-cols-4">
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {formatCurrency(dailyReport.total_amount)}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium">Transactions</CardTitle>
-                      <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {dailyReport.transaction_count}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium">Items Sold</CardTitle>
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {dailyReport.item_count}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium">Avg Transaction</CardTitle>
-                      <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {dailyReport.transaction_count > 0
-                          ? formatCurrency(
-                              parseFloat(dailyReport.total_amount) / dailyReport.transaction_count
-                            )
-                          : formatCurrency(0)}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Tax and Discount */}
-                <div className="grid gap-4 md:grid-cols-3">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">Tax Collected</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-xl font-bold">
-                        {formatCurrency(dailyReport.total_tax)}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">Discounts Given</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-xl font-bold text-orange-600">
-                        {formatCurrency(dailyReport.total_discount)}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">Voided Sales</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-xl font-bold text-red-600">
-                        {dailyReport.voided_count} ({formatCurrency(dailyReport.voided_amount)})
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Payment breakdown */}
-                {dailyReport.payment_breakdown && Object.keys(dailyReport.payment_breakdown).length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Payment Methods</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-4 md:grid-cols-4">
-                        {Object.entries(dailyReport.payment_breakdown).map(
-                          ([method, amount]) => (
-                            <div
-                              key={method}
-                              className="flex items-center justify-between rounded-lg border p-4"
-                            >
-                              <span className="capitalize font-medium">{method}</span>
-                              <span className="font-bold">{formatCurrency(amount)}</span>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Hourly sales */}
-                {dailyReport.hourly_sales && dailyReport.hourly_sales.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Hourly Breakdown</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-2 grid-cols-6 md:grid-cols-12">
-                        {dailyReport.hourly_sales.map((hourData) => (
-                          <div
-                            key={hourData.hour}
-                            className="text-center p-2 rounded border"
-                          >
-                            <div className="text-xs text-muted-foreground">
-                              {hourData.hour.toString().padStart(2, '0')}:00
-                            </div>
-                            <div className="font-bold">{hourData.transactions}</div>
-                            <div className="text-xs">{formatCurrency(hourData.sales)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No data for selected date</p>
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* Top Sellers Report */}
-        {activeReport === 'top-sellers' && (
-          <>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  placeholder="From"
-                  className="w-40"
-                />
-                <span className="text-muted-foreground">to</span>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  placeholder="To"
-                  className="w-40"
-                />
-              </div>
-            </div>
-
-            {isLoading ? (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : topSellers.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No sales data available</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Top Selling Products</CardTitle>
-                  <CardDescription>
-                    {dateFrom && dateTo
-                      ? `From ${dateFrom} to ${dateTo}`
-                      : 'Last 30 days'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b text-left text-sm text-muted-foreground">
-                          <th className="pb-3 font-medium w-12">#</th>
-                          <th className="pb-3 font-medium">Product</th>
-                          <th className="pb-3 font-medium">Category</th>
-                          <th className="pb-3 font-medium text-right">Qty Sold</th>
-                          <th className="pb-3 font-medium text-right">Revenue</th>
-                          <th className="pb-3 font-medium text-right">Profit</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {topSellers.map((item, index) => (
-                          <tr key={`${item.product_id}-${index}`} className="border-b last:border-0">
-                            <td className="py-3">
-                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                                {index + 1}
-                              </span>
-                            </td>
-                            <td className="py-3 font-medium">{item.product_name}</td>
-                            <td className="py-3 text-muted-foreground">
-                              {item.category_name || '-'}
-                            </td>
-                            <td className="py-3 text-right">{parseFloat(item.quantity_sold)}</td>
-                            <td className="py-3 text-right font-bold">
-                              {formatCurrency(item.total_revenue)}
-                            </td>
-                            <td className="py-3 text-right text-green-600">
-                              {formatCurrency(item.total_profit)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* Inventory Report */}
-        {activeReport === 'inventory' && (
-          <>
-            {isLoading ? (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : inventoryReport ? (
-              <div className="space-y-6">
-                {/* Summary cards */}
-                <div className="grid gap-4 md:grid-cols-4">
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {inventoryReport.total_products}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium">Total Quantity</CardTitle>
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {parseFloat(inventoryReport.total_quantity)}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium">Cost Value</CardTitle>
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {formatCurrency(inventoryReport.total_cost_value)}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium">Retail Value</CardTitle>
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {formatCurrency(inventoryReport.total_retail_value)}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Potential profit */}
-                <Card className="border-green-500">
-                  <CardHeader>
-                    <CardTitle className="text-base">Potential Profit</CardTitle>
-                    <CardDescription>
-                      If all inventory is sold at retail price
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-green-600">
-                      {formatCurrency(inventoryReport.potential_profit)}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Inventory items */}
-                {inventoryReport.items && inventoryReport.items.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Inventory Items</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b text-left text-sm text-muted-foreground">
-                              <th className="pb-3 font-medium">Product</th>
-                              <th className="pb-3 font-medium">Category</th>
-                              <th className="pb-3 font-medium text-right">Qty</th>
-                              <th className="pb-3 font-medium text-right">Cost</th>
-                              <th className="pb-3 font-medium text-right">Price</th>
-                              <th className="pb-3 font-medium text-right">Value</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {inventoryReport.items.map((item, index) => (
-                              <tr key={`${item.product_id}-${index}`} className="border-b last:border-0">
-                                <td className="py-3 font-medium">{item.product_name}</td>
-                                <td className="py-3 text-muted-foreground">
-                                  {item.category_name || '-'}
-                                </td>
-                                <td className="py-3 text-right">{parseFloat(item.quantity)}</td>
-                                <td className="py-3 text-right">
-                                  {formatCurrency(item.cost_price)}
-                                </td>
-                                <td className="py-3 text-right">
-                                  {formatCurrency(item.sell_price)}
-                                </td>
-                                <td className="py-3 text-right font-bold">
-                                  {formatCurrency(item.retail_value)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <Package className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No inventory data available</p>
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
+          <TabsContent value="overview">{renderOverview()}</TabsContent>
+          <TabsContent value="sales">{renderSalesReport()}</TabsContent>
+          <TabsContent value="top-sellers">{renderTopSellers()}</TabsContent>
+          <TabsContent value="inventory">{renderInventory()}</TabsContent>
+          <TabsContent value="cash">{renderCashReport()}</TabsContent>
+          <TabsContent value="employees">{renderEmployeeReport()}</TabsContent>
+          <TabsContent value="categories">{renderCategoryReport()}</TabsContent>
+        </Tabs>
       </div>
     </div>
   );

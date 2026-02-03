@@ -33,15 +33,25 @@ import {
   ShieldAlert,
   RotateCcw,
   Archive,
+  Settings2,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { User, CreateUserRequest, UpdateUserRequest, UserRole } from '@/types';
+import { User, CreateUserRequest, UpdateUserRequest, UserRole, Permission, PermissionOverride } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
 import { AccountManager } from '@/lib/account-manager';
+import { Switch } from '@/components/ui/switch';
+
+// Role hierarchy for permission management
+const roleHierarchy: Record<string, number> = {
+  owner: 3,
+  manager: 2,
+  cashier: 1,
+};
 
 export default function UsersPage() {
   const { user: currentUser, hasPermission } = useAuth();
   const canManageUsers = hasPermission(PERMISSIONS.USERS_MANAGE);
+  const canManagePermissions = hasPermission(PERMISSIONS.USERS_PERMISSIONS);
   const isOwner = currentUser?.role_name === 'owner';
 
   // Helper to check if current user can edit a specific user
@@ -52,6 +62,15 @@ export default function UsersPage() {
     // Non-owners cannot edit owners
     if (targetUser.role_name === 'owner') return false;
     return true;
+  };
+
+  // Helper to check if current user can manage permissions of a specific user
+  const canManageUserPermissions = (targetUser: User) => {
+    if (!canManagePermissions) return false;
+    const currentLevel = roleHierarchy[currentUser?.role_name || ''] || 0;
+    const targetLevel = roleHierarchy[targetUser.role_name] || 0;
+    // Can only manage permissions of users with strictly lower role level
+    return targetLevel < currentLevel;
   };
 
   const [users, setUsers] = useState<User[]>([]);
@@ -65,10 +84,19 @@ export default function UsersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
+  const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [permissionsUser, setPermissionsUser] = useState<User | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Permission management state
+  const [allPermissions, setAllPermissions] = useState<Record<string, Permission[]>>({});
+  const [userEffectivePermissions, setUserEffectivePermissions] = useState<string[]>([]);
+  const [userOverrides, setUserOverrides] = useState<PermissionOverride[]>([]);
+  const [permissionChanges, setPermissionChanges] = useState<Record<string, boolean | null>>({});
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<CreateUserRequest>({
@@ -270,6 +298,212 @@ export default function UsersPage() {
     }
   };
 
+  // Open permissions dialog
+  const openPermissionsDialog = async (user: User) => {
+    setPermissionsUser(user);
+    setPermissionsDialogOpen(true);
+    setIsLoadingPermissions(true);
+    setPermissionChanges({});
+
+    try {
+      // Fetch all permissions grouped by category
+      const permResult = await api.getPermissions(true);
+      if (permResult.data) {
+        setAllPermissions(permResult.data as Record<string, Permission[]>);
+      }
+
+      // Fetch user's current permissions
+      const userPermResult = await api.getUserPermissions(user.id);
+      if (userPermResult.data) {
+        setUserEffectivePermissions(userPermResult.data.effective_permissions || []);
+        setUserOverrides(userPermResult.data.overrides || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch permissions:', error);
+    } finally {
+      setIsLoadingPermissions(false);
+    }
+  };
+
+  // Check if a permission has an override
+  const getPermissionOverride = (permissionId: string): PermissionOverride | undefined => {
+    return userOverrides.find(o => o.permission_id === permissionId);
+  };
+
+  // Check if a permission is currently enabled (either via role or override)
+  const isPermissionEnabled = (permission: Permission): boolean => {
+    // First check if there's a pending change
+    if (permissionChanges[permission.id] !== undefined) {
+      return permissionChanges[permission.id] === true;
+    }
+    // Then check if there's an override
+    const override = getPermissionOverride(permission.id);
+    if (override) {
+      return override.allowed;
+    }
+    // Finally check effective permissions
+    return userEffectivePermissions.includes(permission.key);
+  };
+
+  // Handle permission toggle
+  const handlePermissionToggle = (permission: Permission, enabled: boolean) => {
+    // Check if this is reverting to the role default
+    const override = getPermissionOverride(permission.id);
+    const roleDefault = userEffectivePermissions.includes(permission.key) && !override;
+    
+    if (enabled === roleDefault && !override) {
+      // Remove from changes if reverting to role default
+      const newChanges = { ...permissionChanges };
+      delete newChanges[permission.id];
+      setPermissionChanges(newChanges);
+    } else {
+      setPermissionChanges(prev => ({
+        ...prev,
+        [permission.id]: enabled,
+      }));
+    }
+  };
+
+  // Save permission changes
+  const savePermissionChanges = async () => {
+    if (!permissionsUser || Object.keys(permissionChanges).length === 0) return;
+
+    setIsSubmitting(true);
+    try {
+      const permissions = Object.entries(permissionChanges).map(([id, allowed]) => ({
+        permission_id: id,
+        allowed: allowed === true,
+      }));
+
+      const result = await api.setUserPermissions(permissionsUser.id, permissions);
+      if (result.error) {
+        console.error('Failed to save permissions:', result.error);
+        return;
+      }
+
+      // Refresh the permissions data
+      const userPermResult = await api.getUserPermissions(permissionsUser.id);
+      if (userPermResult.data) {
+        setUserEffectivePermissions(userPermResult.data.effective_permissions || []);
+        setUserOverrides(userPermResult.data.overrides || []);
+      }
+      setPermissionChanges({});
+    } catch (error) {
+      console.error('Failed to save permissions:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Get the status text for a permission
+  const getPermissionStatus = (permission: Permission): { text: string; color: string } => {
+    const override = getPermissionOverride(permission.id);
+    const hasChange = permissionChanges[permission.id] !== undefined;
+    
+    if (hasChange) {
+      return { text: 'Modified', color: 'text-yellow-600' };
+    }
+    if (override) {
+      return { 
+        text: override.allowed ? 'Override: Granted' : 'Override: Denied', 
+        color: override.allowed ? 'text-green-600' : 'text-red-600' 
+      };
+    }
+    return { text: 'From Role', color: 'text-muted-foreground' };
+  };
+
+  // Check if a permission is a "view/access" permission (controls sidebar access)
+  // can_view_sales is the parent for can_void_sale (void is in sales history page)
+  // can_create_sale is independent (POS page)
+  const isViewPermission = (permission: Permission): boolean => {
+    // can_create_sale is independent - POS page
+    if (permission.key === 'can_create_sale') {
+      return false;
+    }
+    // can_view_sales is the access permission for sales history
+    if (permission.key === 'can_view_sales') {
+      return true;
+    }
+    // can_void_sale is a child of can_view_sales
+    if (permission.key === 'can_void_sale') {
+      return false;
+    }
+    return permission.key.startsWith('can_view_');
+  };
+
+  // Get the view permission for a category
+  const getViewPermissionForCategory = (category: string, permissions: Permission[]): Permission | undefined => {
+    // For sales category, can_view_sales is the parent for void permission
+    if (category === 'sales') {
+      return permissions.find(p => p.key === 'can_view_sales');
+    }
+    return permissions.find(p => isViewPermission(p));
+  };
+
+  // Check if a permission should be disabled based on parent permission
+  const isPermissionDisabledByParent = (permission: Permission, category: string): boolean => {
+    // can_void_sale depends on can_view_sales (void is in sales history page)
+    if (permission.key === 'can_void_sale') {
+      const permissions = allPermissions[category] || [];
+      const viewPerm = permissions.find(p => p.key === 'can_view_sales');
+      if (viewPerm && !isPermissionEnabled(viewPerm)) {
+        return true;
+      }
+    }
+    // can_create_sale is independent - never disabled by parent
+    if (permission.key === 'can_create_sale') {
+      return false;
+    }
+    // For other categories, use the standard view permission check
+    if (category !== 'sales') {
+      const viewPerm = getViewPermissionForCategory(category, allPermissions[category] || []);
+      if (viewPerm && !isViewPermission(permission) && !isPermissionEnabled(viewPerm)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Check if view permission for a category is enabled (for backward compatibility)
+  const isViewPermissionEnabled = (category: string): boolean => {
+    const permissions = allPermissions[category] || [];
+    const viewPerm = getViewPermissionForCategory(category, permissions);
+    if (!viewPerm) return true;
+    return isPermissionEnabled(viewPerm);
+  };
+
+  // Sort permissions: view permissions first, then others
+  const sortPermissions = (permissions: Permission[]): Permission[] => {
+    return [...permissions].sort((a, b) => {
+      const aIsView = isViewPermission(a);
+      const bIsView = isViewPermission(b);
+      if (aIsView && !bIsView) return -1;
+      if (!aIsView && bIsView) return 1;
+      return 0;
+    });
+  };
+
+  // Get display name for permission (rename view permissions to "Access to...")
+  const getPermissionDisplayName = (permission: Permission, category: string): string => {
+    // Sales permissions - special naming
+    if (permission.key === 'can_view_sales') {
+      return 'Sales History Access';
+    }
+    if (permission.key === 'can_create_sale') {
+      return 'Create Sales (POS)';
+    }
+    if (isViewPermission(permission)) {
+      // Special case: system category shows as "Audit"
+      if (category === 'system') {
+        return 'Access to Audit';
+      }
+      // Capitalize category name
+      const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+      return `Access to ${categoryName}`;
+    }
+    return permission.name;
+  };
+
   const getRoleIcon = (role: UserRole) => {
     switch (role) {
       case 'owner':
@@ -444,8 +678,19 @@ export default function UsersPage() {
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => openEditDialog(user)}
+                                      title="Edit user"
                                     >
                                       <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {canManageUserPermissions(user) && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => openPermissionsDialog(user)}
+                                      title="Manage permissions"
+                                    >
+                                      <Settings2 className="h-4 w-4" />
                                     </Button>
                                   )}
                                   {canEditUser(user) && user.role_name !== 'owner' && (
@@ -456,6 +701,7 @@ export default function UsersPage() {
                                         setDeletingUser(user);
                                         setDeleteDialogOpen(true);
                                       }}
+                                      title="Archive user"
                                     >
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
@@ -700,6 +946,139 @@ export default function UsersPage() {
                 'Delete Permanently'
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permissions Management Dialog */}
+      <Dialog open={permissionsDialogOpen} onOpenChange={(open) => {
+        setPermissionsDialogOpen(open);
+        if (!open) {
+          setPermissionsUser(null);
+          setPermissionChanges({});
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5" />
+              Manage Permissions
+            </DialogTitle>
+            <DialogDescription>
+              Configure individual permissions for <span className="font-semibold">{permissionsUser?.name}</span> ({permissionsUser?.role_name}).
+              These overrides will grant or deny access regardless of the user&apos;s role.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-2">
+          {isLoadingPermissions ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(allPermissions).map(([category, permissions]) => {
+                const sortedPermissions = sortPermissions(permissions);
+                
+                return (
+                  <div key={category} className="space-y-3">
+                    <h4 className="font-semibold capitalize text-sm border-b pb-1">{category}</h4>
+                    <div className="space-y-2">
+                      {sortedPermissions.map((permission) => {
+                        const isViewPerm = isViewPermission(permission);
+                        const isEnabled = isPermissionEnabled(permission);
+                        const status = getPermissionStatus(permission);
+                        
+                        // Use the new per-permission disabled check
+                        const isDisabled = isPermissionDisabledByParent(permission, category);
+                        
+                        // Get the appropriate message for disabled state
+                        const getDisabledMessage = () => {
+                          if (permission.key === 'can_void_sale') {
+                            return 'Enable "Sales History Access" first';
+                          }
+                          return `Enable "Access to ${category.charAt(0).toUpperCase() + category.slice(1)}" first`;
+                        };
+                        
+                        return (
+                          <div 
+                            key={permission.id} 
+                            className={`flex items-center justify-between py-2 px-3 rounded-md transition-colors ${
+                              isDisabled 
+                                ? 'bg-muted/30 opacity-50' 
+                                : 'bg-muted/50 hover:bg-muted'
+                            }`}
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-medium text-sm ${isDisabled ? 'text-muted-foreground' : ''}`}>
+                                  {getPermissionDisplayName(permission, category)}
+                                </span>
+                                {isViewPerm && (
+                                  <span className="text-xs text-blue-600 font-medium">(Controls Access)</span>
+                                )}
+                                {!isDisabled && (
+                                  <span className={`text-xs ${status.color}`}>({status.text})</span>
+                                )}
+                              </div>
+                              {permission.description && (
+                                <p className="text-xs text-muted-foreground mt-0.5">{permission.description}</p>
+                              )}
+                              {isDisabled && (
+                                <p className="text-xs text-orange-600 mt-0.5">
+                                  {getDisabledMessage()}
+                                </p>
+                              )}
+                            </div>
+                            <Switch
+                              checked={isDisabled ? false : isEnabled}
+                              onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
+                              disabled={isDisabled}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          </div>
+
+          <DialogFooter className="flex-shrink-0 flex items-center justify-between gap-2 pt-4 border-t bg-background">
+            <div className="text-sm text-muted-foreground">
+              {Object.keys(permissionChanges).length > 0 && (
+                <span className="text-yellow-600">
+                  {Object.keys(permissionChanges).length} unsaved change(s)
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setPermissionsDialogOpen(false);
+                  setPermissionsUser(null);
+                  setPermissionChanges({});
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={savePermissionChanges} 
+                disabled={isSubmitting || Object.keys(permissionChanges).length === 0}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

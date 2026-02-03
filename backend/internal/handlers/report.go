@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"github.com/shopspring/decimal"
 
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/repository"
@@ -365,9 +366,31 @@ func (h *ReportHandler) ExportSalesCSV(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get summary statistics for the period
+	summary, err := h.reportRepo.GetSalesRangeSummary(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get sales summary")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
 	// Generate CSV
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
+
+	// Write summary section
+	writer.Write([]string{"SALES REPORT SUMMARY"})
+	writer.Write([]string{"Period:", fmt.Sprintf("%s to %s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))})
+	writer.Write([]string{""})
+	writer.Write([]string{"Total Transactions:", fmt.Sprintf("%d", summary.TotalTransactions)})
+	writer.Write([]string{"Total Items Sold:", fmt.Sprintf("%d", summary.TotalItems)})
+	writer.Write([]string{"Total Revenue:", summary.TotalAmount.String()})
+	writer.Write([]string{"Total Tax Collected:", summary.TotalTax.String()})
+	writer.Write([]string{"Total Discounts:", summary.TotalDiscount.String()})
+	writer.Write([]string{""})
+	writer.Write([]string{""})
 
 	// Header
 	writer.Write([]string{
@@ -552,6 +575,201 @@ func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
 
 	// Set response headers
 	filename := fmt.Sprintf("top_sellers_%s_to_%s.csv", startDate.Format("20060102"), endDate.Format("20060102"))
+	c.Set("Content-Type", "text/csv")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+
+	return c.Send(buf.Bytes())
+}
+
+// ExportComprehensiveReportCSV exports all analytics and statistics in one CSV
+func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
+	// Check permission
+	roleName := middleware.GetRoleName(c)
+	if roleName != "owner" && roleName != "manager" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "Only owner or manager can export data",
+		})
+	}
+
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
+
+	var startDate, endDate time.Time
+	var err error
+
+	if startStr == "" || endStr == "" {
+		endDate = time.Now()
+		startDate = endDate.AddDate(0, 0, -30)
+	} else {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid start_date format",
+			})
+		}
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid end_date format",
+			})
+		}
+	}
+
+	// Get all data
+	summary, err := h.reportRepo.GetSalesRangeSummary(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get sales summary")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
+	dailyReports, err := h.reportRepo.GetSalesRangeReport(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get daily reports")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
+	topSellers, err := h.reportRepo.GetTopSellers(c.Context(), startDate, endDate, 20)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get top sellers")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
+	employeeSales, err := h.reportRepo.GetEmployeeSalesReport(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get employee sales")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
+	categorySales, err := h.reportRepo.GetCategorySalesReport(c.Context(), startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get category sales")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to export data",
+		})
+	}
+
+	// Generate comprehensive CSV
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+
+	// Title
+	writer.Write([]string{"COMPREHENSIVE SALES REPORT"})
+	writer.Write([]string{"Generated:", time.Now().Format("2006-01-02 15:04:05")})
+	writer.Write([]string{"Period:", fmt.Sprintf("%s to %s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))})
+	writer.Write([]string{""})
+
+	// SUMMARY SECTION
+	writer.Write([]string{"=== SUMMARY STATISTICS ==="})
+	writer.Write([]string{"Total Transactions:", fmt.Sprintf("%d", summary.TotalTransactions)})
+	writer.Write([]string{"Total Items Sold:", fmt.Sprintf("%d", summary.TotalItems)})
+	writer.Write([]string{"Total Revenue:", summary.TotalAmount.String()})
+	writer.Write([]string{"Total Tax:", summary.TotalTax.String()})
+	writer.Write([]string{"Total Discounts:", summary.TotalDiscount.String()})
+	avgPerTransaction := decimal.Zero
+	if summary.TotalTransactions > 0 {
+		avgPerTransaction = summary.TotalAmount.Div(decimal.NewFromInt(int64(summary.TotalTransactions)))
+	}
+	writer.Write([]string{"Average per Transaction:", avgPerTransaction.String()})
+	writer.Write([]string{""})
+	writer.Write([]string{""})
+
+	// DAILY BREAKDOWN SECTION
+	writer.Write([]string{"=== DAILY SALES BREAKDOWN ==="})
+	writer.Write([]string{"Date", "Transactions", "Items Sold", "Revenue", "Tax", "Discounts"})
+	for _, day := range dailyReports {
+		writer.Write([]string{
+			day.Date,
+			fmt.Sprintf("%d", day.TransactionCount),
+			fmt.Sprintf("%d", day.ItemCount),
+			day.TotalAmount.String(),
+			day.TotalTax.String(),
+			day.TotalDiscount.String(),
+		})
+	}
+	writer.Write([]string{""})
+	writer.Write([]string{""})
+
+	// TOP SELLERS SECTION
+	writer.Write([]string{"=== TOP 20 SELLING PRODUCTS ==="})
+	writer.Write([]string{"Rank", "Product Name", "SKU", "Category", "Qty Sold", "Revenue", "Profit", "Margin %"})
+	for i, item := range topSellers {
+		sku := ""
+		if item.ProductSKU != nil {
+			sku = *item.ProductSKU
+		}
+		category := ""
+		if item.CategoryName != nil {
+			category = *item.CategoryName
+		}
+		margin := decimal.Zero
+		if !item.TotalRevenue.IsZero() {
+			margin = item.TotalProfit.Div(item.TotalRevenue).Mul(decimal.NewFromInt(100))
+		}
+		writer.Write([]string{
+			fmt.Sprintf("%d", i+1),
+			item.ProductName,
+			sku,
+			category,
+			item.QuantitySold.String(),
+			item.TotalRevenue.String(),
+			item.TotalProfit.String(),
+			margin.StringFixed(2),
+		})
+	}
+	writer.Write([]string{""})
+	writer.Write([]string{""})
+
+	// EMPLOYEE PERFORMANCE SECTION
+	if len(employeeSales) > 0 {
+		writer.Write([]string{"=== EMPLOYEE SALES PERFORMANCE ==="})
+		writer.Write([]string{"Employee", "Transactions", "Items Sold", "Total Sales", "Avg per Transaction"})
+		for _, emp := range employeeSales {
+			writer.Write([]string{
+				fmt.Sprintf("%v", emp["employee_name"]),
+				fmt.Sprintf("%v", emp["transaction_count"]),
+				fmt.Sprintf("%v", emp["item_count"]),
+				fmt.Sprintf("%v", emp["total_sales"]),
+				fmt.Sprintf("%v", emp["avg_transaction"]),
+			})
+		}
+		writer.Write([]string{""})
+		writer.Write([]string{""})
+	}
+
+	// CATEGORY PERFORMANCE SECTION
+	if len(categorySales) > 0 {
+		writer.Write([]string{"=== SALES BY CATEGORY ==="})
+		writer.Write([]string{"Category", "Items Sold (Line Items)", "Total Quantity", "Revenue"})
+		for _, cat := range categorySales {
+			writer.Write([]string{
+				fmt.Sprintf("%v", cat["category_name"]),
+				fmt.Sprintf("%v", cat["items_sold"]),
+				fmt.Sprintf("%v", cat["quantity_sold"]),
+				fmt.Sprintf("%v", cat["total_revenue"]),
+			})
+		}
+	}
+
+	writer.Flush()
+
+	// Set response headers
+	filename := fmt.Sprintf("comprehensive_report_%s_to_%s.csv", startDate.Format("20060102"), endDate.Format("20060102"))
 	c.Set("Content-Type", "text/csv")
 	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 
