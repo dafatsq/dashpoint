@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ import {
   Banknote,
   QrCode,
   Building2,
+  AlertCircle,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Sale, PaymentMethod } from '@/types';
@@ -45,6 +47,7 @@ const PAYMENT_ICONS: Record<PaymentMethod, React.ReactNode> = {
 };
 
 export default function SalesHistoryPage() {
+  const router = useRouter();
   const { hasPermission } = useAuth();
   const [sales, setSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +64,13 @@ export default function SalesHistoryPage() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
+
+  // Redirect if no permission
+  useEffect(() => {
+    if (!hasPermission(PERMISSIONS.SALES_VIEW)) {
+      router.replace('/dashboard');
+    }
+  }, [hasPermission, router]);
 
   // Fetch sales
   useEffect(() => {

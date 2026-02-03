@@ -79,6 +79,7 @@ type CreateProductRequest struct {
 	AllowNegativeStock *bool   `json:"allow_negative_stock"`
 	InitialQuantity    *string `json:"initial_quantity"`
 	LowStockThreshold  *string `json:"low_stock_threshold"`
+	ImageURL           *string `json:"image_url"`
 }
 
 // UpdateProductRequest represents the request to update a product
@@ -95,6 +96,7 @@ type UpdateProductRequest struct {
 	IsActive           *bool   `json:"is_active"`
 	TrackInventory     *bool   `json:"track_inventory"`
 	AllowNegativeStock *bool   `json:"allow_negative_stock"`
+	ImageURL           *string `json:"image_url"`
 }
 
 // List handles GET /api/v1/products
@@ -388,6 +390,10 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 		}
 	}
 
+	if req.ImageURL != nil {
+		product.ImageURL = req.ImageURL
+	}
+
 	// Parse initial quantity
 	var initialQty *decimal.Decimal
 	if req.InitialQuantity != nil {
@@ -556,6 +562,15 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 
 	if req.AllowNegativeStock != nil {
 		product.AllowNegativeStock = *req.AllowNegativeStock
+	}
+
+	if req.ImageURL != nil {
+		// Empty string means clear the image
+		if *req.ImageURL == "" {
+			product.ImageURL = nil
+		} else {
+			product.ImageURL = req.ImageURL
+		}
 	}
 
 	if err := h.productRepo.Update(c.Context(), product); err != nil {

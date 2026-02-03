@@ -72,9 +72,7 @@ function getProductPrice(product: Product): number {
 
 export default function InventoryPage() {
   const { hasPermission } = useAuth();
-  const canAdjust = hasPermission(PERMISSIONS.INVENTORY_ADJUST);
-  const canReceive = hasPermission(PERMISSIONS.INVENTORY_RECEIVE);
-  const canModifyStock = canAdjust || canReceive;
+  const canModifyStock = hasPermission(PERMISSIONS.INVENTORY_EDIT);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
@@ -86,7 +84,7 @@ export default function InventoryPage() {
   // Adjustment dialog
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [adjustmentType, setAdjustmentType] = useState<'add' | 'remove'>('add');
+  const [adjustmentType, setAdjustmentType] = useState<'add' | 'remove' | 'count'>('add');
   const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
   const [adjustmentTypeValue, setAdjustmentTypeValue] = useState<AdjustmentType>('purchase');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');

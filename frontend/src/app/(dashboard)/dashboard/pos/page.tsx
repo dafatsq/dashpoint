@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,19 @@ import api from '@/lib/api';
 import { Product, CartItem, Category, Shift, PaymentMethod, CreateSaleRequest } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
 
+// Helper to get full image URL
+function getImageUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  // Use window.location for dynamic base URL, fallback to localhost:8080
+  const baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? `${window.location.protocol}//${window.location.hostname}:8080`
+    : 'http://localhost:8080';
+  return `${baseUrl}${path}`;
+}
+
 // Helper functions to parse Product string values
 function getProductPrice(product: Product): number {
   return parseFloat(product.price) || 0;
@@ -60,8 +74,16 @@ function getProductMinQuantity(product: Product): number {
 }
 
 export default function POSPage() {
+  const router = useRouter();
   const { hasPermission, user } = useAuth();
-  const canApplyDiscount = hasPermission(PERMISSIONS.SALES_DISCOUNT);
+  const canApplyDiscount = hasPermission(PERMISSIONS.SALES_CREATE);
+
+  // Redirect if no permission
+  useEffect(() => {
+    if (!hasPermission(PERMISSIONS.SALES_CREATE)) {
+      router.replace('/dashboard');
+    }
+  }, [hasPermission, router]);
 
   // Product state
   const [products, setProducts] = useState<Product[]>([]);
@@ -333,8 +355,19 @@ export default function POSPage() {
                       disabled={!currentShift || quantity <= 0}
                       className="bg-card border rounded-lg p-3 text-left hover:border-primary hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <div className="aspect-square bg-muted rounded-md mb-2 flex items-center justify-center">
-                        <ShoppingCart className="h-8 w-8 text-muted-foreground" />
+                      <div className="aspect-square bg-muted rounded-md mb-2 flex items-center justify-center overflow-hidden">
+                        {product.image_url ? (
+                          <img
+                            src={getImageUrl(product.image_url)}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <ShoppingCart className="h-8 w-8 text-muted-foreground" style={{ display: product.image_url ? 'none' : 'block' }} />
                       </div>
                       <p className="font-medium text-sm truncate">{product.name}</p>
                       <p className="text-xs text-muted-foreground">{product.category_name}</p>

@@ -30,6 +30,7 @@ import {
   Receipt,
   TrendingDown,
   Calendar,
+  Info,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Expense, ExpenseCategory, CreateExpenseRequest, ExpenseSummary, Product } from '@/types';
@@ -210,7 +211,7 @@ export default function ExpensesPage() {
     try {
       const expenseData: CreateExpenseRequest = {
         ...formData,
-        category_id: formData.category_id || undefined,
+        category_id: (formData.category_id && formData.category_id !== 'none') ? formData.category_id : undefined,
         product_id: formData.product_id || undefined,
         quantity: formData.quantity || undefined,
         vendor: formData.vendor || undefined,
@@ -528,95 +529,27 @@ export default function ExpensesPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="amount">Amount (IDR) *</Label>
-                  {isInventoryPurchase() && formData.product_id && formData.quantity && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs"
-                      onClick={() => setIsManualAmount(!isManualAmount)}
-                    >
-                      {isManualAmount ? 'Auto-calculate' : 'Manual edit'}
-                    </Button>
-                  )}
-                </div>
-                <Input
-                  id="amount"
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) => {
-                    setFormData({ ...formData, amount: e.target.value });
-                    if (formErrors.amount) setFormErrors({ ...formErrors, amount: undefined });
-                    if (isInventoryPurchase()) setIsManualAmount(true);
-                  }}
-                  placeholder="100000"
-                  className={formErrors.amount ? 'border-destructive' : ''}
-                  disabled={isInventoryPurchase() && !isManualAmount && !!formData.product_id && !!formData.quantity}
-                />
-                {isInventoryPurchase() && !isManualAmount && formData.product_id && formData.quantity && (
-                  <p className="text-xs text-muted-foreground">Auto-calculated from product cost × quantity</p>
-                )}
-                {formErrors.amount && (
-                  <p className="text-sm text-destructive">{formErrors.amount}</p>
-                )}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="expense_date">Date *</Label>
-                <Input
-                  id="expense_date"
-                  type="date"
-                  value={formData.expense_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, expense_date: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="description">Description *</Label>
-                {isInventoryPurchase() && formData.product_id && formData.quantity && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs"
-                    onClick={() => setIsManualDescription(!isManualDescription)}
-                  >
-                    {isManualDescription ? 'Auto-generate' : 'Manual edit'}
-                  </Button>
-                )}
-              </div>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => {
-                  setFormData({ ...formData, description: e.target.value });
-                  if (formErrors.description) setFormErrors({ ...formErrors, description: undefined });
-                  if (isInventoryPurchase()) setIsManualDescription(true);
-                }}
-                placeholder="e.g., Monthly electricity bill"
-                className={formErrors.description ? 'border-destructive' : ''}
-                disabled={isInventoryPurchase() && !isManualDescription && !!formData.product_id && !!formData.quantity}
-              />
-              {isInventoryPurchase() && !isManualDescription && formData.product_id && formData.quantity && (
-                <p className="text-xs text-muted-foreground">Auto-generated from product and quantity</p>
-              )}
-              {formErrors.description && (
-                <p className="text-sm text-destructive">{formErrors.description}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
                 <Label htmlFor="category">Category</Label>
                 <Select
-                  value={formData.category_id || 'none'}
+                  value={formData.category_id}
                   onValueChange={(value) => {
-                    setFormData({ ...formData, category_id: value === 'none' ? '' : value, product_id: '', quantity: '' });
+                    if (!editingExpense) {
+                      // For New Expense: reset everything except date when category changes
+                      setFormData({
+                        category_id: value,
+                        product_id: '',
+                        quantity: '',
+                        amount: '',
+                        description: '',
+                        expense_date: formData.expense_date,
+                        vendor: '',
+                        reference_number: '',
+                        notes: '',
+                      });
+                    } else {
+                      // For Editing: just clear product/quantity-specific fields to prevent logic conflicts
+                      setFormData({ ...formData, category_id: value, product_id: '', quantity: '' });
+                    }
                     setIsManualAmount(false);
                     setIsManualDescription(false);
                   }}
@@ -635,34 +568,48 @@ export default function ExpensesPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="vendor">Vendor</Label>
-                <Input
-                  id="vendor"
-                  value={formData.vendor}
-                  onChange={(e) =>
-                    setFormData({ ...formData, vendor: e.target.value })
-                  }
-                  placeholder="e.g., PLN"
-                />
+                {isInventoryPurchase() ? (
+                  <>
+                    <Label htmlFor="quantity" className={!formData.category_id ? 'opacity-50' : ''}>Quantity *</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      value={formData.quantity}
+                      onChange={(e) =>
+                        setFormData({ ...formData, quantity: e.target.value })
+                      }
+                      placeholder="Enter quantity"
+                      disabled={!formData.category_id}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Label htmlFor="vendor" className={!formData.category_id ? 'opacity-50' : ''}>Vendor</Label>
+                    <Input
+                      id="vendor"
+                      value={formData.vendor}
+                      onChange={(e) =>
+                        setFormData({ ...formData, vendor: e.target.value })
+                      }
+                      placeholder="e.g., PLN"
+                      disabled={!formData.category_id}
+                    />
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Conditional: Product & Quantity for Inventory Purchase */}
-            {isInventoryPurchase() && (
-              <>
-                <div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-900 dark:text-blue-100 font-medium">
-                    Inventory Purchase - Select product and quantity, amount will be auto-calculated
-                  </p>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="product">Product *</Label>
+            <div className="grid gap-2">
+              {isInventoryPurchase() ? (
+                <>
+                  <Label htmlFor="product" className={!formData.category_id ? 'opacity-50' : ''}>Product *</Label>
                   <Select
                     value={formData.product_id || 'none'}
                     onValueChange={(value) =>
                       setFormData({ ...formData, product_id: value === 'none' ? '' : value })
                     }
+                    disabled={!formData.category_id}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select product" />
@@ -676,26 +623,141 @@ export default function ExpensesPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="description" className={!formData.category_id ? 'opacity-50' : ''}>Description *</Label>
+                  </div>
+                  <Input
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => {
+                      setFormData({ ...formData, description: e.target.value });
+                      if (formErrors.description) setFormErrors({ ...formErrors, description: undefined });
+                    }}
+                    placeholder="e.g., Monthly electricity bill"
+                    className={formErrors.description ? 'border-destructive' : ''}
+                    disabled={!formData.category_id}
+                  />
+                  {formErrors.description && (
+                    <p className="text-sm text-destructive">{formErrors.description}</p>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="amount" className={!formData.category_id ? 'opacity-50' : ''}>Amount (IDR) *</Label>
+                  {isInventoryPurchase() && formData.product_id && formData.quantity && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs"
+                      onClick={() => setIsManualAmount(!isManualAmount)}
+                      disabled={!formData.category_id}
+                    >
+                      {isManualAmount ? 'Auto-calculate' : 'Manual edit'}
+                    </Button>
+                  )}
+                </div>
+                <Input
+                  id="amount"
+                  type="number"
+                  value={formData.amount}
+                  onChange={(e) => {
+                    setFormData({ ...formData, amount: e.target.value });
+                    if (formErrors.amount) setFormErrors({ ...formErrors, amount: undefined });
+                    if (isInventoryPurchase()) setIsManualAmount(true);
+                  }}
+                  placeholder="100000"
+                  className={formErrors.amount ? 'border-destructive' : ''}
+                  disabled={!formData.category_id || (isInventoryPurchase() && !isManualAmount && !!formData.product_id && !!formData.quantity)}
+                />
+                {isInventoryPurchase() && !isManualAmount && formData.product_id && formData.quantity && (
+                  <p className="text-xs text-muted-foreground">Auto-calculated from product cost × quantity</p>
+                )}
+                {formErrors.amount && (
+                  <p className="text-sm text-destructive">{formErrors.amount}</p>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="expense_date" className={!formData.category_id ? 'opacity-50' : ''}>Date *</Label>
+                <Input
+                  id="expense_date"
+                  type="date"
+                  value={formData.expense_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, expense_date: e.target.value })
+                  }
+                  disabled={!formData.category_id}
+                />
+              </div>
+            </div>
+
+            {/* Conditional: Remaining sections for Inventory Purchase */}
+            {isInventoryPurchase() && (
+              <>
+                <div className="flex items-center gap-3 p-3 my-4 rounded-md bg-primary/10 border border-primary/30">
+                  <Info className="h-5 w-5 text-primary flex-shrink-0" />
+                  <p className="text-sm text-primary">
+                    Inventory Purchase: Amount is auto-calculated based on the selected Product and Quantity.
+                  </p>
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="quantity">Quantity *</Label>
+                  <Label htmlFor="vendor" className={!formData.category_id ? 'opacity-50' : ''}>Vendor</Label>
                   <Input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    value={formData.quantity}
+                    id="vendor"
+                    value={formData.vendor}
                     onChange={(e) =>
-                      setFormData({ ...formData, quantity: e.target.value })
+                      setFormData({ ...formData, vendor: e.target.value })
                     }
-                    placeholder="Enter quantity purchased"
+                    placeholder="e.g., Supplier Name"
+                    disabled={!formData.category_id}
                   />
+                </div>
+
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="description" className={!formData.category_id ? 'opacity-50' : ''}>Description *</Label>
+                    {formData.product_id && formData.quantity && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => setIsManualDescription(!isManualDescription)}
+                        disabled={!formData.category_id}
+                      >
+                        {isManualDescription ? 'Auto-generate' : 'Manual edit'}
+                      </Button>
+                    )}
+                  </div>
+                  <Input
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => {
+                      setFormData({ ...formData, description: e.target.value });
+                      if (formErrors.description) setFormErrors({ ...formErrors, description: undefined });
+                      setIsManualDescription(true);
+                    }}
+                    placeholder="e.g., Stock for February"
+                    className={formErrors.description ? 'border-destructive' : ''}
+                    disabled={!formData.category_id || (!isManualDescription && !!formData.product_id && !!formData.quantity)}
+                  />
+                  {!isManualDescription && formData.product_id && formData.quantity && (
+                    <p className="text-xs text-muted-foreground">Auto-generated from product and quantity</p>
+                  )}
                 </div>
               </>
             )}
 
             <div className="grid gap-2">
-              <Label htmlFor="reference_number">Reference Number</Label>
+              <Label htmlFor="reference_number" className={!formData.category_id ? 'opacity-50' : ''}>Reference Number</Label>
               <Input
                 id="reference_number"
                 value={formData.reference_number}
@@ -703,11 +765,12 @@ export default function ExpensesPage() {
                   setFormData({ ...formData, reference_number: e.target.value })
                 }
                 placeholder="e.g., Invoice #12345"
+                disabled={!formData.category_id}
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="notes" className={!formData.category_id ? 'opacity-50' : ''}>Notes</Label>
               <Input
                 id="notes"
                 value={formData.notes}
@@ -715,6 +778,7 @@ export default function ExpensesPage() {
                   setFormData({ ...formData, notes: e.target.value })
                 }
                 placeholder="Additional notes..."
+                disabled={!formData.category_id}
               />
             </div>
           </div>
@@ -723,7 +787,7 @@ export default function ExpensesPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || !formData.category_id}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

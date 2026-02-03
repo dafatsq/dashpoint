@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -71,6 +72,12 @@ func main() {
 	// Initialize audit service
 	audit.Init(auditRepo)
 
+	// Create upload directory
+	uploadDir := "./uploads"
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		log.Fatal().Err(err).Msg("Failed to create upload directory")
+	}
+
 	// Create handlers
 	healthHandler := handlers.NewHealthHandler(db)
 	authHandler := handlers.NewAuthHandler(userRepo, refreshTokenRepo, jwtManager)
@@ -85,6 +92,21 @@ func main() {
 	reportHandler := handlers.NewReportHandler(reportRepo)
 	auditHandler := handlers.NewAuditHandler(auditRepo)
 	expenseHandler := handlers.NewExpenseHandler(expenseRepo, inventoryRepo, productRepo)
+	uploadHandler := handlers.NewUploadHandler(uploadDir)
+
+	// Create permission checker function
+	permissionChecker := func(c *fiber.Ctx, userID uuid.UUID, permission string) (bool, error) {
+		permissions, err := userRepo.GetUserPermissions(c.Context(), userID)
+		if err != nil {
+			return false, err
+		}
+		for _, perm := range permissions {
+			if perm == permission {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
@@ -101,8 +123,20 @@ func main() {
 	app.Use(middleware.CORS())
 	app.Use(middleware.RequestID())
 
+	// Serve static files (uploaded images) with proper headers
+	app.Static("/uploads", uploadDir, fiber.Static{
+		Browse: false,
+		MaxAge: 3600, // Cache for 1 hour
+		ModifyResponse: func(c *fiber.Ctx) error {
+			// Add CORS headers for images
+			c.Set("Access-Control-Allow-Origin", "*")
+			c.Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			return nil
+		},
+	})
+
 	// Setup routes
-	setupRoutes(app, jwtManager, userRepo, healthHandler, authHandler, userHandler, roleHandler, productHandler, categoryHandler, shiftHandler, saleHandler, reportHandler, auditHandler, expenseHandler, eventsHandler)
+	setupRoutes(app, jwtManager, userRepo, permissionChecker, healthHandler, authHandler, userHandler, roleHandler, productHandler, categoryHandler, shiftHandler, saleHandler, reportHandler, auditHandler, expenseHandler, eventsHandler, uploadHandler)
 
 	// Start server in goroutine
 	go func() {
@@ -148,6 +182,7 @@ func setupRoutes(
 	app *fiber.App,
 	jwtManager *auth.JWTManager,
 	userRepo *repository.UserRepository,
+	permissionChecker middleware.PermissionChecker,
 	healthHandler *handlers.HealthHandler,
 	authHandler *handlers.AuthHandler,
 	userHandler *handlers.UserHandler,
@@ -160,6 +195,7 @@ func setupRoutes(
 	auditHandler *handlers.AuditHandler,
 	expenseHandler *handlers.ExpenseHandler,
 	eventsHandler *handlers.EventsHandler,
+	uploadHandler *handlers.UploadHandler,
 ) {
 	// Root endpoint
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -236,7 +272,7 @@ func setupRoutes(
 	// Inventory endpoints
 	inventory := protected.Group("/inventory")
 	inventory.Get("/low-stock", productHandler.GetLowStock)
-	inventory.Post("/adjust", middleware.RequireRole("owner", "manager", "cashier"), productHandler.AdjustStock)
+	inventory.Post("/adjust", middleware.RequirePermission(permissionChecker, "can_edit_inventory"), productHandler.AdjustStock)
 
 	// Shift endpoints
 	shifts := protected.Group("/shifts")
@@ -248,12 +284,12 @@ func setupRoutes(
 
 	// Sales endpoints
 	sales := protected.Group("/sales")
-	sales.Post("/", saleHandler.CreateSale)
-	sales.Get("/", saleHandler.ListSales)
-	sales.Get("/summary/daily", saleHandler.GetDailySummary)
-	sales.Get("/invoice/:invoiceNo", saleHandler.GetSaleByInvoice)
-	sales.Get("/:id", saleHandler.GetSale)
-	sales.Post("/:id/void", saleHandler.VoidSale)
+	sales.Post("/", middleware.RequirePermission(permissionChecker, "can_create_sale"), saleHandler.CreateSale)
+	sales.Get("/", middleware.RequirePermission(permissionChecker, "can_view_sales"), saleHandler.ListSales)
+	sales.Get("/summary/daily", middleware.RequirePermission(permissionChecker, "can_view_sales"), saleHandler.GetDailySummary)
+	sales.Get("/invoice/:invoiceNo", middleware.RequirePermission(permissionChecker, "can_view_sales"), saleHandler.GetSaleByInvoice)
+	sales.Get("/:id", middleware.RequirePermission(permissionChecker, "can_view_sales"), saleHandler.GetSale)
+	sales.Post("/:id/void", middleware.RequirePermission(permissionChecker, "can_void_sale"), saleHandler.VoidSale)
 
 	// Reports endpoints (owner/manager only for most)
 	reports := protected.Group("/reports")
@@ -269,6 +305,7 @@ func setupRoutes(
 	reports.Get("/export/sales", reportHandler.ExportSalesCSV)
 	reports.Get("/export/inventory", reportHandler.ExportInventoryCSV)
 	reports.Get("/export/top-sellers", reportHandler.ExportTopSellersCSV)
+	reports.Get("/export/comprehensive", reportHandler.ExportComprehensiveReportCSV)
 
 	// Expense endpoints (owner/manager only)
 	expenses := protected.Group("/expenses")
@@ -283,15 +320,19 @@ func setupRoutes(
 	expenses.Patch("/:id", expenseHandler.Update)
 	expenses.Delete("/:id", expenseHandler.Delete)
 
-	// Audit log endpoints (owner only)
+	// Audit log endpoints (requires can_view_audit_logs permission)
 	logs := protected.Group("/logs")
-	logs.Use(middleware.RequireRole("owner"))
-	logs.Get("/", auditHandler.List)
-	logs.Get("/actions", auditHandler.GetActions)
-	logs.Get("/summary", auditHandler.GetSummary)
-	logs.Get("/entity/:type/:id", auditHandler.GetEntityHistory)
-	logs.Get("/user/:id", auditHandler.GetUserActivity)
-	logs.Get("/:id", auditHandler.Get)
+	logs.Get("/", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.List)
+	logs.Get("/actions", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.GetActions)
+	logs.Get("/summary", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.GetSummary)
+	logs.Get("/entity/:type/:id", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.GetEntityHistory)
+	logs.Get("/user/:id", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.GetUserActivity)
+	logs.Get("/:id", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.Get)
+
+	// Upload endpoints (authenticated users only)
+	upload := protected.Group("/upload")
+	upload.Post("/image", uploadHandler.UploadImage)
+	upload.Delete("/image/:filename", uploadHandler.DeleteImage)
 }
 
 func errorHandler(c *fiber.Ctx, err error) error {

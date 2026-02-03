@@ -1,5 +1,7 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
+import { Permission, PermissionOverride } from '@/types';
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
@@ -157,6 +159,7 @@ class ApiClient {
         method,
         headers: requestHeaders,
         body: body ? JSON.stringify(body) : undefined,
+        cache: 'no-store', // Prevent caching of API responses
       });
 
       // If unauthorized, try to refresh token
@@ -168,6 +171,7 @@ class ApiClient {
             method,
             headers: requestHeaders,
             body: body ? JSON.stringify(body) : undefined,
+            cache: 'no-store',
           });
         } else {
           // Redirect to login
@@ -312,6 +316,28 @@ class ApiClient {
     const result = await this.request<{ roles: { id: string; name: string; description: string }[] }>('/roles');
     if (result.error) return { error: result.error };
     return { data: result.data?.roles || [] };
+  }
+
+  // Permission endpoints
+  async getPermissions(grouped?: boolean): Promise<ApiResponse<Permission[] | Record<string, Permission[]>>> {
+    const result = await this.request<{ permissions: Permission[] | Record<string, Permission[]> }>(`/permissions${grouped ? '?grouped=true' : ''}`);
+    if (result.error) return { error: result.error };
+    return { data: result.data?.permissions };
+  }
+
+  async getUserPermissions(userId: string): Promise<ApiResponse<{ effective_permissions: string[]; overrides: PermissionOverride[] }>> {
+    const result = await this.request<{ effective_permissions: string[]; overrides: PermissionOverride[] }>(`/users/${userId}/permissions`);
+    if (result.error) return { error: result.error };
+    return { data: result.data };
+  }
+
+  async setUserPermissions(userId: string, permissions: { permission_id: string; allowed: boolean }[]): Promise<ApiResponse<{ message: string; effective_permissions: string[]; overrides: number }>> {
+    const result = await this.request<{ message: string; effective_permissions: string[]; overrides: number }>(`/users/${userId}/permissions`, {
+      method: 'PATCH',
+      body: { permissions },
+    });
+    if (result.error) return { error: result.error };
+    return { data: result.data };
   }
 
   // Product endpoints
@@ -478,14 +504,13 @@ class ApiClient {
     return { data: result.data?.report };
   }
 
-  async getSalesReport(params: { from: string; to: string; group_by?: string }): Promise<ApiResponse<import('@/types').SalesReport>> {
+  async getSalesRangeReport(params: { start_date: string; end_date: string }): Promise<ApiResponse<import('@/types').SalesRangeReport>> {
     const searchParams = new URLSearchParams();
-    searchParams.set('from', params.from);
-    searchParams.set('to', params.to);
-    if (params.group_by) searchParams.set('group_by', params.group_by);
-    const result = await this.request<{ report: import('@/types').SalesReport }>(`/reports/sales?${searchParams.toString()}`);
+    searchParams.set('start_date', params.start_date);
+    searchParams.set('end_date', params.end_date);
+    const result = await this.request<import('@/types').SalesRangeReport>(`/reports/sales?${searchParams.toString()}`);
     if (result.error) return { error: result.error };
-    return { data: result.data?.report };
+    return { data: result.data };
   }
 
   async getTopSellers(params?: { from?: string; to?: string; limit?: number }): Promise<ApiResponse<import('@/types').TopSeller[]>> {
@@ -499,10 +524,98 @@ class ApiClient {
     return { data: result.data?.top_sellers || [] };
   }
 
-  async getInventoryReport(): Promise<ApiResponse<import('@/types').InventoryValuation>> {
-    const result = await this.request<InventoryValuationResponse>('/reports/inventory');
+  async getInventoryReport(includeItems?: boolean): Promise<ApiResponse<import('@/types').InventoryValuation>> {
+    const query = includeItems ? '?include_items=true' : '';
+    const result = await this.request<InventoryValuationResponse>(`/reports/inventory${query}`);
     if (result.error) return { error: result.error };
     return { data: result.data?.valuation };
+  }
+
+  async getCashReport(date?: string): Promise<ApiResponse<import('@/types').CashReport>> {
+    const query = date ? `?date=${date}` : '';
+    const result = await this.request<{ report: import('@/types').CashReport }>(`/reports/cash${query}`);
+    if (result.error) return { error: result.error };
+    return { data: result.data?.report };
+  }
+
+  async getEmployeeSalesReport(params?: { start_date?: string; end_date?: string }): Promise<ApiResponse<import('@/types').EmployeeSales[]>> {
+    const searchParams = new URLSearchParams();
+    if (params?.start_date) searchParams.set('start_date', params.start_date);
+    if (params?.end_date) searchParams.set('end_date', params.end_date);
+    const query = searchParams.toString();
+    const result = await this.request<{ employees: import('@/types').EmployeeSales[] }>(`/reports/by-employee${query ? `?${query}` : ''}`);
+    if (result.error) return { error: result.error };
+    return { data: result.data?.employees || [] };
+  }
+
+  async getCategorySalesReport(params?: { start_date?: string; end_date?: string }): Promise<ApiResponse<import('@/types').CategorySales[]>> {
+    const searchParams = new URLSearchParams();
+    if (params?.start_date) searchParams.set('start_date', params.start_date);
+    if (params?.end_date) searchParams.set('end_date', params.end_date);
+    const query = searchParams.toString();
+    const result = await this.request<{ categories: import('@/types').CategorySales[] }>(`/reports/by-category${query ? `?${query}` : ''}`);
+    if (result.error) return { error: result.error };
+    return { data: result.data?.categories || [] };
+  }
+
+  // Export endpoints - returns blob URL for download
+  async exportSalesCSV(params: { start_date: string; end_date: string }): Promise<string> {
+    const token = this.getAccessToken();
+    const searchParams = new URLSearchParams();
+    searchParams.set('start_date', params.start_date);
+    searchParams.set('end_date', params.end_date);
+    const response = await fetch(`${this.baseUrl}/reports/export/sales?${searchParams.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  async exportInventoryCSV(): Promise<string> {
+    const token = this.getAccessToken();
+    const response = await fetch(`${this.baseUrl}/reports/export/inventory`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  async exportTopSellersCSV(params?: { start_date?: string; end_date?: string; limit?: number }): Promise<string> {
+    const token = this.getAccessToken();
+    const searchParams = new URLSearchParams();
+    if (params?.start_date) searchParams.set('start_date', params.start_date);
+    if (params?.end_date) searchParams.set('end_date', params.end_date);
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    const query = searchParams.toString();
+    const response = await fetch(`${this.baseUrl}/reports/export/top-sellers${query ? `?${query}` : ''}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  async exportComprehensiveReportCSV(params: { start_date: string; end_date: string }): Promise<string> {
+    const token = this.getAccessToken();
+    const searchParams = new URLSearchParams();
+    searchParams.set('start_date', params.start_date);
+    searchParams.set('end_date', params.end_date);
+    const response = await fetch(`${this.baseUrl}/reports/export/comprehensive?${searchParams.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
   }
 
   // Audit log endpoints

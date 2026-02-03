@@ -103,6 +103,15 @@ type CashReport struct {
 	ShiftCount   int             `json:"shift_count"`
 }
 
+// SalesRangeSummary represents aggregated summary for a date range
+type SalesRangeSummary struct {
+	TotalTransactions int             `json:"total_transactions"`
+	TotalItems        int             `json:"total_items"`
+	TotalAmount       decimal.Decimal `json:"total_amount"`
+	TotalTax          decimal.Decimal `json:"total_tax"`
+	TotalDiscount     decimal.Decimal `json:"total_discount"`
+}
+
 // GetDailySalesReport gets sales report for a specific date
 func (r *ReportRepository) GetDailySalesReport(ctx context.Context, date time.Time) (*DailySalesReport, error) {
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
@@ -211,6 +220,30 @@ func (r *ReportRepository) GetSalesRangeReport(ctx context.Context, startDate, e
 	}
 
 	return reports, nil
+}
+
+// GetSalesRangeSummary gets aggregated summary for a date range
+func (r *ReportRepository) GetSalesRangeSummary(ctx context.Context, startDate, endDate time.Time) (*SalesRangeSummary, error) {
+	summary := &SalesRangeSummary{}
+
+	err := r.pool.QueryRow(ctx, `
+		SELECT 
+			COALESCE(COUNT(*), 0),
+			COALESCE(SUM(item_count), 0),
+			COALESCE(SUM(total_amount), 0),
+			COALESCE(SUM(tax_amount), 0),
+			COALESCE(SUM(discount_amount), 0)
+		FROM sales 
+		WHERE created_at >= $1 AND created_at < $2 AND status = 'completed'
+	`, startDate, endDate.Add(24*time.Hour)).Scan(
+		&summary.TotalTransactions,
+		&summary.TotalItems,
+		&summary.TotalAmount,
+		&summary.TotalTax,
+		&summary.TotalDiscount,
+	)
+
+	return summary, err
 }
 
 // GetTopSellers gets top selling products

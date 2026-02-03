@@ -762,6 +762,31 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 		})
 	}
 
+	// Check role hierarchy - can only modify permissions of users with lower roles
+	currentRoleName := middleware.GetRoleName(c)
+	targetRoleName := ""
+	if user.Role != nil {
+		targetRoleName = user.Role.Name
+	}
+
+	// Define role hierarchy: owner > manager > cashier
+	roleHierarchy := map[string]int{
+		"owner":   3,
+		"manager": 2,
+		"cashier": 1,
+	}
+
+	currentRoleLevel := roleHierarchy[currentRoleName]
+	targetRoleLevel := roleHierarchy[targetRoleName]
+
+	// Can only modify permissions of users with strictly lower role level
+	if targetRoleLevel >= currentRoleLevel {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "You can only modify permissions of users with roles lower than yours",
+		})
+	}
+
 	var req SetPermissionsRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -803,6 +828,23 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 	// Get updated permissions
 	permissions, _ := h.userRepo.GetUserPermissions(c.Context(), id)
 	overrides, _ := h.userRepo.GetUserPermissionOverrides(c.Context(), id)
+
+	// Audit log permission changes
+	permissionChanges := make([]string, 0, len(req.Permissions))
+	for _, perm := range req.Permissions {
+		permID, _ := uuid.Parse(perm.PermissionID)
+		permission, _ := h.permissionRepo.GetByID(c.Context(), permID)
+		if permission != nil {
+			status := "granted"
+			if !perm.Allowed {
+				status = "denied"
+			}
+			permissionChanges = append(permissionChanges, permission.Name+" "+status)
+		}
+	}
+
+	audit.LogFromFiber(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(),
+		"Updated permissions for: "+user.Name+" ("+strings.Join(permissionChanges, ", ")+")")
 
 	// Broadcast permissions changed event
 	h.broadcastUserEvent(id, EventPermissionsChanged, grantedBy, map[string]interface{}{
