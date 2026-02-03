@@ -44,8 +44,8 @@ export default function ExpensesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [dateRange, setDateRange] = useState({
-    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0],
+    start: '',
+    end: '',
   });
 
   // Dialog states
@@ -358,7 +358,9 @@ export default function ExpensesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-lg font-medium">
-                {formatDate(dateRange.start)} - {formatDate(dateRange.end)}
+                {dateRange.start && dateRange.end 
+                  ? `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`
+                  : 'No period selected'}
               </div>
               <p className="text-xs text-muted-foreground">
                 {summary?.by_category?.length || 0} categories
