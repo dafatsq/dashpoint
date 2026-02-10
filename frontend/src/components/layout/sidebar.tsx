@@ -115,9 +115,10 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex h-full flex-col border-r bg-card transition-all duration-300',
-        collapsed && !onNavigate ? 'w-16' : 'w-64',
-        onNavigate ? 'w-64' : 'hidden md:flex h-screen'
+        'flex h-full flex-col bg-card transition-all duration-300',
+        !onNavigate && 'border-r',
+        onNavigate ? 'w-full' : (collapsed ? 'w-16' : 'w-64'),
+        !onNavigate && 'hidden md:flex h-screen'
       )}
     >
       {/* Header - Hidden when in mobile drawer */}

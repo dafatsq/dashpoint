@@ -40,6 +40,13 @@ import {
 import api from '@/lib/api';
 import { Product, CartItem, Category, Shift, PaymentMethod, CreateSaleRequest } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 
 // Helper to get full image URL
 function getImageUrl(path: string | null | undefined): string {
@@ -71,6 +78,156 @@ function getProductMinQuantity(product: Product): number {
     return parseFloat(product.inventory.low_stock_threshold) || 0;
   }
   return 0;
+}
+
+// Helper to format currency
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  }).format(amount);
+};
+
+// Extracted Cart View Component
+interface CartViewProps {
+  cartItems: CartItem[];
+  onClear: () => void;
+  onUpdateQuantity: (id: string, delta: number) => void;
+  onRemove: (id: string) => void;
+  user: any;
+  subtotal: number;
+  discount: number;
+  setDiscount: (val: number) => void;
+  total: number;
+  canApplyDiscount: boolean;
+  currentShift: Shift | null;
+  onCheckout: () => void;
+}
+
+function CartView({
+  cartItems,
+  onClear,
+  onUpdateQuantity,
+  onRemove,
+  user,
+  subtotal,
+  discount,
+  setDiscount,
+  total,
+  canApplyDiscount,
+  currentShift,
+  onCheckout,
+}: CartViewProps) {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between p-4 border-b">
+        <h2 className="font-semibold text-lg">Current Order</h2>
+        {cartItems.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={onClear}>
+            Clear
+          </Button>
+        )}
+      </div>
+
+      <div className="flex-1 flex flex-col p-4 overflow-hidden">
+        {/* Cart items */}
+        <div className="flex-1 overflow-y-auto space-y-2">
+          {cartItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <ShoppingCart className="h-12 w-12 mb-2" />
+              <p className="text-sm">Cart is empty</p>
+            </div>
+          ) : (
+            cartItems.map((item) => (
+              <div
+                key={item.product.id}
+                className="flex items-center gap-3 p-2 rounded-lg border bg-card"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{item.product.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatCurrency(getProductPrice(item.product))}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => onUpdateQuantity(item.product.id, -1)}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                  <span className="w-8 text-center text-sm font-medium">
+                    {item.quantity}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => onUpdateQuantity(item.product.id, 1)}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive"
+                    onClick={() => onRemove(item.product.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <Separator className="my-4" />
+
+        {/* Totals */}
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between items-center pb-2 border-b">
+            <span className="text-muted-foreground">Cashier</span>
+            <span className="font-medium">{user?.name || 'Unknown'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span>{formatCurrency(subtotal)}</span>
+          </div>
+          {canApplyDiscount && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Discount</span>
+              <Input
+                type="number"
+                value={discount || ''}
+                onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                className="w-28 h-7 text-right"
+                placeholder="0"
+              />
+            </div>
+          )}
+          <Separator />
+          <div className="flex justify-between text-lg font-bold">
+            <span>Total</span>
+            <span className="text-primary">{formatCurrency(total)}</span>
+          </div>
+        </div>
+
+        {/* Checkout button */}
+        <Button
+          size="lg"
+          className="w-full mt-4"
+          disabled={!currentShift || cartItems.length === 0}
+          onClick={onCheckout}
+        >
+          <CreditCard className="h-5 w-5 mr-2" />
+          Checkout
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export default function POSPage() {
@@ -261,16 +418,26 @@ export default function POSPage() {
     setLastChange(0);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
   // Quick amount buttons for cash payment
   const quickAmounts = [10000, 20000, 50000, 100000];
+
+  const cartProps = {
+    cartItems,
+    onClear: clearCart,
+    onUpdateQuantity: updateQuantity,
+    onRemove: removeFromCart,
+    user,
+    subtotal,
+    discount,
+    setDiscount,
+    total,
+    canApplyDiscount,
+    currentShift,
+    onCheckout: () => {
+      setAmountPaid(total.toString());
+      setCheckoutDialogOpen(true);
+    },
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -278,7 +445,7 @@ export default function POSPage() {
 
       {/* Shift status bar */}
       {!currentShift ? (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 px-6 py-3 flex items-center justify-between">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm">No active shift. Start a shift to begin selling.</span>
@@ -289,7 +456,7 @@ export default function POSPage() {
           </Button>
         </div>
       ) : (
-        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 px-6 py-3 flex items-center justify-between">
+        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
             <CheckCircle className="h-4 w-4" />
             <span className="text-sm">
@@ -300,9 +467,9 @@ export default function POSPage() {
         </div>
       )}
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left side - Product grid */}
-        <div className="flex-1 flex flex-col p-4 overflow-hidden">
+        <div className="flex-1 flex flex-col p-4 overflow-hidden pb-16 lg:pb-4">
           {/* Search and filter */}
           <div className="flex gap-4 mb-4">
             <div className="relative flex-1">
@@ -342,7 +509,7 @@ export default function POSPage() {
                 <p>No products found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
                 {filteredProducts.map((product) => {
                   const quantity = getProductQuantity(product);
                   const minQuantity = getProductMinQuantity(product);
@@ -371,7 +538,7 @@ export default function POSPage() {
                       </div>
                       <p className="font-medium text-sm truncate">{product.name}</p>
                       <p className="text-xs text-muted-foreground">{product.category_name}</p>
-                      <div className="flex items-center justify-between mt-2">
+                      <div className="flex flex-col gap-1 mt-2">
                         <span className="font-bold text-primary">
                           {formatCurrency(price)}
                         </span>
@@ -387,119 +554,33 @@ export default function POSPage() {
           </div>
         </div>
 
-        {/* Right side - Cart */}
-        <Card className="w-96 rounded-none border-l border-t-0 border-b-0 border-r-0 flex flex-col">
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center justify-between">
-              <span>Current Order</span>
-              {cartItems.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearCart}>
-                  Clear
-                </Button>
-              )}
-            </CardTitle>
-          </CardHeader>
+        {/* Desktop Right side - Cart Sidebar */}
+        <div className="hidden lg:flex w-96 bg-card border-l flex-col h-full">
+          <CartView {...cartProps} />
+        </div>
+      </div>
 
-          <CardContent className="flex-1 flex flex-col p-4 pt-0 overflow-hidden">
-            {/* Cart items */}
-            <div className="flex-1 overflow-y-auto space-y-2">
-              {cartItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                  <ShoppingCart className="h-12 w-12 mb-2" />
-                  <p className="text-sm">Cart is empty</p>
-                </div>
-              ) : (
-                cartItems.map((item) => (
-                  <div
-                    key={item.product.id}
-                    className="flex items-center gap-3 p-2 rounded-lg border bg-card"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{item.product.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatCurrency(getProductPrice(item.product))}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateQuantity(item.product.id, -1)}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-8 text-center text-sm font-medium">
-                        {item.quantity}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateQuantity(item.product.id, 1)}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => removeFromCart(item.product.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <Separator className="my-4" />
-
-            {/* Totals */}
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between items-center pb-2 border-b">
-                <span className="text-muted-foreground">Cashier</span>
-                <span className="font-medium">{user?.name || 'Unknown'}</span>
+      {/* Mobile Bottom Bar */}
+      <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-background border-t">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button className="w-full flex justify-between" size="lg">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                <span>{cartItems.length} items</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(subtotal)}</span>
-              </div>
-              {canApplyDiscount && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Discount</span>
-                  <Input
-                    type="number"
-                    value={discount || ''}
-                    onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                    className="w-28 h-7 text-right"
-                    placeholder="0"
-                  />
-                </div>
-              )}
-              <Separator />
-              <div className="flex justify-between text-lg font-bold">
-                <span>Total</span>
-                <span className="text-primary">{formatCurrency(total)}</span>
-              </div>
-            </div>
-
-            {/* Checkout button */}
-            <Button
-              size="lg"
-              className="w-full mt-4"
-              disabled={!currentShift || cartItems.length === 0}
-              onClick={() => {
-                setAmountPaid(total.toString());
-                setCheckoutDialogOpen(true);
-              }}
-            >
-              <CreditCard className="h-5 w-5 mr-2" />
-              Checkout
+              <span className="font-bold">{formatCurrency(total)}</span>
             </Button>
-          </CardContent>
-        </Card>
+          </SheetTrigger>
+          <SheetContent className="w-full sm:max-w-md p-0 bg-card gap-0" side="right">
+            <SheetHeader>
+              <SheetTitle className="sr-only">Current Order</SheetTitle>
+            </SheetHeader>
+            <div className="h-full pt-6">
+              <CartView {...cartProps} />
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
       {/* Start Shift Dialog */}
