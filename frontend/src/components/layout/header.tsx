@@ -17,7 +17,7 @@ export function Header({ title }: HeaderProps) {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-6">
+    <header className="flex h-16 shrink-0 items-center justify-between border-b bg-card px-6">
       <div className="flex items-center gap-4">
         {/* Mobile Menu */}
         <div className="md:hidden">
@@ -27,17 +27,17 @@ export function Header({ title }: HeaderProps) {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-72">
+            <SheetContent side="left" className="p-0 w-72 bg-card gap-0">
               <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
               <SheetDescription className="sr-only">
                 Mobile navigation menu
               </SheetDescription>
-              <div className="h-full">
-                <div className="flex h-16 items-center border-b px-6">
+              <div className="h-full flex flex-col">
+                <div className="flex h-16 items-center border-b px-6 flex-none">
                   <Store className="h-6 w-6 text-primary mr-2" />
                   <span className="font-bold text-lg">DashPoint</span>
                 </div>
-                <div className="h-[calc(100vh-4rem)]">
+                <div className="flex-1 overflow-hidden">
                   <Sidebar onNavigate={() => setOpen(false)} />
                 </div>
               </div>
@@ -45,7 +45,7 @@ export function Header({ title }: HeaderProps) {
           </Sheet>
         </div>
 
-        {title && <h1 className="text-xl font-semibold">{title}</h1>}
+        {title && <h1 className="text-2xl font-bold tracking-tight">{title}</h1>}
       </div>
 
       <div className="flex items-center gap-4">

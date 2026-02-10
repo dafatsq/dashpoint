@@ -355,8 +355,8 @@ export default function ProductsPage() {
           <button
             onClick={() => setViewMode('active')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'active'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
               }`}
           >
             Active
@@ -364,8 +364,8 @@ export default function ProductsPage() {
           <button
             onClick={() => setViewMode('archived')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${viewMode === 'archived'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
               }`}
           >
             <Archive className="h-4 w-4" />
@@ -464,9 +464,9 @@ export default function ProductsPage() {
                               <p className="text-sm text-muted-foreground">{product.sku || '-'}</p>
                             </div>
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${product.is_active
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${product.is_active
+                                ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
                                 }`}
                             >
                               {product.is_active ? 'Active' : 'Inactive'}
@@ -635,8 +635,8 @@ export default function ProductsPage() {
                             <td className="py-3 text-center">
                               <span
                                 className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${product.is_active
-                                    ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
-                                    : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
+                                  ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                  : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
                                   }`}
                               >
                                 {product.is_active ? 'Active' : 'Inactive'}
