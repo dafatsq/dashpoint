@@ -149,7 +149,7 @@ func LogFailure(c *fiber.Ctx, action models.AuditAction, entityType models.Audit
 }
 
 // LogAuth creates an auth-related audit log
-func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email string, success bool, metadata map[string]interface{}) {
+func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email string, userName string, userRole string, success bool, metadata map[string]interface{}) {
 	status := models.AuditStatusSuccess
 	if !success {
 		status = models.AuditStatusFailure
@@ -163,6 +163,8 @@ func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email s
 	entry := &models.AuditLogEntry{
 		UserID:     userID,
 		UserEmail:  email,
+		UserName:   userName,
+		UserRole:   userRole,
 		Action:     action,
 		EntityType: models.AuditEntityAuth,
 		EntityID:   entityID,

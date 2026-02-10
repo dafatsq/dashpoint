@@ -7,21 +7,11 @@ import { AccountManager, SavedAccount } from '@/lib/account-manager';
 import { AccountSwitcher } from '@/components/account-switcher';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  Package,
-  Boxes,
-  Receipt,
-  BarChart3,
-  Users,
-  ScrollText,
-  Settings,
-  LogOut,
+  Store,
+  UserCog,
   ChevronLeft,
   ChevronRight,
-  Store,
-  Wallet,
-  UserCog,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,69 +39,13 @@ interface NavItem {
   permission?: string;
 }
 
-const navItems: NavItem[] = [
-  {
-    href: '/dashboard',
-    label: 'Dashboard',
-    icon: <LayoutDashboard className="h-5 w-5" />,
-  },
-  {
-    href: '/dashboard/pos',
-    label: 'Point of Sale',
-    icon: <ShoppingCart className="h-5 w-5" />,
-    permission: PERMISSIONS.SALES_CREATE,
-  },
-  {
-    href: '/dashboard/products',
-    label: 'Products',
-    icon: <Package className="h-5 w-5" />,
-    permission: PERMISSIONS.PRODUCTS_VIEW,
-  },
-  {
-    href: '/dashboard/inventory',
-    label: 'Inventory',
-    icon: <Boxes className="h-5 w-5" />,
-    permission: PERMISSIONS.INVENTORY_VIEW,
-  },
-  {
-    href: '/dashboard/sales',
-    label: 'Sales History',
-    icon: <Receipt className="h-5 w-5" />,
-    permission: PERMISSIONS.SALES_VIEW,
-  },
-  {
-    href: '/dashboard/reports',
-    label: 'Reports',
-    icon: <BarChart3 className="h-5 w-5" />,
-    permission: PERMISSIONS.REPORTS_VIEW,
-  },
-  {
-    href: '/dashboard/expenses',
-    label: 'Expenses',
-    icon: <Wallet className="h-5 w-5" />,
-    permission: PERMISSIONS.REPORTS_VIEW, // Owner/Manager only
-  },
-  {
-    href: '/dashboard/users',
-    label: 'Users',
-    icon: <Users className="h-5 w-5" />,
-    permission: PERMISSIONS.USERS_VIEW,
-  },
-  {
-    href: '/dashboard/audit',
-    label: 'Audit Logs',
-    icon: <ScrollText className="h-5 w-5" />,
-    permission: PERMISSIONS.AUDIT_VIEW,
-  },
-  {
-    href: '/dashboard/settings',
-    label: 'Settings',
-    icon: <Settings className="h-5 w-5" />,
-    permission: PERMISSIONS.SETTINGS_MANAGE,
-  },
-];
+import { navItems } from '@/lib/nav-config';
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, hasPermission, logout, pinLogin } = useAuth();
@@ -162,7 +96,7 @@ export function Sidebar() {
 
     try {
       const result = await pinLogin(selectedAccount.id, pin);
-      
+
       if (result.success) {
         setShowSwitchDialog(false);
         setSelectedAccount(null);
@@ -181,7 +115,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'flex h-screen flex-col border-r bg-card transition-all duration-300',
+        'hidden md:flex h-screen flex-col border-r bg-card transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -216,6 +150,7 @@ export function Sidebar() {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  onClick={onNavigate}
                   className={cn(
                     'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                     isActive
@@ -260,8 +195,8 @@ export function Sidebar() {
                 <DropdownMenuLabel>Saved Accounts ({savedAccounts.filter(account => account.id !== user?.id).length})</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {savedAccounts.filter(account => account.id !== user?.id).map((account) => (
-                  <DropdownMenuItem 
-                    key={account.id} 
+                  <DropdownMenuItem
+                    key={account.id}
                     onClick={() => handleAccountClick(account)}
                     className="cursor-pointer"
                   >
@@ -299,7 +234,7 @@ export function Sidebar() {
 
           <form onSubmit={handlePinSubmit} className="space-y-4 mt-4" autoComplete="off">
             <input type="text" name="username" autoComplete="username" style={{ display: 'none' }} />
-            
+
             {pinError && (
               <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 <UserCog className="h-4 w-4 flex-shrink-0" />

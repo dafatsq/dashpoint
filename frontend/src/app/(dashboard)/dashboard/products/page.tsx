@@ -204,12 +204,12 @@ export default function ProductsPage() {
     if (!formData.price || parseFloat(formData.price) <= 0) {
       errors.price = 'Valid price is required';
     }
-    
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
-    
+
     setFormErrors({});
     setIsSubmitting(true);
 
@@ -354,21 +354,19 @@ export default function ProductsPage() {
         <div className="flex gap-1 mb-4 p-1 bg-muted rounded-lg w-fit">
           <button
             onClick={() => setViewMode('active')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'active'
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'active'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             Active
           </button>
           <button
             onClick={() => setViewMode('archived')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-              viewMode === 'archived'
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${viewMode === 'archived'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             <Archive className="h-4 w-4" />
             Archived
@@ -427,159 +425,291 @@ export default function ProductsPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {viewMode === 'active' ? 'Products' : 'Archived Products'} ({filteredProducts.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b text-left text-sm text-muted-foreground">
-                      <th className="pb-3 font-medium">Product</th>
-                      <th className="pb-3 font-medium">SKU</th>
-                      <th className="pb-3 font-medium">Category</th>
-                      <th className="pb-3 font-medium text-right">Price</th>
-                      <th className="pb-3 font-medium text-right">Stock</th>
-                      <th className="pb-3 font-medium text-center">Status</th>
-                      {(canEdit || canDelete) && (
-                        <th className="pb-3 font-medium text-right">Actions</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProducts.map((product) => {
-                      const quantity = getProductQuantity(product);
-                      const minQuantity = getProductMinQuantity(product);
-                      const isLowStock = quantity <= minQuantity;
-                      return (
-                        <tr key={product.id} className="border-b last:border-0">
-                          <td className="py-3">
-                            <div className="flex items-center gap-3">
-                              {product.image_url ? (
-                                <div className="relative h-10 w-10 rounded border overflow-hidden flex-shrink-0 bg-muted">
-                                  <img
-                                    src={getImageUrl(product.image_url)}
-                                    alt={product.name}
-                                    className="h-full w-full object-cover"
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).style.display = 'none';
-                                      ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
-                                    }}
-                                  />
-                                  <div className="absolute inset-0 hidden items-center justify-center bg-muted">
-                                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="h-10 w-10 rounded border flex items-center justify-center bg-muted flex-shrink-0">
-                                  <Package className="h-4 w-4 text-muted-foreground" />
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <p className="font-medium">{product.name}</p>
-                                {product.description && (
-                                  <p className="text-xs text-muted-foreground truncate max-w-xs">
-                                    {product.description}
-                                  </p>
-                                )}
-                              </div>
+          <>
+            {/* Mobile Card View */}
+            <div className="md:hidden grid gap-4">
+              {filteredProducts.map((product) => {
+                const quantity = getProductQuantity(product);
+                const minQuantity = getProductMinQuantity(product);
+                const isLowStock = quantity <= minQuantity;
+
+                return (
+                  <Card key={product.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        {product.image_url ? (
+                          <div className="relative h-20 w-20 rounded border overflow-hidden flex-shrink-0 bg-muted">
+                            <img
+                              src={getImageUrl(product.image_url)}
+                              alt={product.name}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                              }}
+                            />
+                            <div className="absolute inset-0 hidden items-center justify-center bg-muted">
+                              <ImageIcon className="h-8 w-8 text-muted-foreground" />
                             </div>
-                          </td>
-                          <td className="py-3 text-sm text-muted-foreground">
-                            {product.sku || '-'}
-                          </td>
-                          <td className="py-3 text-sm">
-                            {product.category_name || '-'}
-                          </td>
-                          <td className="py-3 text-right font-medium">
-                            {formatCurrency(getProductPrice(product))}
-                          </td>
-                          <td className="py-3 text-right">
-                            <span className={isLowStock ? 'text-destructive font-medium' : ''}>
-                              {quantity}
-                            </span>
-                          </td>
-                          <td className="py-3 text-center">
+                          </div>
+                        ) : (
+                          <div className="h-20 w-20 rounded border flex items-center justify-center bg-muted flex-shrink-0">
+                            <Package className="h-8 w-8 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h3 className="font-semibold line-clamp-1">{product.name}</h3>
+                              <p className="text-sm text-muted-foreground">{product.sku || '-'}</p>
+                            </div>
                             <span
-                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                product.is_active
-                                  ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
-                                  : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
-                              }`}
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${product.is_active
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                                }`}
                             >
                               {product.is_active ? 'Active' : 'Inactive'}
                             </span>
-                          </td>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                            <div>
+                              <span className="text-muted-foreground">Price: </span>
+                              <span className="font-medium">{formatCurrency(getProductPrice(product))}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Stock: </span>
+                              <span className={isLowStock ? 'text-destructive font-medium' : 'font-medium'}>
+                                {quantity}
+                              </span>
+                            </div>
+                          </div>
+
                           {(canEdit || canDelete) && (
-                            <td className="py-3 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                {viewMode === 'active' ? (
-                                  <>
-                                    {canEdit && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => openEditDialog(product)}
-                                      >
-                                        <Pencil className="h-4 w-4" />
-                                      </Button>
-                                    )}
-                                    {canDelete && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          setDeletingProduct(product);
-                                          setDeleteDialogOpen(true);
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                      </Button>
-                                    )}
-                                  </>
+                            <div className="flex items-center justify-end gap-2 border-t pt-3 mt-1">
+                              {viewMode === 'active' ? (
+                                <>
+                                  {canEdit && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8"
+                                      onClick={() => openEditDialog(product)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                                      Edit
+                                    </Button>
+                                  )}
+                                  {canDelete && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => {
+                                        setDeletingProduct(product);
+                                        setDeleteDialogOpen(true);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                      Delete
+                                    </Button>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  {canEdit && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8"
+                                      onClick={() => handleRestore(product)}
+                                      disabled={isSubmitting}
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                                      Restore
+                                    </Button>
+                                  )}
+                                  {canDelete && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => {
+                                        setDeletingProduct(product);
+                                        setPermanentDeleteDialogOpen(true);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                      Delete
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table View */}
+            <Card className="hidden md:block">
+              <CardHeader>
+                <CardTitle>
+                  {viewMode === 'active' ? 'Products' : 'Archived Products'} ({filteredProducts.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-sm text-muted-foreground">
+                        <th className="pb-3 font-medium">Product</th>
+                        <th className="pb-3 font-medium">SKU</th>
+                        <th className="pb-3 font-medium">Category</th>
+                        <th className="pb-3 font-medium text-right">Price</th>
+                        <th className="pb-3 font-medium text-right">Stock</th>
+                        <th className="pb-3 font-medium text-center">Status</th>
+                        {(canEdit || canDelete) && (
+                          <th className="pb-3 font-medium text-right">Actions</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProducts.map((product) => {
+                        const quantity = getProductQuantity(product);
+                        const minQuantity = getProductMinQuantity(product);
+                        const isLowStock = quantity <= minQuantity;
+                        return (
+                          <tr key={product.id} className="border-b last:border-0">
+                            <td className="py-3">
+                              <div className="flex items-center gap-3">
+                                {product.image_url ? (
+                                  <div className="relative h-10 w-10 rounded border overflow-hidden flex-shrink-0 bg-muted">
+                                    <img
+                                      src={getImageUrl(product.image_url)}
+                                      alt={product.name}
+                                      className="h-full w-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 hidden items-center justify-center bg-muted">
+                                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  </div>
                                 ) : (
-                                  <>
-                                    {canEdit && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleRestore(product)}
-                                        disabled={isSubmitting}
-                                      >
-                                        <RotateCcw className="h-4 w-4 mr-1" />
-                                        Restore
-                                      </Button>
-                                    )}
-                                    {canDelete && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-destructive hover:text-destructive"
-                                        onClick={() => {
-                                          setDeletingProduct(product);
-                                          setPermanentDeleteDialogOpen(true);
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4 mr-1" />
-                                        Delete
-                                      </Button>
-                                    )}
-                                  </>
+                                  <div className="h-10 w-10 rounded border flex items-center justify-center bg-muted flex-shrink-0">
+                                    <Package className="h-4 w-4 text-muted-foreground" />
+                                  </div>
                                 )}
+                                <div className="min-w-0">
+                                  <p className="font-medium">{product.name}</p>
+                                  {product.description && (
+                                    <p className="text-xs text-muted-foreground truncate max-w-xs">
+                                      {product.description}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                             </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                            <td className="py-3 text-sm text-muted-foreground">
+                              {product.sku || '-'}
+                            </td>
+                            <td className="py-3 text-sm">
+                              {product.category_name || '-'}
+                            </td>
+                            <td className="py-3 text-right font-medium">
+                              {formatCurrency(getProductPrice(product))}
+                            </td>
+                            <td className="py-3 text-right">
+                              <span className={isLowStock ? 'text-destructive font-medium' : ''}>
+                                {quantity}
+                              </span>
+                            </td>
+                            <td className="py-3 text-center">
+                              <span
+                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${product.is_active
+                                    ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                    : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
+                                  }`}
+                              >
+                                {product.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            {(canEdit || canDelete) && (
+                              <td className="py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  {viewMode === 'active' ? (
+                                    <>
+                                      {canEdit && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => openEditDialog(product)}
+                                        >
+                                          <Pencil className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                      {canDelete && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => {
+                                            setDeletingProduct(product);
+                                            setDeleteDialogOpen(true);
+                                          }}
+                                        >
+                                          <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {canEdit && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleRestore(product)}
+                                          disabled={isSubmitting}
+                                        >
+                                          <RotateCcw className="h-4 w-4 mr-1" />
+                                          Restore
+                                        </Button>
+                                      )}
+                                      {canDelete && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-destructive hover:text-destructive"
+                                          onClick={() => {
+                                            setDeletingProduct(product);
+                                            setPermanentDeleteDialogOpen(true);
+                                          }}
+                                        >
+                                          <Trash2 className="h-4 w-4 mr-1" />
+                                          Delete
+                                        </Button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
 
@@ -785,7 +915,7 @@ export default function ProductsPage() {
           <DialogHeader>
             <DialogTitle>Archive Product</DialogTitle>
             <DialogDescription>
-              Are you sure you want to archive &quot;{deletingProduct?.name}&quot;? 
+              Are you sure you want to archive &quot;{deletingProduct?.name}&quot;?
               The product will be moved to the Archived tab and can be restored later.
             </DialogDescription>
           </DialogHeader>
@@ -818,7 +948,7 @@ export default function ProductsPage() {
           <DialogHeader>
             <DialogTitle>Permanently Delete Product</DialogTitle>
             <DialogDescription>
-              Are you sure you want to permanently delete &quot;{deletingProduct?.name}&quot;? 
+              Are you sure you want to permanently delete &quot;{deletingProduct?.name}&quot;?
               This action cannot be undone. All data associated with this product will be lost.
             </DialogDescription>
           </DialogHeader>

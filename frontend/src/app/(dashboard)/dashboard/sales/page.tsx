@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import {
   Search,
   Loader2,
@@ -53,8 +54,7 @@ export default function SalesHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
   // View dialog
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -78,8 +78,8 @@ export default function SalesHistoryPage() {
       setIsLoading(true);
       try {
         const params: { from?: string; to?: string; status?: string } = {};
-        if (dateFrom) params.from = dateFrom;
-        if (dateTo) params.to = dateTo;
+        if (dateRange.start) params.from = dateRange.start;
+        if (dateRange.end) params.to = dateRange.end;
         if (statusFilter !== 'all') params.status = statusFilter;
 
         const result = await api.getSales(params);
@@ -92,7 +92,7 @@ export default function SalesHistoryPage() {
     };
 
     fetchSales();
-  }, [dateFrom, dateTo, statusFilter]);
+  }, [dateRange, statusFilter]);
 
   // Filter sales
   const filteredSales = sales.filter((sale) =>
@@ -190,7 +190,7 @@ export default function SalesHistoryPage() {
             <CardTitle className="text-base">Filters</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -200,24 +200,12 @@ export default function SalesHistoryPage() {
                   className="pl-9"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  placeholder="From"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  placeholder="To"
-                />
-              </div>
+              <DateRangePicker
+                value={dateRange}
+                onChange={setDateRange}
+                placeholder="Select date range"
+                className="w-full"
+              />
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Statuses" />

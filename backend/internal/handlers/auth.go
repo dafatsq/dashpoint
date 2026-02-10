@@ -102,7 +102,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 
 	if user == nil {
 		// Log failed login attempt
-		audit.LogAuth(c, models.AuditActionLoginFailed, nil, req.Email, false, map[string]interface{}{
+		audit.LogAuth(c, models.AuditActionLoginFailed, nil, req.Email, "", "", false, map[string]interface{}{
 			"reason": "user_not_found",
 		})
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -114,7 +114,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	// Check if user is active
 	if !user.IsActive {
 		// Log failed login - account disabled
-		audit.LogAuth(c, models.AuditActionLoginFailed, &user.ID, req.Email, false, map[string]interface{}{
+		audit.LogAuth(c, models.AuditActionLoginFailed, &user.ID, req.Email, user.Name, user.Role.Name, false, map[string]interface{}{
 			"reason": "account_disabled",
 		})
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -126,7 +126,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	// Check password
 	if user.PasswordHash == nil || !auth.CheckPassword(req.Password, *user.PasswordHash) {
 		// Log failed login - wrong password
-		audit.LogAuth(c, models.AuditActionLoginFailed, &user.ID, req.Email, false, map[string]interface{}{
+		audit.LogAuth(c, models.AuditActionLoginFailed, &user.ID, req.Email, user.Name, user.Role.Name, false, map[string]interface{}{
 			"reason": "invalid_password",
 		})
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -136,7 +136,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	}
 
 	// Generate tokens
-	return h.generateAuthResponse(c, user)
+	return h.generateAuthResponse(c, user, false)
 }
 
 // PINLogin handles POST /api/v1/auth/pin-login
@@ -211,7 +211,7 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 	}
 
 	// Generate tokens
-	return h.generateAuthResponse(c, user)
+	return h.generateAuthResponse(c, user, false)
 }
 
 // Refresh handles POST /api/v1/auth/refresh
@@ -281,7 +281,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	}
 
 	// Generate new tokens
-	return h.generateAuthResponse(c, user)
+	return h.generateAuthResponse(c, user, true)
 }
 
 // Logout handles POST /api/v1/auth/logout
@@ -360,7 +360,7 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 }
 
 // generateAuthResponse generates tokens and returns the auth response
-func (h *AuthHandler) generateAuthResponse(c *fiber.Ctx, user *models.User) error {
+func (h *AuthHandler) generateAuthResponse(c *fiber.Ctx, user *models.User, isRefresh bool) error {
 	// Generate token pair
 	tokenPair, err := h.jwtManager.GenerateTokenPair(
 		user.ID,
@@ -398,10 +398,13 @@ func (h *AuthHandler) generateAuthResponse(c *fiber.Ctx, user *models.User) erro
 		})
 	}
 
-	// Update last login
-	if err := h.userRepo.UpdateLastLogin(c.Context(), user.ID); err != nil {
-		log.Error().Err(err).Msg("Failed to update last login")
-		// Don't fail the request for this
+	// Only update last login and audit log for actual logins, not token refreshes
+	if !isRefresh {
+		// Update last login
+		if err := h.userRepo.UpdateLastLogin(c.Context(), user.ID); err != nil {
+			log.Error().Err(err).Msg("Failed to update last login")
+			// Don't fail the request for this
+		}
 	}
 
 	// Get user permissions
@@ -412,14 +415,16 @@ func (h *AuthHandler) generateAuthResponse(c *fiber.Ctx, user *models.User) erro
 		permissions = []string{}
 	}
 
-	// Log successful login
-	email := ""
-	if user.Email != nil {
-		email = *user.Email
+	// Log successful login (skip for token refreshes)
+	if !isRefresh {
+		email := ""
+		if user.Email != nil {
+			email = *user.Email
+		}
+		audit.LogAuth(c, models.AuditActionLogin, &user.ID, email, user.Name, user.Role.Name, true, map[string]interface{}{
+			"role": user.Role.Name,
+		})
 	}
-	audit.LogAuth(c, models.AuditActionLogin, &user.ID, email, true, map[string]interface{}{
-		"role": user.Role.Name,
-	})
 
 	return c.JSON(AuthResponse{
 		AccessToken:  tokenPair.AccessToken,

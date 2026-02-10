@@ -247,8 +247,11 @@ func setupRoutes(
 	users.Patch("/:id/pin", userHandler.UpdatePIN)
 	users.Delete("/:id", userHandler.Delete)
 	users.Delete("/:id/permanent", userHandler.PermanentDelete)
-	users.Get("/:id/permissions", userHandler.GetPermissions)
-	users.Patch("/:id/permissions", userHandler.SetPermissions)
+
+	// Permission management endpoints (requires can_manage_permissions)
+	userPermissions := protected.Group("/users")
+	userPermissions.Get("/:id/permissions", middleware.RequirePermission(permissionChecker, "can_manage_permissions"), userHandler.GetPermissions)
+	userPermissions.Patch("/:id/permissions", middleware.RequirePermission(permissionChecker, "can_manage_permissions"), userHandler.SetPermissions)
 
 	// Category endpoints (all authenticated users can view, owner/manager can modify)
 	categories := protected.Group("/categories")

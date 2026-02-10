@@ -368,7 +368,8 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 
 	// Audit log with new values
 	newValues := map[string]interface{}{
-		"name": user.Name,
+		"affected_user": user.Name,
+		"name":          user.Name,
 	}
 	if user.Role != nil {
 		newValues["role"] = user.Role.Name
@@ -483,6 +484,15 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 				"code":    "FORBIDDEN",
 				"message": "You cannot assign the " + role.Name + " role",
 			})
+		}
+
+		// Check if role is actually changing
+		if user.RoleID != roleID {
+			// Clear all permission overrides when role changes
+			if err := h.userRepo.ClearUserPermissionOverrides(c.Context(), id); err != nil {
+				log.Error().Err(err).Msg("Failed to clear permission overrides")
+				// Don't fail the role change if clearing overrides fails
+			}
 		}
 
 		user.RoleID = roleID
@@ -797,7 +807,22 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 
 	grantedBy := middleware.GetUserID(c)
 
+	// Get old permission overrides for audit trail (indexed by permission_id)
+	oldOverrides, _ := h.userRepo.GetUserPermissionOverrides(c.Context(), id)
+	oldOverrideMap := make(map[string]string) // permission_id -> "granted"/"denied"
+	for _, override := range oldOverrides {
+		if override.Permission != nil {
+			status := "denied"
+			if override.Allowed {
+				status = "granted"
+			}
+			oldOverrideMap[override.PermissionID.String()] = status
+		}
+	}
+
 	// Set each permission
+	oldValues := make(map[string]interface{})
+	newValues := make(map[string]interface{})
 	for _, perm := range req.Permissions {
 		permID, err := uuid.Parse(perm.PermissionID)
 		if err != nil {
@@ -823,28 +848,33 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 				"message": "Failed to set permissions",
 			})
 		}
+
+		// Track old value for this specific permission
+		if oldStatus, exists := oldOverrideMap[perm.PermissionID]; exists {
+			oldValues[permission.Name] = oldStatus
+		} else {
+			oldValues[permission.Name] = "from role"
+		}
+
+		// Track new value for audit
+		newStatus := "denied"
+		if perm.Allowed {
+			newStatus = "granted"
+		}
+		newValues[permission.Name] = newStatus
 	}
 
 	// Get updated permissions
 	permissions, _ := h.userRepo.GetUserPermissions(c.Context(), id)
 	overrides, _ := h.userRepo.GetUserPermissionOverrides(c.Context(), id)
 
-	// Audit log permission changes
-	permissionChanges := make([]string, 0, len(req.Permissions))
-	for _, perm := range req.Permissions {
-		permID, _ := uuid.Parse(perm.PermissionID)
-		permission, _ := h.permissionRepo.GetByID(c.Context(), permID)
-		if permission != nil {
-			status := "granted"
-			if !perm.Allowed {
-				status = "denied"
-			}
-			permissionChanges = append(permissionChanges, permission.Name+" "+status)
-		}
-	}
+	// Add affected user context
+	oldValues["affected_user"] = user.Name
+	newValues["affected_user"] = user.Name
 
-	audit.LogFromFiber(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(),
-		"Updated permissions for: "+user.Name+" ("+strings.Join(permissionChanges, ", ")+")")
+	// Audit log with detailed changes
+	audit.LogWithValues(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(),
+		"Updated permissions for: "+user.Name, oldValues, newValues)
 
 	// Broadcast permissions changed event
 	h.broadcastUserEvent(id, EventPermissionsChanged, grantedBy, map[string]interface{}{
@@ -878,6 +908,15 @@ func (h *UserHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get user information for audit log
+	user, err := h.userRepo.GetByID(c.Context(), id)
+	if err != nil || user == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"code":    "NOT_FOUND",
+			"message": "User not found",
+		})
+	}
+
 	// Deactivate the user
 	if err := h.userRepo.Deactivate(c.Context(), id); err != nil {
 		log.Error().Err(err).Msg("Failed to deactivate user")
@@ -886,6 +925,17 @@ func (h *UserHandler) Delete(c *fiber.Ctx) error {
 			"message": "Failed to deactivate user",
 		})
 	}
+
+	// Audit log
+	roleName := ""
+	if user.Role != nil {
+		roleName = user.Role.Name
+	}
+	audit.LogWithValues(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(),
+		"Archived user: "+user.Name,
+		map[string]interface{}{"affected_user": user.Name, "name": user.Name, "role": roleName, "status": "active"},
+		map[string]interface{}{"affected_user": user.Name, "name": user.Name, "role": roleName, "status": "archived"},
+	)
 
 	// Broadcast deactivation event and disconnect the user
 	h.broadcastUserEvent(id, EventUserDeactivated, currentUserID, nil)
@@ -918,6 +968,15 @@ func (h *UserHandler) PermanentDelete(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get user information for audit log
+	user, err := h.userRepo.GetByID(c.Context(), id)
+	if err != nil || user == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"code":    "NOT_FOUND",
+			"message": "User not found",
+		})
+	}
+
 	// Check if user has sales history
 	hasSales, err := h.userRepo.HasSalesHistory(c.Context(), id)
 	if err != nil {
@@ -942,6 +1001,21 @@ func (h *UserHandler) PermanentDelete(c *fiber.Ctx) error {
 			"message": "Failed to permanently delete user",
 		})
 	}
+
+	// Audit log
+	delRoleName := ""
+	if user.Role != nil {
+		delRoleName = user.Role.Name
+	}
+	delEmail := ""
+	if user.Email != nil {
+		delEmail = *user.Email
+	}
+	audit.LogWithValues(c, models.AuditActionUserDelete, models.AuditEntityUser, id.String(),
+		"Permanently deleted user: "+user.Name,
+		map[string]interface{}{"affected_user": user.Name, "name": user.Name, "role": delRoleName, "email": delEmail, "status": "archived"},
+		nil,
+	)
 
 	// Broadcast delete event and disconnect the user
 	h.broadcastUserEvent(id, EventUserDeleted, currentUserID, nil)

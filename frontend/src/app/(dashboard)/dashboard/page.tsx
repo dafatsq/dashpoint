@@ -4,16 +4,19 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  DollarSign, 
-  ShoppingCart, 
-  Package, 
+import {
+  DollarSign,
+  ShoppingCart,
+  Package,
   TrendingUp,
   AlertTriangle,
-  Loader2 
+  Loader2,
+  ChevronRight,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { DailySummary, LowStockItem } from '@/types';
+import Link from 'next/link';
+import { navItems } from '@/lib/nav-config';
 
 interface DashboardStats {
   todaySales: number;
@@ -23,7 +26,7 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,7 +76,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col h-full">
       <Header title="Dashboard" />
-      
+
       <div className="flex-1 p-6">
         {/* Welcome message */}
         <div className="mb-6">
@@ -193,6 +196,34 @@ export default function DashboardPage() {
             )}
           </>
         )}
+
+        {/* Quick Actions */}
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {navItems
+              .filter((item) => item.href !== '/dashboard')
+              .filter((item) => !item.permission || hasPermission(item.permission))
+              .map((item) => (
+                <Link key={item.href} href={item.href}>
+                  <Card className="h-full hover:bg-muted/50 transition-colors cursor-pointer border-muted-foreground/20 hover:border-primary/50">
+                    <CardContent className="p-6 flex flex-col h-full">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className={`p-2 rounded-lg bg-muted ${item.color?.replace('text-', 'bg-')}/10`}>
+                          <div className={item.color}>{item.icon}</div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <h4 className="font-semibold mb-1">{item.label}</h4>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {item.description}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+          </div>
+        </div>
       </div>
     </div>
   );
