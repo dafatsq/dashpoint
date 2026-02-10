@@ -115,31 +115,34 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'hidden md:flex h-screen flex-col border-r bg-card transition-all duration-300',
-        collapsed ? 'w-16' : 'w-64'
+        'flex h-full flex-col border-r bg-card transition-all duration-300',
+        collapsed && !onNavigate ? 'w-16' : 'w-64',
+        onNavigate ? 'w-64' : 'hidden md:flex h-screen'
       )}
     >
-      {/* Header */}
-      <div className="flex h-16 items-center justify-between border-b px-4">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <Store className="h-6 w-6 text-primary" />
-            <span className="font-bold text-lg">DashPoint</span>
-          </div>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setCollapsed(!collapsed)}
-          className={cn(collapsed && 'mx-auto')}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
+      {/* Header - Hidden when in mobile drawer */}
+      {!onNavigate && (
+        <div className="flex h-16 items-center justify-between border-b px-4">
+          {!collapsed && (
+            <div className="flex items-center gap-2">
+              <Store className="h-6 w-6 text-primary" />
+              <span className="font-bold text-lg">DashPoint</span>
+            </div>
           )}
-        </Button>
-      </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className={cn(collapsed && 'mx-auto')}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-2">
