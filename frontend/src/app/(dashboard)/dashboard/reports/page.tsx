@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import {
   Loader2,
   BarChart3,
@@ -34,9 +35,9 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { 
-  DailyReport, 
-  TopSeller, 
+import {
+  DailyReport,
+  TopSeller,
   InventoryValuation,
   CashReport,
   EmployeeSales,
@@ -99,7 +100,7 @@ function getDateRange(preset: string): { start: string; end: string } {
 export default function ReportsPage() {
   const { hasPermission, user } = useAuth();
   const canExport = hasPermission(PERMISSIONS.REPORTS_EXPORT);
-  
+
   // Debug: log permission check
   console.log('[Reports] User:', user?.role_name, 'Permissions:', user?.permissions, 'canExport:', canExport);
 
@@ -354,21 +355,12 @@ export default function ReportsPage() {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={dateRange.start}
-            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-            className="w-40"
-          />
-          <span className="text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={dateRange.end}
-            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-            className="w-40"
-          />
-        </div>
+        <DateRangePicker
+          value={dateRange}
+          onChange={setDateRange}
+          placeholder="Select date range"
+          className="w-[280px]"
+        />
         <Button variant="outline" size="sm" onClick={fetchOverviewData} disabled={isLoading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
@@ -410,8 +402,8 @@ export default function ReportsPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{formatNumber(salesRangeReport.summary.total_items)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Avg {salesRangeReport.summary.total_transactions > 0 
-                    ? (salesRangeReport.summary.total_items / salesRangeReport.summary.total_transactions).toFixed(1) 
+                  Avg {salesRangeReport.summary.total_transactions > 0
+                    ? (salesRangeReport.summary.total_items / salesRangeReport.summary.total_transactions).toFixed(1)
                     : 0} per sale
                 </p>
               </CardContent>
@@ -454,8 +446,8 @@ export default function ReportsPage() {
                     return salesRangeReport.daily_reports.map((day) => {
                       const height = (parseFloat(day.total_amount) / maxAmount) * 100;
                       return (
-                        <div 
-                          key={day.date} 
+                        <div
+                          key={day.date}
                           className="flex-1 min-w-[4px] max-w-[24px] bg-primary rounded-t hover:bg-primary/80 transition-colors cursor-pointer"
                           style={{ height: `${Math.max(height, 2)}%` }}
                           title={`${day.date}: ${formatCurrency(day.total_amount)} (${day.transaction_count} tx)`}
@@ -533,21 +525,12 @@ export default function ReportsPage() {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={dateRange.start}
-            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-            className="w-40"
-          />
-          <span className="text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={dateRange.end}
-            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-            className="w-40"
-          />
-        </div>
+        <DateRangePicker
+          value={dateRange}
+          onChange={setDateRange}
+          placeholder="Select date range"
+          className="w-[280px]"
+        />
         {canExport && (
           <Button variant="outline" size="sm" onClick={handleExportSales}>
             <Download className="h-4 w-4 mr-2" />
@@ -681,21 +664,12 @@ export default function ReportsPage() {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={dateRange.start}
-            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-            className="w-40"
-          />
-          <span className="text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={dateRange.end}
-            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-            className="w-40"
-          />
-        </div>
+        <DateRangePicker
+          value={dateRange}
+          onChange={setDateRange}
+          placeholder="Select date range"
+          className="w-[280px]"
+        />
         {canExport && (
           <Button variant="outline" size="sm" onClick={handleExportTopSellers}>
             <Download className="h-4 w-4 mr-2" />
@@ -732,15 +706,14 @@ export default function ReportsPage() {
                 </thead>
                 <tbody>
                   {topSellers.map((item, index) => {
-                    const margin = parseFloat(item.total_revenue) > 0 
-                      ? (parseFloat(item.total_profit) / parseFloat(item.total_revenue)) * 100 
+                    const margin = parseFloat(item.total_revenue) > 0
+                      ? (parseFloat(item.total_profit) / parseFloat(item.total_revenue)) * 100
                       : 0;
                     return (
                       <tr key={`${item.product_id}-${index}`} className="border-b last:border-0 hover:bg-muted/50">
                         <td className="py-3">
-                          <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-                            index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                          }`}>
+                          <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                            }`}>
                             {index + 1}
                           </span>
                         </td>
@@ -757,13 +730,12 @@ export default function ReportsPage() {
                         <td className="py-3 text-right font-bold">{formatCurrency(item.total_revenue)}</td>
                         <td className="py-3 text-right text-green-600">{formatCurrency(item.total_profit)}</td>
                         <td className="py-3 text-right">
-                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
-                            margin > 30 
-                              ? 'bg-primary text-primary-foreground ring-primary/20' 
-                              : margin > 15 
-                                ? 'bg-muted text-muted-foreground ring-muted-foreground/20' 
+                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${margin > 30
+                              ? 'bg-primary text-primary-foreground ring-primary/20'
+                              : margin > 15
+                                ? 'bg-muted text-muted-foreground ring-muted-foreground/20'
                                 : 'bg-transparent text-muted-foreground ring-muted-foreground/30'
-                          }`}>
+                            }`}>
                             {margin.toFixed(1)}%
                           </span>
                         </td>
@@ -1003,8 +975,8 @@ export default function ReportsPage() {
           </div>
 
           {/* Difference */}
-          <Card className={parseFloat(cashReport.difference) !== 0 
-            ? 'border-yellow-200 bg-yellow-50/50 dark:bg-yellow-950/20' 
+          <Card className={parseFloat(cashReport.difference) !== 0
+            ? 'border-yellow-200 bg-yellow-50/50 dark:bg-yellow-950/20'
             : 'border-green-200 bg-green-50/50 dark:bg-green-950/20'
           }>
             <CardHeader>
@@ -1012,13 +984,12 @@ export default function ReportsPage() {
               <CardDescription>Actual minus Expected</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className={`text-3xl font-bold flex items-center gap-2 ${
-                parseFloat(cashReport.difference) > 0 
-                  ? 'text-green-600' 
-                  : parseFloat(cashReport.difference) < 0 
-                    ? 'text-red-600' 
+              <div className={`text-3xl font-bold flex items-center gap-2 ${parseFloat(cashReport.difference) > 0
+                  ? 'text-green-600'
+                  : parseFloat(cashReport.difference) < 0
+                    ? 'text-red-600'
                     : 'text-green-600'
-              }`}>
+                }`}>
                 {parseFloat(cashReport.difference) > 0 && <ArrowUpRight className="h-8 w-8" />}
                 {parseFloat(cashReport.difference) < 0 && <ArrowDownRight className="h-8 w-8" />}
                 {parseFloat(cashReport.difference) === 0 && <Minus className="h-8 w-8" />}
@@ -1056,21 +1027,12 @@ export default function ReportsPage() {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={dateRange.start}
-            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-            className="w-40"
-          />
-          <span className="text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={dateRange.end}
-            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-            className="w-40"
-          />
-        </div>
+        <DateRangePicker
+          value={dateRange}
+          onChange={setDateRange}
+          placeholder="Select date range"
+          className="w-[280px]"
+        />
       </div>
 
       {isLoading ? (
@@ -1102,9 +1064,8 @@ export default function ReportsPage() {
                   {employeeSales.map((emp, index) => (
                     <tr key={emp.employee_id} className="border-b last:border-0 hover:bg-muted/50">
                       <td className="py-3">
-                        <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-                          index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                        }`}>
+                        <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                          }`}>
                           {index + 1}
                         </span>
                       </td>
@@ -1145,21 +1106,12 @@ export default function ReportsPage() {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={dateRange.start}
-            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-            className="w-40"
-          />
-          <span className="text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={dateRange.end}
-            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-            className="w-40"
-          />
-        </div>
+        <DateRangePicker
+          value={dateRange}
+          onChange={setDateRange}
+          placeholder="Select date range"
+          className="w-[280px]"
+        />
       </div>
 
       {isLoading ? (
@@ -1175,9 +1127,8 @@ export default function ReportsPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">{cat.category_name}</CardTitle>
-                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                      index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                    }`}>
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      }`}>
                       {index + 1}
                     </span>
                   </div>
@@ -1219,15 +1170,14 @@ export default function ReportsPage() {
                     {(() => {
                       const totalRevenue = categorySales.reduce((sum, c) => sum + parseFloat(c.total_revenue), 0);
                       return categorySales.map((cat, index) => {
-                        const percentage = totalRevenue > 0 
-                          ? (parseFloat(cat.total_revenue) / totalRevenue) * 100 
+                        const percentage = totalRevenue > 0
+                          ? (parseFloat(cat.total_revenue) / totalRevenue) * 100
                           : 0;
                         return (
                           <tr key={cat.category_id} className="border-b last:border-0 hover:bg-muted/50">
                             <td className="py-3">
-                              <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-                                index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                              }`}>
+                              <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                                }`}>
                                 {index + 1}
                               </span>
                             </td>

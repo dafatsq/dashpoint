@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import {
   Search,
   Plus,
@@ -393,20 +394,12 @@ export default function ExpensesPage() {
               ))}
             </SelectContent>
           </Select>
-          <div className="flex gap-2">
-            <Input
-              type="date"
-              value={dateRange.start}
-              onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
-              className="w-40"
-            />
-            <Input
-              type="date"
-              value={dateRange.end}
-              onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
-              className="w-40"
-            />
-          </div>
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            placeholder="Select date range"
+            className="w-[280px]"
+          />
           <Button onClick={openCreateDialog}>
             <Plus className="h-4 w-4 mr-2" />
             Add Expense

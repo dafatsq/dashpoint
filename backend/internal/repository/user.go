@@ -600,6 +600,16 @@ func (r *UserRepository) RemoveUserPermission(ctx context.Context, userID, permi
 	return nil
 }
 
+// ClearUserPermissionOverrides removes all permission overrides for a user
+func (r *UserRepository) ClearUserPermissionOverrides(ctx context.Context, userID uuid.UUID) error {
+	query := `DELETE FROM user_permissions WHERE user_id = $1`
+	_, err := r.pool.Exec(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to clear user permission overrides: %w", err)
+	}
+	return nil
+}
+
 // GetUserPermissionOverrides retrieves all permission overrides for a user
 func (r *UserRepository) GetUserPermissionOverrides(ctx context.Context, userID uuid.UUID) ([]*models.UserPermission, error) {
 	query := `

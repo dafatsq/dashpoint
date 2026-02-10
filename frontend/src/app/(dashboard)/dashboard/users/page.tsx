@@ -347,21 +347,45 @@ export default function UsersPage() {
 
   // Handle permission toggle
   const handlePermissionToggle = (permission: Permission, enabled: boolean) => {
-    // Check if this is reverting to the role default
-    const override = getPermissionOverride(permission.id);
-    const roleDefault = userEffectivePermissions.includes(permission.key) && !override;
-    
-    if (enabled === roleDefault && !override) {
-      // Remove from changes if reverting to role default
-      const newChanges = { ...permissionChanges };
-      delete newChanges[permission.id];
-      setPermissionChanges(newChanges);
-    } else {
-      setPermissionChanges(prev => ({
-        ...prev,
-        [permission.id]: enabled,
-      }));
+    const newChanges = { ...permissionChanges };
+
+    // Helper to set a single permission change
+    const setChange = (perm: Permission, value: boolean) => {
+      const override = getPermissionOverride(perm.id);
+      const roleDefault = userEffectivePermissions.includes(perm.key) && !override;
+
+      if (value === roleDefault && !override) {
+        delete newChanges[perm.id];
+      } else {
+        newChanges[perm.id] = value;
+      }
+    };
+
+    // Set the toggled permission
+    setChange(permission, enabled);
+
+    // If this is a view/access permission being disabled, also disable all child permissions in the same category
+    if (!enabled) {
+      // Find which category this permission belongs to
+      for (const [category, permissions] of Object.entries(allPermissions)) {
+        const viewPerm = getViewPermissionForCategory(category, permissions);
+        if (viewPerm && viewPerm.id === permission.id) {
+          // This is the view permission for this category - disable all non-view children
+          for (const childPerm of permissions) {
+            if (childPerm.id !== permission.id) {
+              // Special case: can_create_sale is independent
+              if (childPerm.key === 'can_create_sale') continue;
+              // Special case: can_void_sale depends on can_view_sales
+              if (category === 'sales' && childPerm.key !== 'can_void_sale') continue;
+              setChange(childPerm, false);
+            }
+          }
+          break;
+        }
+      }
     }
+
+    setPermissionChanges(newChanges);
   };
 
   // Save permission changes
@@ -399,14 +423,14 @@ export default function UsersPage() {
   const getPermissionStatus = (permission: Permission): { text: string; color: string } => {
     const override = getPermissionOverride(permission.id);
     const hasChange = permissionChanges[permission.id] !== undefined;
-    
+
     if (hasChange) {
       return { text: 'Modified', color: 'text-yellow-600' };
     }
     if (override) {
-      return { 
-        text: override.allowed ? 'Override: Granted' : 'Override: Denied', 
-        color: override.allowed ? 'text-green-600' : 'text-red-600' 
+      return {
+        text: override.allowed ? 'Override: Granted' : 'Override: Denied',
+        color: override.allowed ? 'text-green-600' : 'text-red-600'
       };
     }
     return { text: 'From Role', color: 'text-muted-foreground' };
@@ -535,21 +559,19 @@ export default function UsersPage() {
         <div className="flex gap-1 mb-4 p-1 bg-muted rounded-lg w-fit">
           <button
             onClick={() => setViewMode('active')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'active'
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'active'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             Active
           </button>
           <button
             onClick={() => setViewMode('archived')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-              viewMode === 'archived'
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${viewMode === 'archived'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             <Archive className="h-4 w-4" />
             Archived
@@ -622,7 +644,7 @@ export default function UsersPage() {
                       <th className="pb-3 font-medium">Role</th>
                       <th className="pb-3 font-medium text-center">PIN Set</th>
                       <th className="pb-3 font-medium text-center">Status</th>
-                      {canManageUsers && (
+                      {(canManageUsers || canManagePermissions) && (
                         <th className="pb-3 font-medium text-right">Actions</th>
                       )}
                     </tr>
@@ -648,27 +670,25 @@ export default function UsersPage() {
                         </td>
                         <td className="py-3 text-center">
                           <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              user.has_pin
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.has_pin
                                 ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
                                 : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
-                            }`}
+                              }`}
                           >
                             {user.has_pin ? 'Yes' : 'No'}
                           </span>
                         </td>
                         <td className="py-3 text-center">
                           <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              user.is_active
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.is_active
                                 ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
                                 : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
-                            }`}
+                              }`}
                           >
                             {user.is_active ? 'Active' : 'Archived'}
                           </span>
                         </td>
-                        {canManageUsers && (
+                        {(canManageUsers || canManagePermissions) && (
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
                               {viewMode === 'active' ? (
@@ -887,7 +907,7 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>Archive User</DialogTitle>
             <DialogDescription>
-              Are you sure you want to archive &quot;{deletingUser?.name}&quot;? 
+              Are you sure you want to archive &quot;{deletingUser?.name}&quot;?
               The user will be moved to the Archived tab and can be restored later.
             </DialogDescription>
           </DialogHeader>
@@ -920,7 +940,7 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>Permanently Delete User</DialogTitle>
             <DialogDescription>
-              Are you sure you want to permanently delete &quot;{deletingUser?.name}&quot;? 
+              Are you sure you want to permanently delete &quot;{deletingUser?.name}&quot;?
               This action cannot be undone. All data associated with this user will be lost.
             </DialogDescription>
           </DialogHeader>
@@ -971,79 +991,78 @@ export default function UsersPage() {
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto pr-2">
-          {isLoadingPermissions ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {Object.entries(allPermissions).map(([category, permissions]) => {
-                const sortedPermissions = sortPermissions(permissions);
-                
-                return (
-                  <div key={category} className="space-y-3">
-                    <h4 className="font-semibold capitalize text-sm border-b pb-1">{category}</h4>
-                    <div className="space-y-2">
-                      {sortedPermissions.map((permission) => {
-                        const isViewPerm = isViewPermission(permission);
-                        const isEnabled = isPermissionEnabled(permission);
-                        const status = getPermissionStatus(permission);
-                        
-                        // Use the new per-permission disabled check
-                        const isDisabled = isPermissionDisabledByParent(permission, category);
-                        
-                        // Get the appropriate message for disabled state
-                        const getDisabledMessage = () => {
-                          if (permission.key === 'can_void_sale') {
-                            return 'Enable "Sales History Access" first';
-                          }
-                          return `Enable "Access to ${category.charAt(0).toUpperCase() + category.slice(1)}" first`;
-                        };
-                        
-                        return (
-                          <div 
-                            key={permission.id} 
-                            className={`flex items-center justify-between py-2 px-3 rounded-md transition-colors ${
-                              isDisabled 
-                                ? 'bg-muted/30 opacity-50' 
-                                : 'bg-muted/50 hover:bg-muted'
-                            }`}
-                          >
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-medium text-sm ${isDisabled ? 'text-muted-foreground' : ''}`}>
-                                  {getPermissionDisplayName(permission, category)}
-                                </span>
-                                {isViewPerm && (
-                                  <span className="text-xs text-blue-600 font-medium">(Controls Access)</span>
+            {isLoadingPermissions ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {Object.entries(allPermissions).map(([category, permissions]) => {
+                  const sortedPermissions = sortPermissions(permissions);
+
+                  return (
+                    <div key={category} className="space-y-3">
+                      <h4 className="font-semibold capitalize text-sm border-b pb-1">{category}</h4>
+                      <div className="space-y-2">
+                        {sortedPermissions.map((permission) => {
+                          const isViewPerm = isViewPermission(permission);
+                          const isEnabled = isPermissionEnabled(permission);
+                          const status = getPermissionStatus(permission);
+
+                          // Use the new per-permission disabled check
+                          const isDisabled = isPermissionDisabledByParent(permission, category);
+
+                          // Get the appropriate message for disabled state
+                          const getDisabledMessage = () => {
+                            if (permission.key === 'can_void_sale') {
+                              return 'Enable "Sales History Access" first';
+                            }
+                            return `Enable "Access to ${category.charAt(0).toUpperCase() + category.slice(1)}" first`;
+                          };
+
+                          return (
+                            <div
+                              key={permission.id}
+                              className={`flex items-center justify-between py-2 px-3 rounded-md transition-colors ${isDisabled
+                                  ? 'bg-muted/30 opacity-50'
+                                  : 'bg-muted/50 hover:bg-muted'
+                                }`}
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-medium text-sm ${isDisabled ? 'text-muted-foreground' : ''}`}>
+                                    {getPermissionDisplayName(permission, category)}
+                                  </span>
+                                  {isViewPerm && (
+                                    <span className="text-xs text-blue-600 font-medium">(Controls Access)</span>
+                                  )}
+                                  {!isDisabled && (
+                                    <span className={`text-xs ${status.color}`}>({status.text})</span>
+                                  )}
+                                </div>
+                                {permission.description && (
+                                  <p className="text-xs text-muted-foreground mt-0.5">{permission.description}</p>
                                 )}
-                                {!isDisabled && (
-                                  <span className={`text-xs ${status.color}`}>({status.text})</span>
+                                {isDisabled && (
+                                  <p className="text-xs text-orange-600 mt-0.5">
+                                    {getDisabledMessage()}
+                                  </p>
                                 )}
                               </div>
-                              {permission.description && (
-                                <p className="text-xs text-muted-foreground mt-0.5">{permission.description}</p>
-                              )}
-                              {isDisabled && (
-                                <p className="text-xs text-orange-600 mt-0.5">
-                                  {getDisabledMessage()}
-                                </p>
-                              )}
+                              <Switch
+                                checked={isDisabled ? false : isEnabled}
+                                onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
+                                disabled={isDisabled}
+                              />
                             </div>
-                            <Switch
-                              checked={isDisabled ? false : isEnabled}
-                              onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
-                              disabled={isDisabled}
-                            />
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <DialogFooter className="flex-shrink-0 flex items-center justify-between gap-2 pt-4 border-t bg-background">
@@ -1055,8 +1074,8 @@ export default function UsersPage() {
               )}
             </div>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setPermissionsDialogOpen(false);
                   setPermissionsUser(null);
@@ -1065,8 +1084,8 @@ export default function UsersPage() {
               >
                 Cancel
               </Button>
-              <Button 
-                onClick={savePermissionChanges} 
+              <Button
+                onClick={savePermissionChanges}
                 disabled={isSubmitting || Object.keys(permissionChanges).length === 0}
               >
                 {isSubmitting ? (
