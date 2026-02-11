@@ -20,7 +20,7 @@ export function Header({ title }: HeaderProps) {
     <header className="flex h-16 shrink-0 items-center justify-between border-b bg-card px-6">
       <div className="flex items-center gap-4">
         {/* Mobile Menu */}
-        <div className="md:hidden">
+        <div className="lg:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -50,7 +50,7 @@ export function Header({ title }: HeaderProps) {
 
       <div className="flex items-center gap-4">
         {/* Search */}
-        <div className="relative hidden md:block">
+        <div className="relative hidden lg:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search..."

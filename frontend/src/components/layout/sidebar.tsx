@@ -118,7 +118,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         'flex h-full flex-col bg-card transition-all duration-300',
         !onNavigate && 'border-r',
         onNavigate ? 'w-full' : (collapsed ? 'w-16' : 'w-64'),
-        !onNavigate && 'hidden md:flex h-screen'
+        !onNavigate && 'hidden lg:flex h-screen'
       )}
     >
       {/* Header - Hidden when in mobile drawer */}

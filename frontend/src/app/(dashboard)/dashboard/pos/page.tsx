@@ -509,7 +509,7 @@ export default function POSPage() {
                 <p>No products found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
                 {filteredProducts.map((product) => {
                   const quantity = getProductQuantity(product);
                   const minQuantity = getProductMinQuantity(product);
