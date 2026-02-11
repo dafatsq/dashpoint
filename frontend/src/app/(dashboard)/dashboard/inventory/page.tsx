@@ -30,6 +30,8 @@ import {
   AlertTriangle,
   TrendingDown,
   Package,
+  Settings2,
+  ImageIcon,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Product, LowStockItem, AdjustmentType } from '@/types';
@@ -68,6 +70,19 @@ function getProductMinQuantity(product: Product): number {
 
 function getProductPrice(product: Product): number {
   return parseFloat(product.price) || 0;
+}
+
+// Helper to get full image URL
+function getImageUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  // Use window.location for dynamic base URL, fallback to localhost:8080
+  const baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? `${window.location.protocol}//${window.location.hostname}:8080`
+    : 'http://localhost:8080';
+  return `${baseUrl}${path}`;
 }
 
 export default function InventoryPage() {
@@ -124,13 +139,11 @@ export default function InventoryPage() {
   );
 
   // Open adjustment dialog
-  const openAdjustDialog = (product: Product, type: 'add' | 'remove' | 'count') => {
+  const openAdjustDialog = (product: Product) => {
     setSelectedProduct(product);
-    setAdjustmentType(type);
+    setAdjustmentType('add');
     setAdjustmentQuantity('');
-    setAdjustmentTypeValue(
-      type === 'add' ? 'purchase' : type === 'remove' ? 'damage' : 'count'
-    );
+    setAdjustmentTypeValue('purchase');
     setAdjustmentNotes('');
     setAdjustDialogOpen(true);
   };
@@ -151,22 +164,22 @@ export default function InventoryPage() {
 
     const inputQuantity = parseInt(adjustmentQuantity);
     const currentStock = getProductQuantity(selectedProduct);
-    
+
     console.log('[Adjustment Debug]', {
       adjustmentType,
       adjustmentTypeValue,
       inputQuantity,
       currentStock,
     });
-    
+
     let finalQuantity: number;
-    
+
     if (adjustmentTypeValue === 'count') {
       // Stock count: input is the ABSOLUTE final quantity desired
       // User enters what they want the stock to BE, not how much to add/remove
       finalQuantity = inputQuantity;
       console.log('[Adjustment] Count type - setting to absolute quantity:', finalQuantity);
-      
+
       // Validate that the new quantity is not negative
       if (finalQuantity < 0) {
         alert('Stock quantity cannot be negative');
@@ -176,7 +189,7 @@ export default function InventoryPage() {
       // Inventory correction: send negative for remove, positive for add
       finalQuantity = adjustmentType === 'remove' ? -inputQuantity : inputQuantity;
       console.log('[Adjustment] Adjustment type - delta:', finalQuantity);
-      
+
       // Validate that we won't go negative
       if (currentStock + finalQuantity < 0) {
         alert(`Cannot remove ${inputQuantity} items. Only ${currentStock} available.`);
@@ -186,21 +199,21 @@ export default function InventoryPage() {
       // damage, loss, purchase: send positive (backend handles negation for damage/loss)
       finalQuantity = inputQuantity;
       console.log('[Adjustment] Other type - quantity:', finalQuantity);
-      
+
       // For damage/loss, validate we have enough stock
       if ((adjustmentTypeValue === 'damage' || adjustmentTypeValue === 'loss') && finalQuantity > currentStock) {
         alert(`Cannot remove ${inputQuantity} items. Only ${currentStock} available.`);
         return;
       }
     }
-    
+
     const adjustment = {
       product_id: selectedProduct.id,
       adjustment_type: adjustmentTypeValue,
       quantity: finalQuantity.toString(),
       reason: adjustmentNotes || undefined,
     };
-    
+
     console.log('[Adjustment] Sending:', adjustment);
 
     setIsSubmitting(true);
@@ -247,7 +260,7 @@ export default function InventoryPage() {
 
       <div className="flex-1 p-6 overflow-auto">
         {/* Stats cards */}
-        <div className="grid gap-4 md:grid-cols-4 mb-6">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Total Products</CardTitle>
@@ -274,7 +287,9 @@ export default function InventoryPage() {
               <TrendingDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(totalValue)}</div>
+              <div className="text-xl sm:text-2xl font-bold truncate" title={formatCurrency(totalValue)}>
+                {formatCurrency(totalValue)}
+              </div>
             </CardContent>
           </Card>
 
@@ -308,8 +323,8 @@ export default function InventoryPage() {
         </div>
 
         {/* Search */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <div className="relative flex-1 w-full max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search products..."
@@ -360,25 +375,26 @@ export default function InventoryPage() {
                             SKU: {item.sku || 'N/A'}
                           </p>
                         </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <p className="font-bold text-destructive">
-                                {parseFloat(item.quantity)} left
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Available: {parseFloat(item.available_quantity)}
-                              </p>
-                            </div>
-                            {product && canModifyStock && (
-                              <Button
-                                size="sm"
-                                onClick={() => openAdjustDialog(product, 'add')}
-                              >
-                                <Plus className="h-4 w-4 mr-1" />
-                                Restock
-                              </Button>
-                            )}
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="font-bold text-destructive">
+                              {parseFloat(item.quantity)} left
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Available: {parseFloat(item.available_quantity)}
+                            </p>
                           </div>
+                          {product && canModifyStock && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openAdjustDialog(product)}
+                            >
+                              <Settings2 className="h-4 w-4 mr-1" />
+                              Adjust
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -388,100 +404,167 @@ export default function InventoryPage() {
           )
         ) : (
           // All products view
-          <Card>
-            <CardHeader>
-              <CardTitle>Inventory ({filteredProducts.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b text-left text-sm text-muted-foreground">
-                      <th className="pb-3 font-medium">Product</th>
-                      <th className="pb-3 font-medium">SKU</th>
-                      <th className="pb-3 font-medium text-right">Current Stock</th>
-                      <th className="pb-3 font-medium text-right">Min Stock</th>
-                      <th className="pb-3 font-medium text-center">Status</th>
-                      {canModifyStock && (
-                        <th className="pb-3 font-medium text-right">Actions</th>
+          <>
+            {/* Mobile Card View */}
+            <div className="lg:hidden space-y-4">
+              {filteredProducts.map((product) => {
+                const quantity = getProductQuantity(product);
+                const minQuantity = getProductMinQuantity(product);
+                const isLowStock = quantity <= minQuantity;
+                const isOutOfStock = quantity === 0;
+
+                return (
+                  <div key={product.id} className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
+                    <div className="flex items-start gap-4">
+                      {/* Product Image */}
+                      {product.image_url ? (
+                        <div className="relative h-20 w-20 rounded border overflow-hidden flex-shrink-0 bg-muted">
+                          <img
+                            src={getImageUrl(product.image_url)}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                            }}
+                          />
+                          <div className="absolute inset-0 hidden items-center justify-center bg-muted">
+                            <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-20 w-20 rounded border flex items-center justify-center bg-muted flex-shrink-0">
+                          <Package className="h-8 w-8 text-muted-foreground" />
+                        </div>
                       )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProducts.map((product) => {
-                      const quantity = getProductQuantity(product);
-                      const minQuantity = getProductMinQuantity(product);
-                      const isLowStock = quantity <= minQuantity;
-                      const isOutOfStock = quantity === 0;
-                      return (
-                        <tr key={product.id} className="border-b last:border-0">
-                          <td className="py-3">
-                            <p className="font-medium">{product.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {product.category_name || 'No category'}
-                            </p>
-                          </td>
-                          <td className="py-3 text-sm text-muted-foreground">
-                            {product.sku || '-'}
-                          </td>
-                          <td className={`py-3 text-right font-medium ${isLowStock ? 'text-destructive' : ''}`}>
-                            {quantity}
-                          </td>
-                          <td className="py-3 text-right text-muted-foreground">
-                            {minQuantity}
-                          </td>
-                          <td className="py-3 text-center">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                isOutOfStock
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-semibold line-clamp-1">{product.name}</h3>
+                            <p className="text-sm text-muted-foreground">{product.sku || '-'}</p>
+                          </div>
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isOutOfStock
+                              ? 'bg-red-600 text-white'
+                              : isLowStock
+                                ? 'bg-yellow-600 text-white'
+                                : 'bg-green-600 text-white'
+                              }`}
+                          >
+                            {isOutOfStock ? 'Out' : isLowStock ? 'Low' : 'In'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                          <div>
+                            <span className="text-muted-foreground">Stock: </span>
+                            <span className={`font-bold ${isLowStock ? 'text-destructive' : ''}`}>{quantity}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Min: </span>
+                            <span>{minQuantity}</span>
+                          </div>
+                        </div>
+
+                        {canModifyStock && (
+                          <div className="flex items-center justify-end gap-2 border-t pt-3 mt-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openAdjustDialog(product)}
+                              className="h-8"
+                            >
+                              <Settings2 className="h-3.5 w-3.5 mr-1" />
+                              Adjust
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table View */}
+            <Card className="hidden lg:block">
+              <CardHeader>
+                <CardTitle>Inventory ({filteredProducts.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-sm text-muted-foreground">
+                        <th className="pb-3 font-medium">Product</th>
+                        <th className="pb-3 font-medium hidden lg:table-cell">SKU</th>
+                        <th className="pb-3 font-medium text-right">Stock</th>
+                        <th className="pb-3 font-medium text-right hidden lg:table-cell">Min</th>
+                        <th className="pb-3 font-medium text-center">Status</th>
+                        {canModifyStock && (
+                          <th className="pb-3 font-medium text-right">Actions</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProducts.map((product) => {
+                        const quantity = getProductQuantity(product);
+                        const minQuantity = getProductMinQuantity(product);
+                        const isLowStock = quantity <= minQuantity;
+                        const isOutOfStock = quantity === 0;
+                        return (
+                          <tr key={product.id} className="border-b last:border-0">
+                            <td className="py-3">
+                              <p className="font-medium">{product.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {product.category_name || 'No category'}
+                              </p>
+                            </td>
+                            <td className="py-3 text-sm text-muted-foreground hidden lg:table-cell">
+                              {product.sku || '-'}
+                            </td>
+                            <td className={`py-3 text-right font-medium ${isLowStock ? 'text-destructive' : ''}`}>
+                              {quantity}
+                            </td>
+                            <td className="py-3 text-right text-muted-foreground hidden lg:table-cell">
+                              {minQuantity}
+                            </td>
+                            <td className="py-3 text-center">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${isOutOfStock
                                   ? 'bg-red-600 text-white dark:bg-red-600/90 dark:text-white'
                                   : isLowStock
-                                  ? 'bg-yellow-600 text-white dark:bg-yellow-600/90 dark:text-white'
-                                  : 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
-                              }`}
-                            >
-                              {isOutOfStock ? 'Out of Stock' : isLowStock ? 'Low Stock' : 'In Stock'}
-                            </span>
-                          </td>
-                          {canModifyStock && (
-                            <td className="py-3 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => openAdjustDialog(product, 'add')}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => openAdjustDialog(product, 'remove')}
-                                  disabled={quantity === 0}
-                                >
-                                  <Minus className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => openAdjustDialog(product, 'count')}
-                                  title="Stock Count"
-                                >
-                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                  </svg>
-                                </Button>
-                              </div>
+                                    ? 'bg-yellow-600 text-white dark:bg-yellow-600/90 dark:text-white'
+                                    : 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                  }`}
+                              >
+                                {isOutOfStock ? 'Out of Stock' : isLowStock ? 'Low Stock' : 'In Stock'}
+                              </span>
                             </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                            {canModifyStock && (
+                              <td className="py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openAdjustDialog(product)}
+                                  >
+                                    <Settings2 className="h-3 w-3 mr-1" />
+                                    Adjust
+                                  </Button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
 
@@ -516,6 +599,28 @@ export default function InventoryPage() {
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
+              <Label htmlFor="actionType">Action</Label>
+              <Select
+                value={adjustmentType}
+                onValueChange={(value: 'add' | 'remove' | 'count') => {
+                  setAdjustmentType(value);
+                  setAdjustmentTypeValue(
+                    value === 'add' ? 'purchase' : value === 'remove' ? 'damage' : 'count'
+                  );
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="add">Add Stock</SelectItem>
+                  <SelectItem value="remove">Remove Stock</SelectItem>
+                  <SelectItem value="count">Stock Count</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
               <Label htmlFor="quantity">Quantity</Label>
               <Input
                 id="quantity"
@@ -530,8 +635,8 @@ export default function InventoryPage() {
             {adjustmentType !== 'count' && (
               <div className="grid gap-2">
                 <Label htmlFor="adjustmentType">Adjustment Type</Label>
-                <Select 
-                  value={adjustmentTypeValue} 
+                <Select
+                  value={adjustmentTypeValue}
                   onValueChange={(value: AdjustmentType) => setAdjustmentTypeValue(value)}
                 >
                   <SelectTrigger>
@@ -575,7 +680,7 @@ export default function InventoryPage() {
                       <span className="font-bold">
                         {selectedProduct
                           ? getProductQuantity(selectedProduct) +
-                            (adjustmentType === 'add' ? 1 : -1) * parseInt(adjustmentQuantity || '0')
+                          (adjustmentType === 'add' ? 1 : -1) * parseInt(adjustmentQuantity || '0')
                           : 0}
                       </span>
                     </>

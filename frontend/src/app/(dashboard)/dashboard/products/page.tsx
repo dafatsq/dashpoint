@@ -573,7 +573,9 @@ export default function ProductsPage() {
                         <th className="pb-3 font-medium">Category</th>
                         <th className="pb-3 font-medium text-right">Price</th>
                         <th className="pb-3 font-medium text-right">Stock</th>
-                        <th className="pb-3 font-medium text-center">Status</th>
+                        {viewMode !== 'active' && (
+                          <th className="pb-3 font-medium text-center">Status</th>
+                        )}
                         {(canEdit || canDelete) && (
                           <th className="pb-3 font-medium text-right">Actions</th>
                         )}
@@ -632,16 +634,18 @@ export default function ProductsPage() {
                                 {quantity}
                               </span>
                             </td>
-                            <td className="py-3 text-center">
-                              <span
-                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${product.is_active
-                                  ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
-                                  : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
-                                  }`}
-                              >
-                                {product.is_active ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
+                            {viewMode !== 'active' && (
+                              <td className="py-3 text-center">
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${product.is_active
+                                    ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                    : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
+                                    }`}
+                                >
+                                  {product.is_active ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                            )}
                             {(canEdit || canDelete) && (
                               <td className="py-3 text-right">
                                 <div className="flex items-center justify-end gap-1">
