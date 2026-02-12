@@ -215,7 +215,7 @@ export default function AuditLogsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="Audit Logs" />
+      <Header title="Audit" />
 
       <div className="flex-1 p-6 overflow-auto">
         {/* Toolbar */}
@@ -278,72 +278,103 @@ export default function AuditLogsPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity Log</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Desktop View */}
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b text-left text-sm text-muted-foreground">
-                      <th className="pb-3 font-medium">Timestamp</th>
-                      <th className="pb-3 font-medium">User</th>
-                      <th className="pb-3 font-medium">Action</th>
-                      <th className="pb-3 font-medium">Entity</th>
-                      <th className="pb-3 font-medium">IP Address</th>
-                      <th className="pb-3 font-medium text-right">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredLogs.map((log) => (
-                      <tr key={log.id} className="border-b last:border-0">
-                        <td className="py-3 text-sm">
-                          {formatDate(log.created_at)}
-                        </td>
-                        <td className="py-3">
-                          <p className="font-medium text-sm">{log.user_name || 'System'}</p>
-                        </td>
-                        <td className="py-3">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getActionBadgeColor(
-                              log.action
-                            )}`}
-                          >
-                            {ACTION_LABELS[log.action] || log.action}
-                          </span>
-                        </td>
-                        <td className="py-3 text-sm capitalize">
-                          {ENTITY_LABELS[log.entity_type] || log.entity_type}
-                          {log.entity_id && (
-                            <span className="text-xs text-muted-foreground ml-1">
-                              ({log.entity_id.slice(0, 8)}...)
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 text-sm text-muted-foreground">
-                          {log.ip_address || '-'}
-                        </td>
-                        <td className="py-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openDetailDialog(log)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </td>
+          <>
+            {/* Desktop View */}
+            <Card className="hidden lg:block">
+              <CardHeader>
+                <CardTitle>Activity Log</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-sm text-muted-foreground">
+                        <th className="pb-3 font-medium">Timestamp</th>
+                        <th className="pb-3 font-medium">User</th>
+                        <th className="pb-3 font-medium">Action</th>
+                        <th className="pb-3 font-medium">Entity</th>
+                        <th className="pb-3 font-medium">IP Address</th>
+                        <th className="pb-3 font-medium text-right">Details</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {filteredLogs.map((log) => (
+                        <tr key={log.id} className="border-b last:border-0">
+                          <td className="py-3 text-sm">
+                            {formatDate(log.created_at)}
+                          </td>
+                          <td className="py-3">
+                            <p className="font-medium text-sm">{log.user_name || 'System'}</p>
+                          </td>
+                          <td className="py-3">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getActionBadgeColor(
+                                log.action
+                              )}`}
+                            >
+                              {ACTION_LABELS[log.action] || log.action}
+                            </span>
+                          </td>
+                          <td className="py-3 text-sm capitalize">
+                            {ENTITY_LABELS[log.entity_type] || log.entity_type}
+                            {log.entity_id && (
+                              <span className="text-xs text-muted-foreground ml-1">
+                                ({log.entity_id.slice(0, 8)}...)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 text-sm text-muted-foreground">
+                            {log.ip_address || '-'}
+                          </td>
+                          <td className="py-3 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openDetailDialog(log)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Mobile View */}
-              <div className="lg:hidden space-y-4">
-                {filteredLogs.map((log) => (
-                  <div key={log.id} className="p-4 rounded-lg border bg-card text-card-foreground shadow-sm">
+                {/* Pagination */}
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Page {page}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => p + 1)}
+                      disabled={!hasMore}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Mobile View */}
+            <div className="lg:hidden space-y-4">
+              {filteredLogs.map((log) => (
+                <Card key={log.id}>
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <span
@@ -385,12 +416,12 @@ export default function AuditLogsPage() {
                         </div>
                       )}
                     </div>
-                  </div>
-                ))}
-              </div>
+                  </CardContent>
+                </Card>
+              ))}
 
-              {/* Pagination */}
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              {/* Pagination for mobile */}
+              <div className="flex items-center justify-between pt-4">
                 <p className="text-sm text-muted-foreground">
                   Page {page}
                 </p>
@@ -415,8 +446,8 @@ export default function AuditLogsPage() {
                   </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </>
         )}
       </div>
 
