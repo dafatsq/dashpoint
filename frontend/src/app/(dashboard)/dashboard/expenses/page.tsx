@@ -271,7 +271,7 @@ export default function ExpensesPage() {
 
     try {
       const result = await api.deleteExpense(deletingExpense.id);
-      
+
       if (result.error) {
         setDeleteError(result.error);
         return;
@@ -359,7 +359,7 @@ export default function ExpensesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-lg font-medium">
-                {dateRange.start && dateRange.end 
+                {dateRange.start && dateRange.end
                   ? `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`
                   : 'No period selected'}
               </div>
@@ -371,40 +371,44 @@ export default function ExpensesPage() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search expenses..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <DateRangePicker
-            value={dateRange}
-            onChange={setDateRange}
-            placeholder="Select date range"
-            className="w-[280px]"
-          />
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Expense
-          </Button>
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search expenses..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 w-full"
+                />
+              </div>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <DateRangePicker
+                value={dateRange}
+                onChange={setDateRange}
+                placeholder="Select date range"
+                className="w-full sm:w-[280px]"
+              />
+              <Button onClick={openCreateDialog} className="w-full sm:w-auto">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Expense
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Expenses table */}
         {isLoading ? (
@@ -422,82 +426,149 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Expenses ({filteredExpenses.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b text-left text-sm text-muted-foreground">
-                      <th className="pb-3 font-medium">Date</th>
-                      <th className="pb-3 font-medium">Description</th>
-                      <th className="pb-3 font-medium">Category</th>
-                      <th className="pb-3 font-medium">User</th>
-                      <th className="pb-3 font-medium">Vendor</th>
-                      <th className="pb-3 font-medium text-right">Amount</th>
-                      <th className="pb-3 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredExpenses.map((expense) => (
-                      <tr key={expense.id} className="border-b last:border-0">
-                        <td className="py-3 text-sm">
-                          {formatDate(expense.expense_date)}
-                        </td>
-                        <td className="py-3">
-                          <div>
-                            <p className="font-medium">{expense.description}</p>
-                            {expense.reference_number && (
-                              <p className="text-xs text-muted-foreground">
-                                Ref: {expense.reference_number}
-                              </p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 text-sm">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-600 text-white dark:bg-blue-600/90 dark:text-white">
-                            {expense.category_name || 'Uncategorized'}
-                          </span>
-                        </td>
-                        <td className="py-3 text-sm">
-                          {expense.created_by_name || 'Unknown'}
-                        </td>
-                        <td className="py-3 text-sm text-muted-foreground">
-                          {expense.vendor || '-'}
-                        </td>
-                        <td className="py-3 text-right font-medium text-destructive">
-                          {formatCurrency(expense.amount)}
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditDialog(expense)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setDeletingExpense(expense);
-                                setDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </td>
+          <>
+            {/* Desktop Table View */}
+            <Card className="hidden lg:block">
+              <CardHeader>
+                <CardTitle>Expenses ({filteredExpenses.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-sm text-muted-foreground">
+                        <th className="pb-3 font-medium">Date</th>
+                        <th className="pb-3 font-medium">Description</th>
+                        <th className="pb-3 font-medium">Category</th>
+                        <th className="pb-3 font-medium">User</th>
+                        <th className="pb-3 font-medium">Vendor</th>
+                        <th className="pb-3 font-medium text-right">Amount</th>
+                        <th className="pb-3 font-medium text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                    </thead>
+                    <tbody>
+                      {filteredExpenses.map((expense) => (
+                        <tr key={expense.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="py-3 text-sm">
+                            {formatDate(expense.expense_date)}
+                          </td>
+                          <td className="py-3">
+                            <div>
+                              <p className="font-medium">{expense.description}</p>
+                              {expense.reference_number && (
+                                <p className="text-xs text-muted-foreground">
+                                  Ref: {expense.reference_number}
+                                </p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 text-sm">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-600 text-white dark:bg-blue-600/90 dark:text-white">
+                              {expense.category_name || 'Uncategorized'}
+                            </span>
+                          </td>
+                          <td className="py-3 text-sm">
+                            {expense.created_by_name || 'Unknown'}
+                          </td>
+                          <td className="py-3 text-sm text-muted-foreground">
+                            {expense.vendor || '-'}
+                          </td>
+                          <td className="py-3 text-right font-medium text-destructive">
+                            {formatCurrency(expense.amount)}
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEditDialog(expense)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDeletingExpense(expense);
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Mobile Card View */}
+            <div className="lg:hidden space-y-4">
+              <h3 className="font-semibold text-lg">Expenses ({filteredExpenses.length})</h3>
+              {filteredExpenses.map((expense) => (
+                <Card key={expense.id}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex justify-between items-start border-b pb-2">
+                      <div>
+                        <span className="text-sm font-bold text-destructive">{formatCurrency(expense.amount)}</span>
+                        <span className="text-xs text-muted-foreground block">{formatDate(expense.expense_date)}</span>
+                      </div>
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-600 text-white dark:bg-blue-600/90 dark:text-white">
+                        {expense.category_name || 'Uncategorized'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <p className="font-medium">{expense.description}</p>
+                      {expense.reference_number && (
+                        <p className="text-xs text-muted-foreground">
+                          Ref: {expense.reference_number}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                      <div className="flex flex-col">
+                        <span className="text-xs">Vendor</span>
+                        <span className="text-foreground">{expense.vendor || '-'}</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs">User</span>
+                        <span className="text-foreground">{expense.created_by_name || 'Unknown'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditDialog(expense)}
+                        className="h-8"
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDeletingExpense(expense);
+                          setDeleteDialogOpen(true);
+                        }}
+                        className="h-8 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -522,7 +593,7 @@ export default function ExpensesPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="category">Category</Label>
                 <Select
@@ -642,7 +713,7 @@ export default function ExpensesPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="amount" className={!formData.category_id ? 'opacity-50' : ''}>Amount (IDR) *</Label>

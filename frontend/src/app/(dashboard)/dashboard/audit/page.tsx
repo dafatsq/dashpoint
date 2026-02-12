@@ -147,7 +147,7 @@ export default function AuditLogsPage() {
 
   const renderChanges = (oldValues: Record<string, unknown>, newValues: Record<string, unknown>) => {
     const allKeys = new Set([...Object.keys(oldValues || {}), ...Object.keys(newValues || {})]);
-    
+
     if (allKeys.size === 0) {
       return <p className="text-muted-foreground text-sm">No detailed changes recorded</p>;
     }
@@ -155,7 +155,7 @@ export default function AuditLogsPage() {
     // Fields to always show at the top (even if unchanged) as context
     const contextFields = ['affected_user', 'affected_product', 'affected_category', 'affected_expense'];
     const contextItems: { key: string; value: unknown }[] = [];
-    
+
     contextFields.forEach(field => {
       if (oldValues?.[field] || newValues?.[field]) {
         contextItems.push({ key: field, value: oldValues?.[field] || newValues?.[field] });
@@ -177,18 +177,18 @@ export default function AuditLogsPage() {
             ))}
           </div>
         )}
-        
+
         {/* Show changed fields */}
         {Array.from(allKeys).map((key) => {
           // Skip context fields as they're shown above
           if (contextFields.includes(key)) return null;
-          
+
           const oldVal = oldValues?.[key];
           const newVal = newValues?.[key];
-          
+
           // Skip if both are the same
           if (JSON.stringify(oldVal) === JSON.stringify(newVal)) return null;
-          
+
           return (
             <div key={key} className="text-sm border-b pb-2">
               <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span>
@@ -219,46 +219,51 @@ export default function AuditLogsPage() {
 
       <div className="flex-1 p-6 overflow-auto">
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search logs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={selectedAction} onValueChange={(v) => { setSelectedAction(v); setPage(1); }}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="All Actions" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Actions</SelectItem>
-              <SelectItem value="login">Login</SelectItem>
-              <SelectItem value="login_failed">Login Failed</SelectItem>
-              <SelectItem value="create">Create</SelectItem>
-              <SelectItem value="update">Update</SelectItem>
-              <SelectItem value="delete">Delete</SelectItem>
-              <SelectItem value="void">Void</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={selectedEntity} onValueChange={(v) => { setSelectedEntity(v); setPage(1); }}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="All Entities" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Entities</SelectItem>
-              <SelectItem value="auth">Authentication</SelectItem>
-              <SelectItem value="user">User</SelectItem>
-              <SelectItem value="product">Product</SelectItem>
-              <SelectItem value="category">Category</SelectItem>
-              <SelectItem value="sale">Sale</SelectItem>
-              <SelectItem value="shift">Shift</SelectItem>
-              <SelectItem value="inventory">Inventory</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Toolbar */}
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search logs..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 w-full"
+                />
+              </div>
+              <Select value={selectedAction} onValueChange={(v) => { setSelectedAction(v); setPage(1); }}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="All Actions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Actions</SelectItem>
+                  <SelectItem value="login">Login</SelectItem>
+                  <SelectItem value="login_failed">Login Failed</SelectItem>
+                  <SelectItem value="create">Create</SelectItem>
+                  <SelectItem value="update">Update</SelectItem>
+                  <SelectItem value="delete">Delete</SelectItem>
+                  <SelectItem value="void">Void</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={selectedEntity} onValueChange={(v) => { setSelectedEntity(v); setPage(1); }}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="All Entities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Entities</SelectItem>
+                  <SelectItem value="auth">Authentication</SelectItem>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="product">Product</SelectItem>
+                  <SelectItem value="category">Category</SelectItem>
+                  <SelectItem value="sale">Sale</SelectItem>
+                  <SelectItem value="shift">Shift</SelectItem>
+                  <SelectItem value="inventory">Inventory</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Logs table */}
         {isLoading ? (
@@ -278,7 +283,8 @@ export default function AuditLogsPage() {
               <CardTitle>Activity Log</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
+              {/* Desktop View */}
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b text-left text-sm text-muted-foreground">
@@ -332,6 +338,55 @@ export default function AuditLogsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile View */}
+              <div className="lg:hidden space-y-4">
+                {filteredLogs.map((log) => (
+                  <div key={log.id} className="p-4 rounded-lg border bg-card text-card-foreground shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getActionBadgeColor(
+                            log.action
+                          )}`}
+                        >
+                          {ACTION_LABELS[log.action] || log.action}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(log.created_at)}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openDetailDialog(log)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">User:</span>
+                        <span className="font-medium">{log.user_name || 'System'}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Entity:</span>
+                        <span className="font-medium capitalize">
+                          {ENTITY_LABELS[log.entity_type] || log.entity_type}
+                        </span>
+                      </div>
+                      {log.entity_id && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">ID:</span>
+                          <span className="font-mono text-xs">{log.entity_id.slice(0, 8)}...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Pagination */}

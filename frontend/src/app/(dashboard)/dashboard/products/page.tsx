@@ -350,60 +350,70 @@ export default function ProductsPage() {
       <Header title="Products" />
 
       <div className="flex-1 p-6 overflow-auto">
-        {/* Tab Toggle */}
-        <div className="flex gap-1 mb-4 p-1 bg-muted rounded-lg w-fit">
-          <button
-            onClick={() => setViewMode('active')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'active'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-              }`}
-          >
-            Active
-          </button>
-          <button
-            onClick={() => setViewMode('archived')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${viewMode === 'archived'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-              }`}
-          >
-            <Archive className="h-4 w-4" />
-            Archived
-          </button>
-        </div>
+        {/* Filters and Actions */}
+        <Card className="mb-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-base font-semibold">Filters</CardTitle>
+            {canCreate && viewMode === 'active' && (
+              <Button onClick={openCreateDialog} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4">
+              {/* Tab Toggle */}
+              <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+                <button
+                  onClick={() => setViewMode('active')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'active'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                >
+                  Active
+                </button>
+                <button
+                  onClick={() => setViewMode('archived')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${viewMode === 'archived'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                >
+                  <Archive className="h-4 w-4" />
+                  Archived
+                </button>
+              </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {canCreate && viewMode === 'active' && (
-            <Button onClick={openCreateDialog}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Product
-            </Button>
-          )}
-        </div>
+              {/* Search and Category */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 w-full"
+                  />
+                </div>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-full md:w-48">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Products table */}
         {isLoading ? (
