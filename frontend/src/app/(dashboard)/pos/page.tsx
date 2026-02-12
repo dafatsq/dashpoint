@@ -238,7 +238,7 @@ export default function POSPage() {
   // Redirect if no permission
   useEffect(() => {
     if (!hasPermission(PERMISSIONS.SALES_CREATE)) {
-      router.replace('/dashboard');
+      router.replace('/');
     }
   }, [hasPermission, router]);
 

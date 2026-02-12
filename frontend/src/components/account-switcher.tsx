@@ -75,12 +75,12 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
 
     try {
       const result = await pinLogin(selectedAccount.id, pin);
-      
+
       if (result.success) {
         setSelectedAccount(null);
         setPin('');
         onAccountSelect?.();
-        router.push('/dashboard');
+        router.push('/');
       } else {
         setError(result.error || 'Invalid PIN');
       }
@@ -186,7 +186,7 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
 
           <form onSubmit={handlePinSubmit} className="space-y-4 mt-4" autoComplete="off">
             <input type="text" name="username" autoComplete="username" style={{ display: 'none' }} />
-            
+
             {error && (
               <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
