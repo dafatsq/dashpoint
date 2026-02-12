@@ -34,7 +34,14 @@ import {
   RotateCcw,
   Archive,
   Settings2,
+  ShoppingCart,
+  Package,
+  BarChart3,
+  Lock,
+  LayoutDashboard,
+  Wallet,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import api from '@/lib/api';
 import { User, CreateUserRequest, UpdateUserRequest, UserRole, Permission, PermissionOverride } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
@@ -552,7 +559,7 @@ export default function UsersPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="User Management" />
+      <Header title="Users" />
 
       <div className="flex-1 p-6 overflow-auto">
         {/* Tab Toggle */}
@@ -560,8 +567,8 @@ export default function UsersPage() {
           <button
             onClick={() => setViewMode('active')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'active'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
               }`}
           >
             Active
@@ -569,8 +576,8 @@ export default function UsersPage() {
           <button
             onClick={() => setViewMode('archived')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${viewMode === 'archived'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
               }`}
           >
             <Archive className="h-4 w-4" />
@@ -579,34 +586,38 @@ export default function UsersPage() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search users..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={selectedRole} onValueChange={setSelectedRole}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="All Roles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="owner">Owner</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
-              <SelectItem value="cashier">Cashier</SelectItem>
-            </SelectContent>
-          </Select>
-          {canManageUsers && viewMode === 'active' && (
-            <Button onClick={openCreateDialog}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add User
-            </Button>
-          )}
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search users..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 w-full"
+                />
+              </div>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="All Roles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  <SelectItem value="owner">Owner</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="cashier">Cashier</SelectItem>
+                </SelectContent>
+              </Select>
+              {canManageUsers && viewMode === 'active' && (
+                <Button onClick={openCreateDialog} className="w-full sm:w-auto">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add User
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Users table */}
         {isLoading ? (
@@ -628,144 +639,260 @@ export default function UsersPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {viewMode === 'active' ? 'Users' : 'Archived Users'} ({filteredUsers.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b text-left text-sm text-muted-foreground">
-                      <th className="pb-3 font-medium">Name</th>
-                      <th className="pb-3 font-medium">Email</th>
-                      <th className="pb-3 font-medium">Role</th>
-                      <th className="pb-3 font-medium text-center">PIN Set</th>
-                      <th className="pb-3 font-medium text-center">Status</th>
-                      {(canManageUsers || canManagePermissions) && (
-                        <th className="pb-3 font-medium text-right">Actions</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id} className="border-b last:border-0">
-                        <td className="py-3">
-                          <p className="font-medium">{user.name}</p>
-                        </td>
-                        <td className="py-3 text-sm text-muted-foreground">
-                          {user.email || '-'}
-                        </td>
-                        <td className="py-3">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(
-                              user.role_name
-                            )}`}
-                          >
-                            {getRoleIcon(user.role_name)}
-                            <span className="capitalize">{user.role_name}</span>
-                          </span>
-                        </td>
-                        <td className="py-3 text-center">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.has_pin
-                                ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
-                                : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
-                              }`}
-                          >
-                            {user.has_pin ? 'Yes' : 'No'}
-                          </span>
-                        </td>
-                        <td className="py-3 text-center">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.is_active
-                                ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
-                                : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
-                              }`}
-                          >
-                            {user.is_active ? 'Active' : 'Archived'}
-                          </span>
-                        </td>
+          <>
+            <Card className="hidden lg:block">
+              <CardHeader>
+                <CardTitle>
+                  {viewMode === 'active' ? 'Users' : 'Archived Users'} ({filteredUsers.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-sm text-muted-foreground">
+                        <th className="pb-3 font-medium">Name</th>
+                        <th className="pb-3 font-medium">Email</th>
+                        <th className="pb-3 font-medium">Role</th>
+                        <th className="pb-3 font-medium text-center">PIN Set</th>
+                        <th className="pb-3 font-medium text-center">Status</th>
                         {(canManageUsers || canManagePermissions) && (
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {viewMode === 'active' ? (
-                                <>
-                                  {canEditUser(user) && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => openEditDialog(user)}
-                                      title="Edit user"
-                                    >
-                                      <Pencil className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  {canManageUserPermissions(user) && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => openPermissionsDialog(user)}
-                                      title="Manage permissions"
-                                    >
-                                      <Settings2 className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  {canEditUser(user) && user.role_name !== 'owner' && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        setDeletingUser(user);
-                                        setDeleteDialogOpen(true);
-                                      }}
-                                      title="Archive user"
-                                    >
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                  )}
-                                </>
-                              ) : (
-                                <>
-                                  {canEditUser(user) && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleRestore(user)}
-                                      disabled={isSubmitting}
-                                    >
-                                      <RotateCcw className="h-4 w-4 mr-1" />
-                                      Restore
-                                    </Button>
-                                  )}
-                                  {canEditUser(user) && user.role_name !== 'owner' && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-destructive hover:text-destructive"
-                                      onClick={() => {
-                                        setDeletingUser(user);
-                                        setPermanentDeleteDialogOpen(true);
-                                      }}
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-1" />
-                                      Delete
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </td>
+                          <th className="pb-3 font-medium text-right">Actions</th>
                         )}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((user) => (
+                        <tr key={user.id} className="border-b last:border-0">
+                          <td className="py-3">
+                            <p className="font-medium">{user.name}</p>
+                          </td>
+                          <td className="py-3 text-sm text-muted-foreground">
+                            {user.email || '-'}
+                          </td>
+                          <td className="py-3">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(
+                                user.role_name
+                              )}`}
+                            >
+                              {getRoleIcon(user.role_name)}
+                              <span className="capitalize">{user.role_name}</span>
+                            </span>
+                          </td>
+                          <td className="py-3 text-center">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.has_pin
+                                ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
+                                }`}
+                            >
+                              {user.has_pin ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                          <td className="py-3 text-center">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.is_active
+                                ? 'bg-green-600 text-white dark:bg-green-600/90 dark:text-white'
+                                : 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white'
+                                }`}
+                            >
+                              {user.is_active ? 'Active' : 'Archived'}
+                            </span>
+                          </td>
+                          {(canManageUsers || canManagePermissions) && (
+                            <td className="py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                {viewMode === 'active' ? (
+                                  <>
+                                    {canEditUser(user) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => openEditDialog(user)}
+                                        title="Edit user"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {canManageUserPermissions(user) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => openPermissionsDialog(user)}
+                                        title="Manage permissions"
+                                      >
+                                        <Settings2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {canEditUser(user) && user.role_name !== 'owner' && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setDeletingUser(user);
+                                          setDeleteDialogOpen(true);
+                                        }}
+                                        title="Archive user"
+                                      >
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    {canEditUser(user) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleRestore(user)}
+                                        disabled={isSubmitting}
+                                      >
+                                        <RotateCcw className="h-4 w-4 mr-1" />
+                                        Restore
+                                      </Button>
+                                    )}
+                                    {canEditUser(user) && user.role_name !== 'owner' && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-destructive hover:text-destructive"
+                                        onClick={() => {
+                                          setDeletingUser(user);
+                                          setPermanentDeleteDialogOpen(true);
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-1" />
+                                        Delete
+                                      </Button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Mobile Card View */}
+            <div className="lg:hidden space-y-4">
+              <h3 className="font-semibold text-lg">{viewMode === 'active' ? 'Users' : 'Archived Users'} ({filteredUsers.length})</h3>
+              {filteredUsers.map((user) => (
+                <Card key={user.id}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex justify-between items-start border-b pb-2">
+                      <div>
+                        <p className="font-bold">{user.name}</p>
+                        <p className="text-sm text-muted-foreground">{user.email || '-'}</p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(
+                          user.role_name
+                        )}`}
+                      >
+                        {getRoleIcon(user.role_name)}
+                        <span className="capitalize">{user.role_name}</span>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                      <div>
+                        <span className="text-xs block">PIN Set</span>
+                        <span className={user.has_pin ? 'text-green-600 font-medium' : 'text-neutral-500'}>
+                          {user.has_pin ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs block">Status</span>
+                        <span className={user.is_active ? 'text-green-600 font-medium' : 'text-neutral-500'}>
+                          {user.is_active ? 'Active' : 'Archived'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {(canManageUsers || canManagePermissions) && (
+                      <div className="flex justify-end gap-2 pt-2 border-t">
+                        {viewMode === 'active' ? (
+                          <>
+                            {canEditUser(user) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEditDialog(user)}
+                                className="h-8"
+                              >
+                                <Pencil className="h-3.5 w-3.5 mr-1" />
+                                Edit
+                              </Button>
+                            )}
+                            {canManageUserPermissions(user) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openPermissionsDialog(user)}
+                                className="h-8"
+                              >
+                                <Settings2 className="h-3.5 w-3.5 mr-1" />
+                                Perms
+                              </Button>
+                            )}
+                            {canEditUser(user) && user.role_name !== 'owner' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setDeletingUser(user);
+                                  setDeleteDialogOpen(true);
+                                }}
+                                className="h-8 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                Archive
+                              </Button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {canEditUser(user) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRestore(user)}
+                                disabled={isSubmitting}
+                                className="h-8"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                                Restore
+                              </Button>
+                            )}
+                            {canEditUser(user) && user.role_name !== 'owner' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  setDeletingUser(user);
+                                  setPermanentDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                Delete
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -978,7 +1105,7 @@ export default function UsersPage() {
           setPermissionChanges({});
         }
       }}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[90%] sm:w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Settings2 className="h-5 w-5" />
@@ -990,77 +1117,111 @@ export default function UsersPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-2">
+          <div className="flex-1 overflow-y-auto">
             {isLoadingPermissions ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="space-y-6">
-                {Object.entries(allPermissions).map(([category, permissions]) => {
-                  const sortedPermissions = sortPermissions(permissions);
+              <div className="h-full overflow-y-auto custom-scrollbar">
+                <div className="space-y-6 pb-6">
+                  {Object.entries(allPermissions).map(([category, permissions]) => {
+                    const sortedPermissions = sortPermissions(permissions);
 
-                  return (
-                    <div key={category} className="space-y-3">
-                      <h4 className="font-semibold capitalize text-sm border-b pb-1">{category}</h4>
-                      <div className="space-y-2">
-                        {sortedPermissions.map((permission) => {
-                          const isViewPerm = isViewPermission(permission);
-                          const isEnabled = isPermissionEnabled(permission);
-                          const status = getPermissionStatus(permission);
+                    // improved category icons
+                    const getCategoryIcon = (cat: string) => {
+                      switch (cat) {
+                        case 'sales': return <ShoppingCart className="h-4 w-4" />;
+                        case 'inventory': return <Package className="h-4 w-4" />;
+                        case 'reports': return <BarChart3 className="h-4 w-4" />;
+                        case 'users': return <Users className="h-4 w-4" />;
+                        case 'system': return <Settings2 className="h-4 w-4" />;
+                        case 'expenses': return <Wallet className="h-4 w-4" />;
+                        default: return <Lock className="h-4 w-4" />;
+                      }
+                    };
 
-                          // Use the new per-permission disabled check
-                          const isDisabled = isPermissionDisabledByParent(permission, category);
+                    return (
+                      <Card key={category} className="overflow-hidden border-none shadow-sm bg-muted/20">
+                        <CardHeader className="pb-3 pt-4 px-4 border-b bg-muted/30">
+                          <CardTitle className="text-base flex items-center gap-2 capitalize">
+                            {getCategoryIcon(category)}
+                            {category} Permissions
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          <div className="divide-y divide-border/50">
+                            {sortedPermissions.map((permission) => {
+                              const isViewPerm = isViewPermission(permission);
+                              const isEnabled = isPermissionEnabled(permission);
+                              const status = getPermissionStatus(permission);
+                              const isDisabled = isPermissionDisabledByParent(permission, category);
 
-                          // Get the appropriate message for disabled state
-                          const getDisabledMessage = () => {
-                            if (permission.key === 'can_void_sale') {
-                              return 'Enable "Sales History Access" first';
-                            }
-                            return `Enable "Access to ${category.charAt(0).toUpperCase() + category.slice(1)}" first`;
-                          };
+                              // Status Badge Logic
+                              const getStatusBadge = () => {
+                                if (permissionChanges[permission.id] !== undefined) {
+                                  return <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50">Modified</Badge>;
+                                }
+                                const override = getPermissionOverride(permission.id);
+                                if (override) {
+                                  return override.allowed
+                                    ? <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Granted</Badge>
+                                    : <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">Denied</Badge>;
+                                }
+                                return <Badge variant="secondary" className="text-muted-foreground font-normal">Default</Badge>;
+                              };
 
-                          return (
-                            <div
-                              key={permission.id}
-                              className={`flex items-center justify-between py-2 px-3 rounded-md transition-colors ${isDisabled
-                                  ? 'bg-muted/30 opacity-50'
-                                  : 'bg-muted/50 hover:bg-muted'
-                                }`}
-                            >
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className={`font-medium text-sm ${isDisabled ? 'text-muted-foreground' : ''}`}>
-                                    {getPermissionDisplayName(permission, category)}
-                                  </span>
-                                  {isViewPerm && (
-                                    <span className="text-xs text-blue-600 font-medium">(Controls Access)</span>
-                                  )}
-                                  {!isDisabled && (
-                                    <span className={`text-xs ${status.color}`}>({status.text})</span>
-                                  )}
+                              return (
+                                <div
+                                  key={permission.id}
+                                  className={`flex items-start justify-between p-4 transition-colors ${isDisabled ? 'opacity-50 bg-muted/10' : 'hover:bg-muted/30'
+                                    }`}
+                                >
+                                  <div className="flex-1 mr-4">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className={`font-medium text-sm ${isDisabled ? 'text-muted-foreground' : ''}`}>
+                                        {getPermissionDisplayName(permission, category)}
+                                      </span>
+                                      {isViewPerm && (
+                                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 text-blue-600 border-blue-200 bg-blue-50">
+                                          Access
+                                        </Badge>
+                                      )}
+                                      {!isDisabled && getStatusBadge()}
+                                    </div>
+
+                                    {permission.description && (
+                                      <p className="text-sm text-muted-foreground leading-relaxed">
+                                        {permission.description}
+                                      </p>
+                                    )}
+
+                                    {isDisabled && (
+                                      <p className="text-xs text-orange-600 mt-1.5 flex items-center gap-1.5">
+                                        <ShieldAlert className="h-3 w-3" />
+                                        {permission.key === 'can_void_sale'
+                                          ? 'Requires Sales History Access'
+                                          : `Requires ${category.charAt(0).toUpperCase() + category.slice(1)} Access`}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center h-6 mt-1">
+                                    <Switch
+                                      checked={isDisabled ? false : isEnabled}
+                                      onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
+                                      disabled={isDisabled}
+                                    />
+                                  </div>
                                 </div>
-                                {permission.description && (
-                                  <p className="text-xs text-muted-foreground mt-0.5">{permission.description}</p>
-                                )}
-                                {isDisabled && (
-                                  <p className="text-xs text-orange-600 mt-0.5">
-                                    {getDisabledMessage()}
-                                  </p>
-                                )}
-                              </div>
-                              <Switch
-                                checked={isDisabled ? false : isEnabled}
-                                onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
-                                disabled={isDisabled}
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

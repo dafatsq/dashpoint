@@ -260,7 +260,8 @@ export default function InventoryPage() {
 
       <div className="flex-1 p-6 overflow-auto">
         {/* Stats cards */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 mb-6">
+        {/* Stats cards */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Total Products</CardTitle>
@@ -306,34 +307,48 @@ export default function InventoryPage() {
           </Card>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-4">
-          <Button
-            variant={activeTab === 'all' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('all')}
-          >
-            All Products
-          </Button>
-          <Button
-            variant={activeTab === 'low-stock' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('low-stock')}
-          >
-            Low Stock ({lowStockCount})
-          </Button>
-        </div>
 
-        {/* Search */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <div className="relative flex-1 w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <div className="text-xs text-muted-foreground">
+        {/* Filters */}
+        <Card className="mb-4">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-semibold">Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Search */}
+                <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 w-full"
+                  />
+                </div>
+
+                {/* Tabs */}
+                <div className="flex gap-2">
+                  <Button
+                    variant={activeTab === 'all' ? 'default' : 'outline'}
+                    onClick={() => setActiveTab('all')}
+                  >
+                    All Products
+                  </Button>
+                  <Button
+                    variant={activeTab === 'low-stock' ? 'default' : 'outline'}
+                    onClick={() => setActiveTab('low-stock')}
+                  >
+                    Low Stock ({lowStockCount})
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end mb-4">
+          <div className="text-xs text-muted-foreground whitespace-nowrap">
             Last updated: {lastRefreshed.toLocaleTimeString()} • Auto-refreshes every 10s
           </div>
         </div>

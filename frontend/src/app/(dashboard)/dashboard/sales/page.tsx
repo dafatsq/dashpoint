@@ -190,14 +190,14 @@ export default function SalesHistoryPage() {
             <CardTitle className="text-base">Filters</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="flex flex-col md:grid md:grid-cols-3 gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search invoice..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 w-full"
                 />
               </div>
               <DateRangePicker
@@ -207,7 +207,7 @@ export default function SalesHistoryPage() {
                 className="w-full"
               />
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -233,63 +233,121 @@ export default function SalesHistoryPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Sales ({filteredSales.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b text-left text-sm text-muted-foreground">
-                      <th className="pb-3 font-medium">Invoice</th>
-                      <th className="pb-3 font-medium">Date</th>
-                      <th className="pb-3 font-medium">Cashier</th>
-                      <th className="pb-3 font-medium">Items</th>
-                      <th className="pb-3 font-medium text-right">Total</th>
-                      <th className="pb-3 font-medium text-center">Status</th>
-                      <th className="pb-3 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSales.map((sale) => (
-                      <tr key={sale.id} className="border-b last:border-0">
-                        <td className="py-3">
-                          <p className="font-mono text-sm">{sale.invoice_no}</p>
-                        </td>
-                        <td className="py-3 text-sm text-muted-foreground">
-                          {formatDate(sale.created_at)}
-                        </td>
-                        <td className="py-3 text-sm">{sale.employee_name || '-'}</td>
-                        <td className="py-3 text-sm">{sale.item_count} items</td>
-                        <td className="py-3 text-right font-medium">
-                          {formatCurrency(sale.total_amount)}
-                        </td>
-                        <td className="py-3 text-center">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusBadge(
-                              sale.status
-                            )}`}
-                          >
-                            {sale.status}
-                          </span>
-                        </td>
-                        <td className="py-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => viewSaleDetails(sale)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </td>
+          <>
+            <Card className="hidden lg:block">
+              <CardHeader>
+                <CardTitle>Sales ({filteredSales.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+
+                {/* Desktop View */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-sm text-muted-foreground">
+                        <th className="pb-3 font-medium">Invoice</th>
+                        <th className="pb-3 font-medium">Date</th>
+                        <th className="pb-3 font-medium">Cashier</th>
+                        <th className="pb-3 font-medium">Items</th>
+                        <th className="pb-3 font-medium text-right">Total</th>
+                        <th className="pb-3 font-medium text-center">Status</th>
+                        <th className="pb-3 font-medium text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                    </thead>
+                    <tbody>
+                      {filteredSales.map((sale) => (
+                        <tr key={sale.id} className="border-b last:border-0">
+                          <td className="py-3">
+                            <p className="font-mono text-sm">{sale.invoice_no}</p>
+                          </td>
+                          <td className="py-3 text-sm text-muted-foreground">
+                            {formatDate(sale.created_at)}
+                          </td>
+                          <td className="py-3 text-sm">{sale.employee_name || '-'}</td>
+                          <td className="py-3 text-sm">{sale.item_count} items</td>
+                          <td className="py-3 text-right font-medium">
+                            {formatCurrency(sale.total_amount)}
+                          </td>
+                          <td className="py-3 text-center">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusBadge(
+                                sale.status
+                              )}`}
+                            >
+                              {sale.status}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => viewSaleDetails(sale)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+              </CardContent>
+            </Card>
+
+            {/* Mobile Card View */}
+            <div className="lg:hidden space-y-4">
+              {filteredSales.map((sale) => (
+                <div key={sale.id} className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="font-mono font-bold text-sm">{sale.invoice_no}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatDate(sale.created_at)}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${getStatusBadge(
+                        sale.status
+                      )}`}
+                    >
+                      {sale.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-y-2 text-sm mb-4">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Building2 className="h-3.5 w-3.5" />
+                      <span>{sale.employee_name || 'Unknown'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground justify-self-end">
+                      <Receipt className="h-3.5 w-3.5" />
+                      <span>{sale.item_count} items</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground col-span-2">
+                      {PAYMENT_ICONS[getPrimaryPaymentMethod(sale)]}
+                      <span className="capitalize">{getPrimaryPaymentMethod(sale)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t pt-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="text-lg font-bold">{formatCurrency(sale.total_amount)}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => viewSaleDetails(sale)}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" />
+                      View
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
