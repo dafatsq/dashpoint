@@ -23,14 +23,14 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   {
-    href: '/dashboard',
+    href: '/',
     label: 'Dashboard',
     icon: <LayoutDashboard className="h-5 w-5" />,
     description: 'Overview of your store performance',
     color: 'text-blue-500',
   },
   {
-    href: '/dashboard/pos',
+    href: '/pos',
     label: 'Point of Sale',
     icon: <ShoppingCart className="h-5 w-5" />,
     permission: PERMISSIONS.SALES_CREATE,
@@ -38,7 +38,7 @@ export const navItems: NavItem[] = [
     color: 'text-green-500',
   },
   {
-    href: '/dashboard/products',
+    href: '/products',
     label: 'Products',
     icon: <Package className="h-5 w-5" />,
     permission: PERMISSIONS.PRODUCTS_VIEW,
@@ -46,7 +46,7 @@ export const navItems: NavItem[] = [
     color: 'text-orange-500',
   },
   {
-    href: '/dashboard/inventory',
+    href: '/inventory',
     label: 'Inventory',
     icon: <Boxes className="h-5 w-5" />,
     permission: PERMISSIONS.INVENTORY_VIEW,
@@ -54,7 +54,7 @@ export const navItems: NavItem[] = [
     color: 'text-purple-500',
   },
   {
-    href: '/dashboard/sales',
+    href: '/sales',
     label: 'Sales History',
     icon: <Receipt className="h-5 w-5" />,
     permission: PERMISSIONS.SALES_VIEW,
@@ -62,7 +62,7 @@ export const navItems: NavItem[] = [
     color: 'text-indigo-500',
   },
   {
-    href: '/dashboard/reports',
+    href: '/reports',
     label: 'Reports',
     icon: <BarChart3 className="h-5 w-5" />,
     permission: PERMISSIONS.REPORTS_VIEW,
@@ -70,7 +70,7 @@ export const navItems: NavItem[] = [
     color: 'text-pink-500',
   },
   {
-    href: '/dashboard/expenses',
+    href: '/expenses',
     label: 'Expenses',
     icon: <Wallet className="h-5 w-5" />,
     permission: PERMISSIONS.REPORTS_VIEW, // Owner/Manager only
@@ -78,7 +78,7 @@ export const navItems: NavItem[] = [
     color: 'text-red-500',
   },
   {
-    href: '/dashboard/users',
+    href: '/users',
     label: 'Users',
     icon: <Users className="h-5 w-5" />,
     permission: PERMISSIONS.USERS_VIEW,
@@ -86,7 +86,7 @@ export const navItems: NavItem[] = [
     color: 'text-cyan-500',
   },
   {
-    href: '/dashboard/audit',
+    href: '/audit',
     label: 'Audit Logs',
     icon: <ScrollText className="h-5 w-5" />,
     permission: PERMISSIONS.AUDIT_VIEW,
@@ -94,7 +94,7 @@ export const navItems: NavItem[] = [
     color: 'text-gray-500',
   },
   {
-    href: '/dashboard/settings',
+    href: '/settings',
     label: 'Settings',
     icon: <Settings className="h-5 w-5" />,
     permission: PERMISSIONS.SETTINGS_MANAGE,

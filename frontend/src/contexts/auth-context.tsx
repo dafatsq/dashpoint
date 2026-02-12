@@ -76,9 +76,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (options?.checkRoleChange && options.previousRole && options.previousRole !== userData.role_name) {
           console.log('[Auth] Role changed from', options.previousRole, 'to', userData.role_name);
           // Redirect to dashboard to ensure user is on an accessible page
-          if (typeof window !== 'undefined' && window.location.pathname !== '/dashboard') {
+          if (typeof window !== 'undefined' && window.location.pathname !== '/') {
             console.log('[Auth] Redirecting to dashboard due to role change');
-            window.location.href = '/dashboard';
+            window.location.href = '/';
           }
         }
       }
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Handle user events from SSE
   const handleUserEvent = useCallback(async (event: UserEvent) => {
     console.log('[Auth] Received SSE event:', event.type, 'for user:', event.user_id);
-    
+
     // Prevent processing multiple events at once (e.g., from multiple tabs)
     if (isProcessingEventRef.current) {
       console.log('[Auth] Already processing an event, skipping');
@@ -105,7 +105,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('[Auth] No user in localStorage, ignoring event');
       return;
     }
-    
+
     const currentUser = JSON.parse(storedUser);
     if (event.user_id !== currentUser.id) {
       console.log('[Auth] Ignoring event - not for current user');
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Force a full page reload to ensure all components fetch fresh data with new token
           // This is necessary because the old token is cached in memory by various components
           if (typeof window !== 'undefined') {
-            window.location.href = '/dashboard?role_updated=true';
+            window.location.href = '/?role_updated=true';
           }
         } else {
           console.error('[Auth] Failed to refresh tokens after role change, forcing re-login');
@@ -158,10 +158,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(null);
         // Redirect to login with a message
         if (typeof window !== 'undefined') {
-          const message = event.type === 'user_deactivated' 
-            ? 'account_deactivated' 
-            : event.type === 'user_deleted' 
-              ? 'account_deleted' 
+          const message = event.type === 'user_deactivated'
+            ? 'account_deactivated'
+            : event.type === 'user_deleted'
+              ? 'account_deleted'
               : 'force_logout';
           window.location.href = `/login?message=${message}`;
         }
@@ -191,7 +191,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const checkAuth = async () => {
       const token = localStorage.getItem('access_token');
       const storedUser = localStorage.getItem('user');
-      
+
       if (token && storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
@@ -217,7 +217,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(async (email: string, password: string, saveAccount = true) => {
     const result = await api.login(email, password);
-    
+
     if (result.error) {
       return { success: false, error: result.error };
     }
@@ -239,7 +239,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       };
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
-      
+
       // Save account for quick switching (if enabled and user has PIN)
       if (saveAccount && userData.has_pin) {
         AccountManager.saveAccount({
@@ -250,7 +250,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           has_pin: userData.has_pin,
         });
       }
-      
+
       return { success: true };
     }
 
@@ -259,7 +259,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const pinLogin = useCallback(async (userId: string, pin: string) => {
     const result = await api.pinLogin(userId, pin);
-    
+
     if (result.error) {
       return { success: false, error: result.error };
     }
@@ -281,7 +281,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       };
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
-      
+
       // Update saved account info
       if (userData.has_pin) {
         AccountManager.saveAccount({
@@ -292,7 +292,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           has_pin: userData.has_pin,
         });
       }
-      
+
       return { success: true };
     }
 
@@ -301,11 +301,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async (removeFromSaved = false) => {
     const currentUserId = user?.id;
-    
+
     await api.logout();
     localStorage.removeItem('user');
     setUser(null);
-    
+
     // Optionally remove from saved accounts
     if (removeFromSaved && currentUserId) {
       AccountManager.removeAccount(currentUserId);
@@ -363,29 +363,29 @@ export const PERMISSIONS = {
   USERS_VIEW: 'can_view_users',
   USERS_MANAGE: 'can_manage_users',
   USERS_PERMISSIONS: 'can_manage_permissions',
-  
+
   // Product management
   PRODUCTS_VIEW: 'can_view_products',
   PRODUCTS_CREATE: 'can_create_product',
   PRODUCTS_EDIT: 'can_edit_product',
   PRODUCTS_DELETE: 'can_delete_product',
-  
+
   // Inventory management
   INVENTORY_VIEW: 'can_view_inventory',
   INVENTORY_EDIT: 'can_edit_inventory',
-  
+
   // Sales
   SALES_CREATE: 'can_create_sale',
   SALES_VIEW: 'can_view_sales',
   SALES_VOID: 'can_void_sale',
-  
+
   // Reports
   REPORTS_VIEW: 'can_view_reports',
   REPORTS_EXPORT: 'can_export_data',
-  
+
   // Audit logs
   AUDIT_VIEW: 'can_view_audit_logs',
-  
+
   // Settings
   SETTINGS_MANAGE: 'can_manage_settings',
 } as const;

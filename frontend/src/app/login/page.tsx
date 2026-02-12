@@ -26,7 +26,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isLoading: authLoading } = useAuth();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -79,9 +79,9 @@ function LoginPageContent() {
 
     try {
       const result = await login(email, password);
-      
+
       if (result.success) {
-        router.push('/dashboard');
+        router.push('/');
       } else {
         setError(result.error || 'Login failed');
       }
@@ -119,7 +119,7 @@ function LoginPageContent() {
               <span>{infoMessage}</span>
             </div>
           )}
-          
+
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'saved' | 'email')}>
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="saved" disabled={!hasSavedAccounts}>
@@ -143,7 +143,7 @@ function LoginPageContent() {
                     <span>{error}</span>
                   </div>
                 )}
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -156,7 +156,7 @@ function LoginPageContent() {
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
                   <Input
@@ -169,7 +169,7 @@ function LoginPageContent() {
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <Button
                   type="submit"
                   className="w-full"

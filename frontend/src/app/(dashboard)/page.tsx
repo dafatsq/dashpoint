@@ -202,7 +202,7 @@ export default function DashboardPage() {
           <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {navItems
-              .filter((item) => item.href !== '/dashboard')
+              .filter((item) => item.href !== '/')
               .filter((item) => !item.permission || hasPermission(item.permission))
               .map((item) => (
                 <Link key={item.href} href={item.href}>

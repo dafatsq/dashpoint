@@ -101,7 +101,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         setShowSwitchDialog(false);
         setSelectedAccount(null);
         setPin('');
-        router.push('/dashboard');
+        router.push('/');
       } else {
         setPinError(result.error || 'Invalid PIN');
       }

@@ -68,7 +68,7 @@ export default function SalesHistoryPage() {
   // Redirect if no permission
   useEffect(() => {
     if (!hasPermission(PERMISSIONS.SALES_VIEW)) {
-      router.replace('/dashboard');
+      router.replace('/');
     }
   }, [hasPermission, router]);
 
