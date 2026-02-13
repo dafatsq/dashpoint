@@ -445,10 +445,10 @@ export default function POSPage() {
 
       {/* Shift status bar */}
       {!currentShift ? (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 px-6 py-3 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
-            <AlertCircle className="h-4 w-4" />
-            <span className="text-sm">No active shift. Start a shift to begin selling.</span>
+        <div className="bg-card border-b border-l-4 border-l-yellow-500 px-6 py-4 flex items-center justify-between flex-shrink-0 shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-yellow-600" />
+            <span className="text-sm font-medium">No active shift. Start a shift to begin selling.</span>
           </div>
           <Button size="sm" onClick={() => setShiftDialogOpen(true)}>
             <Clock className="h-4 w-4 mr-2" />
@@ -456,12 +456,12 @@ export default function POSPage() {
           </Button>
         </div>
       ) : (
-        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 px-6 py-3 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-            <CheckCircle className="h-4 w-4" />
-            <span className="text-sm">
-              Shift active | Started: {new Date(currentShift.started_at).toLocaleTimeString()} |
-              Transactions: {currentShift.total_transactions}
+        <div className="bg-card border-b border-l-4 border-l-green-500 px-6 py-4 flex items-center justify-between flex-shrink-0 shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <span className="text-sm font-medium">
+              Shift active <span className="text-muted-foreground mx-2">|</span>
+              Started: {new Date(currentShift.started_at).toLocaleTimeString()}
             </span>
           </div>
         </div>

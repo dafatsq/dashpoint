@@ -1187,7 +1187,6 @@ export default function ReportsPage() {
   const renderEmployeeReport = () => (
     <div className="space-y-6">
       {/* Controls */}
-      {/* Controls */}
       <Card className="mb-6">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
@@ -1235,7 +1234,7 @@ export default function ReportsPage() {
                       <th className="pb-3 font-medium text-right">Transactions</th>
                       <th className="pb-3 font-medium text-right">Items Sold</th>
                       <th className="pb-3 font-medium text-right">Total Sales</th>
-                      <th className="pb-3 font-medium text-right">Avg/Transaction</th>
+                      <th className="pb-3 font-medium text-right">Avg / Transaction</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1288,7 +1287,7 @@ export default function ReportsPage() {
                       <span className="font-medium">{formatNumber(emp.item_count)}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-xs text-muted-foreground block">Avg/Txn</span>
+                      <span className="text-xs text-muted-foreground block">Avg / Txn</span>
                       <span className="font-medium">{formatCurrency(emp.avg_transaction)}</span>
                     </div>
                   </div>
@@ -1310,7 +1309,6 @@ export default function ReportsPage() {
 
   const renderCategoryReport = () => (
     <div className="space-y-6">
-      {/* Controls */}
       {/* Controls */}
       <Card className="mb-6">
         <CardContent className="p-6">
