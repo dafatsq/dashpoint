@@ -441,13 +441,10 @@ func (r *ReportRepository) GetSalesForExport(ctx context.Context, startDate, end
 	return items, nil
 }
 
-// GetCashReport gets cash report for a date
-func (r *ReportRepository) GetCashReport(ctx context.Context, date time.Time) (*CashReport, error) {
-	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
-	endOfDay := startOfDay.Add(24 * time.Hour)
-
+// GetCashReport gets cash report for a date range
+func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate time.Time) (*CashReport, error) {
 	report := &CashReport{
-		Date: date.Format("2006-01-02"),
+		Date: fmt.Sprintf("%s to %s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02")),
 	}
 
 	// Get shift data
@@ -458,7 +455,7 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, date time.Time) (*
 			COALESCE(SUM(closing_cash), 0)
 		FROM shifts
 		WHERE started_at >= $1 AND started_at < $2 AND status = 'closed'
-	`, startOfDay, endOfDay).Scan(&report.ShiftCount, &report.OpeningCash, &report.ActualCash)
+	`, startDate, endDate).Scan(&report.ShiftCount, &report.OpeningCash, &report.ActualCash)
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +467,7 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, date time.Time) (*
 		JOIN sales s ON p.sale_id = s.id
 		WHERE s.created_at >= $1 AND s.created_at < $2 
 		AND s.status = 'completed' AND p.payment_method = 'cash'
-	`, startOfDay, endOfDay).Scan(&report.CashSales)
+	`, startDate, endDate).Scan(&report.CashSales)
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +479,7 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, date time.Time) (*
 		JOIN sales s ON p.sale_id = s.id
 		WHERE s.created_at >= $1 AND s.created_at < $2 
 		AND s.status = 'voided' AND p.payment_method = 'cash'
-	`, startOfDay, endOfDay).Scan(&report.CashRefunds)
+	`, startDate, endDate).Scan(&report.CashRefunds)
 	if err != nil {
 		return nil, err
 	}

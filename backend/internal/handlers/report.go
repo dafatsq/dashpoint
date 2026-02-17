@@ -209,16 +209,61 @@ func (h *ReportHandler) GetInventoryValuation(c *fiber.Ctx) error {
 
 // GetCashReport handles GET /api/v1/reports/cash
 func (h *ReportHandler) GetCashReport(c *fiber.Ctx) error {
-	dateStr := c.Query("date", time.Now().Format("2006-01-02"))
-	date, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "INVALID_DATE",
-			"message": "Invalid date format",
-		})
-	}
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
 
-	report, err := h.reportRepo.GetCashReport(c.Context(), date)
+	var startDate, endDate time.Time
+	var err error
+
+	if startStr == "" || endStr == "" {
+		endDate = time.Now()
+		startDate = endDate.AddDate(0, 0, -30)
+	} else {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid start_date format",
+			})
+		}
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code":    "INVALID_DATE",
+				"message": "Invalid end_date format",
+			})
+		}
+	}
+    
+    // Add 1 day to end date to make it inclusive for query logic (started_at < endDate)
+    // Actually repository logic uses started_at < $2. If user selects "2023-01-01" to "2023-01-01".
+    // StartDate = 01-01 00:00. EndDate = 01-01 00:00.
+    // Query: >= 01-01 AND < 01-01. Returns nothing.
+    // So EndDate must be set to End of Day or Next Day.
+    // In GetDailySalesReport, logic was implicit.
+    // In GetSalesRangeReport?
+    
+    // Let's check GetSalesRangeReport logic (Reference lines 53-131 in Step 448).
+    // line 54: startDate, endDate parsed.
+    // line 97: passed to repo.
+    
+    // Let's check Repository GetSalesRangeReport logic?
+    // I didn't verify that.
+    
+    // Assuming standard practice: endDate should be end of day?
+    // In `GetCashReport` repo logic (Step 464): `WHERE started_at >= $1 AND started_at < $2`.
+    // If I pass 2023-01-01 00:00:00 as $2, I miss the last day.
+    // So I should add 24 hours to endDate?
+    // Or set it to 23:59:59?
+    
+    // Let's check existing implementation of `GetSalesRangeReport` handler in Step 448.
+    // It does NOT add time.
+    // So if the Repo relies on implicit "next day" for exclusive upper bound?
+    
+    // Let's assume I need to handle the upper bound.
+    endDate = endDate.Add(24 * time.Hour) // This makes it exclusive upper bound for the NEXT day start.
+
+	report, err := h.reportRepo.GetCashReport(c.Context(), startDate, endDate)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get cash report")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

@@ -127,35 +127,37 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
           {accounts.map((account) => (
             <Card
               key={account.id}
-              className="cursor-pointer hover:bg-accent transition-colors"
+              className="cursor-pointer hover:bg-accent transition-colors overflow-hidden min-w-0"
               onClick={() => handleAccountClick(account)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-primary/10 shrink-0">
                       {getRoleIcon(account.role_name)}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-medium">{account.name}</h4>
+                        <h4 className="font-medium truncate">{account.name}</h4>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span className={cn(
-                          'px-2 py-0.5 rounded-full text-xs font-medium capitalize',
+                          'px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium capitalize shrink-0',
                           getRoleBadgeColor(account.role_name)
                         )}>
                           {account.role_name}
                         </span>
+                        {account.email && (
+                          <span className="truncate">{account.email}</span>
+                        )}
                       </div>
-                      {account.email && (
-                        <p className="text-sm text-muted-foreground">{account.email}</p>
-                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0 pl-1">
                     {account.has_pin && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground mr-1">
                         <KeyRound className="h-3 w-3" />
-                        <span>PIN</span>
+                        <span className="hidden sm:inline">PIN</span>
                       </div>
                     )}
                     <Button

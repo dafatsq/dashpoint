@@ -108,7 +108,7 @@ export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [datePreset, setDatePreset] = useState('last30');
   const [dateRange, setDateRange] = useState(getDateRange('last30'));
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
 
   // Report data
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
@@ -210,14 +210,17 @@ export default function ReportsPage() {
   const fetchCashReport = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await api.getCashReport(selectedDate);
+      const result = await api.getCashReport({
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      });
       if (result.data) setCashReport(result.data);
     } catch (error) {
       console.error('Failed to fetch cash report:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate]);
+  }, [dateRange]);
 
   // Fetch employee sales
   const fetchEmployeeSales = useCallback(async () => {
@@ -943,9 +946,9 @@ export default function ReportsPage() {
           </div>
 
           {/* Potential profit */}
-          <Card className="border-green-200 bg-green-50/50 dark:bg-green-950/20">
+          <Card className="border-l-4 border-l-green-500 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-base text-green-700 dark:text-green-400">Potential Profit</CardTitle>
+              <CardTitle className="text-base">Potential Profit</CardTitle>
               <CardDescription>If all inventory is sold at retail price</CardDescription>
             </CardHeader>
             <CardContent>
@@ -1058,18 +1061,26 @@ export default function ReportsPage() {
     <div className="space-y-6">
       {/* Date selector */}
       {/* Date selector */}
+      {/* Date selector */}
       <Card className="mb-6">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full sm:w-48"
-              />
-            </div>
+            <Select value={datePreset} onValueChange={handlePresetChange}>
+              <SelectTrigger className="w-full sm:w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(DATE_PRESETS).map(([key, { label }]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <DateRangePicker
+              value={dateRange}
+              onChange={setDateRange}
+              placeholder="Select date range"
+              className="w-full sm:w-[280px]"
+            />
             <Button variant="outline" size="sm" onClick={fetchCashReport} disabled={isLoading} className="w-full sm:w-auto">
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
@@ -1149,10 +1160,9 @@ export default function ReportsPage() {
           </div>
 
           {/* Difference */}
-          <Card className={parseFloat(cashReport.difference) !== 0
-            ? 'border-yellow-200 bg-yellow-50/50 dark:bg-yellow-950/20'
-            : 'border-green-200 bg-green-50/50 dark:bg-green-950/20'
-          }>
+          <Card className={`border-l-4 shadow-sm ${parseFloat(cashReport.difference) === 0 ? 'border-l-green-500' :
+            parseFloat(cashReport.difference) > 0 ? 'border-l-yellow-500' : 'border-l-red-500'
+            }`}>
             <CardHeader>
               <CardTitle className="text-base">Cash Difference</CardTitle>
               <CardDescription>Actual minus Expected</CardDescription>

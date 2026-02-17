@@ -112,7 +112,7 @@ function LoginPageContent() {
             Sign in to access your point of sale system
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           {infoMessage && (
             <div className="flex items-center gap-2 rounded-md bg-blue-50 dark:bg-blue-950 p-3 text-sm text-blue-800 dark:text-blue-200 mb-4">
               <Info className="h-4 w-4 flex-shrink-0" />
@@ -121,7 +121,7 @@ function LoginPageContent() {
           )}
 
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'saved' | 'email')}>
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6">
               <TabsTrigger value="saved" disabled={!hasSavedAccounts}>
                 Quick Access
               </TabsTrigger>

@@ -531,9 +531,12 @@ class ApiClient {
     return { data: result.data?.valuation };
   }
 
-  async getCashReport(date?: string): Promise<ApiResponse<import('@/types').CashReport>> {
-    const query = date ? `?date=${date}` : '';
-    const result = await this.request<{ report: import('@/types').CashReport }>(`/reports/cash${query}`);
+  async getCashReport(params?: { start_date?: string; end_date?: string }): Promise<ApiResponse<import('@/types').CashReport>> {
+    const searchParams = new URLSearchParams();
+    if (params?.start_date) searchParams.set('start_date', params.start_date);
+    if (params?.end_date) searchParams.set('end_date', params.end_date);
+    const query = searchParams.toString();
+    const result = await this.request<{ report: import('@/types').CashReport }>(`/reports/cash${query ? `?${query}` : ''}`);
     if (result.error) return { error: result.error };
     return { data: result.data?.report };
   }
