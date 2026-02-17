@@ -154,18 +154,25 @@ export type ShiftStatus = 'open' | 'closed';
 
 export interface Shift {
   id: string;
-  user_id: string;
-  user_name: string;
-  status: ShiftStatus;
-  starting_cash: number;
-  ending_cash: number;
-  expected_cash: number;
-  cash_difference: number;
-  total_sales: number;
-  total_transactions: number;
-  notes: string;
+  employee_id: string;
   started_at: string;
-  closed_at: string;
+  ended_at?: string;
+  status: ShiftStatus;
+  // Cash drawer
+  opening_cash: string;
+  closing_cash?: string;
+  expected_cash?: string;
+  cash_difference?: string;
+  // Summary
+  total_sales: string;
+  total_refunds: string;
+  transaction_count: number;
+  refund_count: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  employee_name?: string;
 }
 
 // Sale types

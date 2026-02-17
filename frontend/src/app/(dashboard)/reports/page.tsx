@@ -952,6 +952,9 @@ export default function ReportsPage() {
               <div className="text-3xl font-bold text-green-600">
                 {formatCurrency(inventoryReport.potential_profit)}
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Margin: {parseFloat(inventoryReport.total_retail_value) > 0 ? ((parseFloat(inventoryReport.potential_profit) / parseFloat(inventoryReport.total_retail_value)) * 100).toFixed(1) : 0}%
+              </p>
             </CardContent>
           </Card>
 
@@ -1169,6 +1172,9 @@ export default function ReportsPage() {
                 {parseFloat(cashReport.difference) < 0 && ' short'}
                 {parseFloat(cashReport.difference) === 0 && ' (balanced)'}
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Expected: {formatCurrency(cashReport.expected_cash)} • Actual: {formatCurrency(cashReport.actual_cash)}
+              </p>
             </CardContent>
           </Card>
         </>
@@ -1180,8 +1186,9 @@ export default function ReportsPage() {
             <p className="text-xs text-muted-foreground mt-1">Shifts must be closed to appear here</p>
           </CardContent>
         </Card>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 
   const renderEmployeeReport = () => (

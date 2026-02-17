@@ -258,6 +258,11 @@ export default function POSPage() {
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
   const [startingCash, setStartingCash] = useState('');
 
+  // Shift details and end shift state
+  const [shiftDetailsOpen, setShiftDetailsOpen] = useState(false);
+  const [endingCash, setEndingCash] = useState('');
+  const [closingNotes, setClosingNotes] = useState('');
+
   // Checkout state
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
@@ -366,6 +371,54 @@ export default function POSPage() {
     }
   };
 
+  const refreshShift = async () => {
+    try {
+      const result = await api.getCurrentShift();
+      if (result.data) {
+        setCurrentShift(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to refresh shift:', error);
+    }
+  };
+
+  const handleEndShift = async () => {
+    if (!endingCash) return;
+
+    // Validate input
+    const cashAmount = parseFloat(endingCash);
+    if (isNaN(cashAmount) || cashAmount < 0) {
+      alert('Please enter a valid positive cash amount');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      // Send as string to preserve precision and match potential backend expectations
+      const result = await api.closeShift(endingCash, closingNotes);
+      if (result.data) {
+        setCurrentShift(null); // Clear current shift
+        setShiftDetailsOpen(false);
+        setEndingCash('');
+        setClosingNotes('');
+        // Optional: Show summary or success message
+        router.refresh(); // Refresh to ensure state is clean
+      } else if (result.error) {
+        alert(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to end shift:', error);
+      alert('Failed to end shift');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const openShiftDetails = () => {
+    refreshShift(); // Get latest data before opening
+    setShiftDetailsOpen(true);
+  };
+
   // Checkout functions
   const handleCheckout = async () => {
     if (!currentShift || cartItems.length === 0) return;
@@ -400,6 +453,7 @@ export default function POSPage() {
         setSaleComplete(true);
         clearCart();
         setAmountPaid('');
+        refreshShift(); // Refresh shift totals after sale
       } else if (result.error) {
         alert(result.error);
       }
@@ -464,6 +518,9 @@ export default function POSPage() {
               Started: {new Date(currentShift.started_at).toLocaleTimeString()}
             </span>
           </div>
+          <Button size="sm" variant="outline" onClick={openShiftDetails}>
+            View Details / End Shift
+          </Button>
         </div>
       )}
 
@@ -613,9 +670,84 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Shift Details / End Shift Dialog */}
+      <Dialog open={shiftDetailsOpen} onOpenChange={setShiftDetailsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Current Shift Details</DialogTitle>
+            <DialogDescription>
+              Review shift totals and enter ending cash to close shift.
+            </DialogDescription>
+          </DialogHeader>
+
+          {currentShift && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground block text-xs">Started At</span>
+                  <span className="font-medium">{new Date(currentShift.started_at).toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-xs">Start Cash</span>
+                  <span className="font-medium">{formatCurrency(parseFloat(currentShift.opening_cash) || 0)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-xs">Cash Sales</span>
+                  <span className="font-medium text-green-600">+{formatCurrency(parseFloat(currentShift.total_sales) || 0)}</span>
+                </div>
+                <div>
+                  {/* Computed locally based on available data, backend typically calculates this */}
+                  <span className="text-muted-foreground block text-xs">Expected Cash</span>
+                  <span className="font-bold">{formatCurrency((parseFloat(currentShift.opening_cash) || 0) + (parseFloat(currentShift.total_sales) || 0))}</span>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <label className="text-sm font-medium">Ending Cash (Counted)</label>
+                <Input
+                  type="number"
+                  value={endingCash}
+                  onChange={(e) => setEndingCash(e.target.value)}
+                  placeholder="Enter total cash in drawer..."
+                  className="mt-1.5"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter the actual amount of cash you have in the drawer.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Notes (Optional)</label>
+                <Input
+                  value={closingNotes}
+                  onChange={(e) => setClosingNotes(e.target.value)}
+                  placeholder="Any discrepancies or comments..."
+                  className="mt-1.5"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShiftDetailsOpen(false)}>
+              Close
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleEndShift}
+              disabled={!endingCash || isProcessing}
+            >
+              {isProcessing ? 'Ending Shift...' : 'End Shift'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Checkout Dialog */}
       <Dialog open={checkoutDialogOpen} onOpenChange={closeCheckoutDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md w-full max-w-[95vw]">
           {saleComplete ? (
             <>
               <DialogHeader>
@@ -697,13 +829,14 @@ export default function POSPage() {
                       onChange={(e) => setAmountPaid(e.target.value)}
                       placeholder="Enter amount..."
                     />
-                    <div className="flex gap-2 mt-2">
+                    <div className="grid grid-cols-3 gap-2 mt-2">
                       {quickAmounts.map((amount) => (
                         <Button
                           key={amount}
                           variant="outline"
                           size="sm"
                           onClick={() => setAmountPaid(amount.toString())}
+                          className="w-full"
                         >
                           {amount / 1000}K
                         </Button>
@@ -712,6 +845,7 @@ export default function POSPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => setAmountPaid(total.toString())}
+                        className="col-span-2 w-full"
                       >
                         Exact
                       </Button>

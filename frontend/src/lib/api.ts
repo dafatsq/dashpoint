@@ -110,7 +110,7 @@ class ApiClient {
 
       const data = await response.json();
       this.setTokens(data.access_token, data.refresh_token);
-      
+
       // Also update user data in localStorage if returned
       // The backend returns updated user info with new role/permissions
       if (data.user) {
@@ -129,7 +129,7 @@ class ApiClient {
         };
         localStorage.setItem('user', JSON.stringify(userData));
       }
-      
+
       return true;
     } catch {
       this.clearTokens();
@@ -193,7 +193,7 @@ class ApiClient {
 
       if (!response.ok) {
         const errorMsg = data.error || data.message || `Request failed with status ${response.status}`;
-        
+
         // Handle account deactivation - log user out immediately
         if (response.status === 401 && data.code === 'ACCOUNT_INACTIVE') {
           this.clearTokens();
@@ -202,7 +202,7 @@ class ApiClient {
           }
           return { error: 'Your account has been deactivated' };
         }
-        
+
         if (response.status >= 400 && response.status < 500) {
           console.warn('API Client Error:', { status: response.status, message: errorMsg, data });
         } else {
@@ -431,19 +431,19 @@ class ApiClient {
     return { data: result.data?.shift };
   }
 
-  async startShift(startingCash: number): Promise<ApiResponse<import('@/types').Shift>> {
+  async startShift(startingCash: number | string): Promise<ApiResponse<import('@/types').Shift>> {
     const result = await this.request<{ shift: import('@/types').Shift }>('/shifts/start', {
       method: 'POST',
-      body: { starting_cash: startingCash },
+      body: { opening_cash: String(startingCash) },
     });
     if (result.error) return { error: result.error };
     return { data: result.data?.shift };
   }
 
-  async closeShift(endingCash: number, notes?: string): Promise<ApiResponse<import('@/types').Shift>> {
+  async closeShift(closingCash: number | string, notes?: string): Promise<ApiResponse<import('@/types').Shift>> {
     const result = await this.request<{ shift: import('@/types').Shift }>('/shifts/close', {
       method: 'POST',
-      body: { ending_cash: endingCash, notes },
+      body: { closing_cash: String(closingCash), notes },
     });
     if (result.error) return { error: result.error };
     return { data: result.data?.shift };
