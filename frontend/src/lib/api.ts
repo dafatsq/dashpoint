@@ -669,6 +669,20 @@ class ApiClient {
     return { data: result.data?.logs || [] };
   }
 
+  // Dashboard changes endpoint (no audit permission required)
+  async getDashboardChanges(params?: {
+    entity_type?: string;
+    limit?: number;
+  }): Promise<ApiResponse<import('@/types').AuditLog[]>> {
+    const searchParams = new URLSearchParams();
+    if (params?.entity_type) searchParams.set('entity_type', params.entity_type);
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    const query = searchParams.toString();
+    const result = await this.request<AuditLogsResponse>(`/dashboard/changes${query ? `?${query}` : ''}`);
+    if (result.error) return { error: result.error };
+    return { data: result.data?.logs || [] };
+  }
+
   // Expense endpoints
   async getExpenseCategories(): Promise<ApiResponse<import('@/types').ExpenseCategory[]>> {
     const result = await this.request<{ data: import('@/types').ExpenseCategory[] }>('/expenses/categories');

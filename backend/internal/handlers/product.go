@@ -459,6 +459,9 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 	if product.SKU != nil {
 		newValues["sku"] = *product.SKU
 	}
+	if product.ImageURL != nil {
+		newValues["image_url"] = *product.ImageURL
+	}
 	audit.LogWithValues(c, models.AuditActionProductCreate, models.AuditEntityProduct, product.ID.String(), "Created product: "+product.Name, nil, newValues)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -502,6 +505,9 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	}
 	if product.SKU != nil {
 		oldValues["sku"] = *product.SKU
+	}
+	if product.ImageURL != nil {
+		oldValues["image_url"] = *product.ImageURL
 	}
 
 	var req UpdateProductRequest
@@ -626,6 +632,9 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	}
 	if product.SKU != nil {
 		newValues["sku"] = *product.SKU
+	}
+	if product.ImageURL != nil {
+		newValues["image_url"] = *product.ImageURL
 	}
 	audit.LogWithValues(c, models.AuditActionProductUpdate, models.AuditEntityProduct, id.String(), "Updated product: "+product.Name, oldValues, newValues)
 
