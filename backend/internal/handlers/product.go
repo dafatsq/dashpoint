@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -19,6 +22,7 @@ type ProductHandler struct {
 	productRepo   *repository.ProductRepository
 	inventoryRepo *repository.InventoryRepository
 	categoryRepo  *repository.CategoryRepository
+	uploadDir     string
 }
 
 // NewProductHandler creates a new product handler
@@ -26,11 +30,32 @@ func NewProductHandler(
 	productRepo *repository.ProductRepository,
 	inventoryRepo *repository.InventoryRepository,
 	categoryRepo *repository.CategoryRepository,
+	uploadDir string,
 ) *ProductHandler {
 	return &ProductHandler{
 		productRepo:   productRepo,
 		inventoryRepo: inventoryRepo,
 		categoryRepo:  categoryRepo,
+		uploadDir:     uploadDir,
+	}
+}
+
+// deleteImageFile removes an uploaded image file from disk.
+// imageURL is expected to be in the form "/uploads/<filename>".
+func (h *ProductHandler) deleteImageFile(imageURL string) {
+	if imageURL == "" || h.uploadDir == "" {
+		return
+	}
+	// Strip leading "/uploads/" prefix to get just the filename
+	filename := strings.TrimPrefix(imageURL, "/uploads/")
+	// Sanitize to prevent directory traversal
+	filename = filepath.Base(filename)
+	if filename == "." || filename == "" {
+		return
+	}
+	filePath := filepath.Join(h.uploadDir, filename)
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to delete orphaned image file")
 	}
 }
 
@@ -566,10 +591,22 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 
 	if req.ImageURL != nil {
 		// Empty string means clear the image
+		oldImageURL := ""
+		if product.ImageURL != nil {
+			oldImageURL = *product.ImageURL
+		}
 		if *req.ImageURL == "" {
 			product.ImageURL = nil
 		} else {
 			product.ImageURL = req.ImageURL
+		}
+		// Delete old file if image was replaced or cleared
+		newImageURL := ""
+		if product.ImageURL != nil {
+			newImageURL = *product.ImageURL
+		}
+		if oldImageURL != "" && oldImageURL != newImageURL {
+			h.deleteImageFile(oldImageURL)
 		}
 	}
 
@@ -641,6 +678,22 @@ func (h *ProductHandler) PermanentDelete(c *fiber.Ctx) error {
 		})
 	}
 
+	// Fetch the product first so we can clean up its image after deletion
+	productToDelete, err := h.productRepo.GetByID(c.Context(), id)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get product")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to retrieve product",
+		})
+	}
+	if productToDelete == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"code":    "NOT_FOUND",
+			"message": "Product not found",
+		})
+	}
+
 	// Check if product has sales history
 	hasSales, err := h.productRepo.HasSalesHistory(c.Context(), id)
 	if err != nil {
@@ -664,6 +717,11 @@ func (h *ProductHandler) PermanentDelete(c *fiber.Ctx) error {
 			"code":    "INTERNAL_ERROR",
 			"message": "Failed to permanently delete product",
 		})
+	}
+
+	// Clean up image file after successful deletion
+	if productToDelete.ImageURL != nil {
+		h.deleteImageFile(*productToDelete.ImageURL)
 	}
 
 	return c.JSON(fiber.Map{

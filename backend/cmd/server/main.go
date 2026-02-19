@@ -86,7 +86,7 @@ func main() {
 	userHandler := handlers.NewUserHandler(userRepo, roleRepo, permissionRepo)
 	userHandler.SetEventsHandler(eventsHandler) // Enable real-time user updates
 	roleHandler := handlers.NewRoleHandler(roleRepo, permissionRepo)
-	productHandler := handlers.NewProductHandler(productRepo, inventoryRepo, categoryRepo)
+	productHandler := handlers.NewProductHandler(productRepo, inventoryRepo, categoryRepo, uploadDir)
 	categoryHandler := handlers.NewCategoryHandler(categoryRepo)
 	shiftHandler := handlers.NewShiftHandler(shiftRepo)
 	saleHandler := handlers.NewSaleHandler(saleRepo, shiftRepo)
