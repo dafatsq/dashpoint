@@ -85,3 +85,6 @@ service-account.json
 .agent/
 .github/
 .opencode/
+
+# SDD
+SDD.md
