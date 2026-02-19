@@ -329,6 +329,10 @@ func setupRoutes(
 	expenses.Patch("/:id", expenseHandler.Update)
 	expenses.Delete("/:id", expenseHandler.Delete)
 
+	// Dashboard endpoints (accessible to all authenticated users)
+	dashboard := protected.Group("/dashboard")
+	dashboard.Get("/changes", auditHandler.List) // reuses audit list, no permission required
+
 	// Audit log endpoints (requires can_view_audit_logs permission)
 	logs := protected.Group("/logs")
 	logs.Get("/", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.List)

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DollarSign,
   ShoppingCart,
@@ -11,12 +12,18 @@ import {
   TrendingUp,
   AlertTriangle,
   Loader2,
-  ChevronRight,
+  Clock,
+  Boxes,
+  Receipt,
+  Wallet,
+  History,
+  User,
+  ArrowRightLeft,
+  CircleDot,
+  CheckCircle2,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { DailySummary, LowStockItem } from '@/types';
-import Link from 'next/link';
-import { navItems } from '@/lib/nav-config';
+import { DailySummary, LowStockItem, AuditLog, Shift } from '@/types';
 
 interface DashboardStats {
   todaySales: number;
@@ -25,8 +32,410 @@ interface DashboardStats {
   lowStockCount: number;
 }
 
+// ─── Audit Log Helpers ───────────────────────────────────────────────
+
+const ACTION_LABELS: Record<string, string> = {
+  'create': 'Created',
+  'update': 'Updated',
+  'delete': 'Deleted',
+  'void': 'Voided',
+  'adjust': 'Adjusted',
+};
+
+const getActionVerb = (action: string): string => {
+  // Actions may be dotted like "product.create" or plain like "create"
+  const parts = action.split('.');
+  return parts[parts.length - 1];
+};
+
+const getActionBadgeColor = (action: string) => {
+  const verb = getActionVerb(action);
+  switch (verb) {
+    case 'create':
+    case 'start':
+      return 'bg-green-600 text-white';
+    case 'update':
+    case 'close':
+      return 'bg-yellow-600 text-white';
+    case 'delete':
+      return 'bg-red-600 text-white';
+    case 'void':
+      return 'bg-orange-600 text-white';
+    case 'adjust':
+      return 'bg-purple-600 text-white';
+    default:
+      return 'bg-gray-600 text-white';
+  }
+};
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleString('id-ID', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const formatDateTime = (dateString: string) => {
+  return new Date(dateString).toLocaleString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+function formatCurrencyShort(amount: number): string {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
+
+function getChangeDescription(log: AuditLog): string {
+  const newVals = log.new_values || {};
+  const oldVals = log.old_values || {};
+  const verb = getActionVerb(log.action);
+
+  if (log.entity_type === 'product') {
+    const name = newVals.name || oldVals.name || '';
+    if (verb === 'create') return `Added product: ${name}`;
+    if (verb === 'update') return `Updated product: ${name}`;
+    if (verb === 'delete') return `Deleted product: ${name}`;
+  }
+
+  if (log.entity_type === 'inventory') {
+    const product = newVals.product_name || oldVals.product_name || newVals.affected_product || oldVals.affected_product || '';
+    const qty = newVals.quantity;
+    if (product && qty !== undefined) return `Adjusted ${product}: ${qty}`;
+    if (product) return `Stock change: ${product}`;
+    return 'Stock adjustment';
+  }
+
+  if (log.entity_type === 'sale') {
+    const invoice = newVals.invoice_no || '';
+    const total = newVals.total;
+    if (verb === 'create') {
+      return invoice
+        ? `Sale ${invoice}${total ? ` — ${formatCurrencyShort(Number(total))}` : ''}`
+        : 'New sale created';
+    }
+    if (verb === 'void') return `Voided sale ${invoice}`;
+    if (verb === 'delete') return `Deleted sale ${invoice}`;
+  }
+
+  if (log.entity_type === 'expense') {
+    const desc = newVals.description || newVals.affected_expense || oldVals.affected_expense || '';
+    const amount = newVals.amount;
+    if (verb === 'create') return `New expense: ${desc}${amount ? ` — ${formatCurrencyShort(Number(amount))}` : ''}`;
+    if (verb === 'update') return `Updated expense: ${desc}`;
+    if (verb === 'delete') return `Deleted expense: ${desc}`;
+  }
+
+  return `${ACTION_LABELS[verb] || verb} ${log.entity_type}`;
+}
+
+// ─── Change Tabs Config (without Shifts) ─────────────────────────────
+
+type ChangeTab = 'product' | 'inventory' | 'sale' | 'expense';
+
+const CHANGE_TABS: { value: ChangeTab; label: string; icon: React.ReactNode }[] = [
+  { value: 'product', label: 'Products', icon: <Package className="h-4 w-4" /> },
+  { value: 'inventory', label: 'Inventory', icon: <Boxes className="h-4 w-4" /> },
+  { value: 'sale', label: 'Sales', icon: <Receipt className="h-4 w-4" /> },
+  { value: 'expense', label: 'Expenses', icon: <Wallet className="h-4 w-4" /> },
+];
+
+// ─── ChangesList Component ───────────────────────────────────────────
+
+function ChangesList({ entityType }: { entityType: ChangeTab }) {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setIsLoading(true);
+      try {
+        const result = await api.getDashboardChanges({ entity_type: entityType, limit: 15 });
+        if (result.data) {
+          setLogs(result.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch change logs:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchLogs();
+  }, [entityType]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (logs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <History className="h-10 w-10 mb-2" />
+        <p className="text-sm">No changes recorded yet</p>
+      </div>
+    );
+  }
+
+  // Fields to skip (already shown in the description or not useful)
+  const SKIP_FIELDS = new Set(['affected_product', 'affected_category', 'affected_expense', 'affected_user']);
+
+  const renderFieldChanges = (log: AuditLog) => {
+    const oldVals = log.old_values || {};
+    const newVals = log.new_values || {};
+    const verb = getActionVerb(log.action);
+
+    // Collect changed fields
+    const allKeys = new Set([...Object.keys(oldVals), ...Object.keys(newVals)]);
+    const changes: { key: string; oldVal: unknown; newVal: unknown }[] = [];
+
+    allKeys.forEach((key) => {
+      if (SKIP_FIELDS.has(key)) return;
+      const oldVal = oldVals[key];
+      const newVal = newVals[key];
+
+      if (verb === 'update' || verb === 'close') {
+        // Only show fields that actually changed
+        if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+          changes.push({ key, oldVal, newVal });
+        }
+      } else if (verb === 'create' || verb === 'start') {
+        // Show new values
+        if (newVal !== undefined && newVal !== null && newVal !== '') {
+          changes.push({ key, oldVal: undefined, newVal });
+        }
+      } else if (verb === 'delete') {
+        // Show old values for deleted items
+        if (oldVal !== undefined && oldVal !== null && oldVal !== '') {
+          changes.push({ key, oldVal, newVal: undefined });
+        }
+      }
+    });
+
+    if (changes.length === 0) return null;
+
+    const formatFieldName = (key: string): string => {
+      if (key === 'image_url') return 'Photo';
+      if (key === 'is_active') return 'Active';
+      return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    };
+
+    const isImageField = (key: string) => key === 'image_url';
+
+    const formatValue = (val: unknown): string => {
+      if (val === null || val === undefined) return '—';
+      if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+      if (typeof val === 'object') return JSON.stringify(val);
+      return String(val);
+    };
+
+    return (
+      <div className="mt-2 ml-0 space-y-0.5">
+        {changes.slice(0, 6).map(({ key, oldVal, newVal }) => (
+          <div key={key} className="text-xs flex items-start gap-1.5 text-muted-foreground">
+            <span className="font-medium text-foreground/70 shrink-0 pt-0.5">{formatFieldName(key)}:</span>
+            {isImageField(key) ? (
+              // Render image thumbnails for photo changes
+              <div className="flex items-center gap-1.5">
+                {oldVal !== undefined && (
+                  <div className="flex flex-col items-center gap-0.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={String(oldVal)} alt="old" className="h-8 w-8 object-cover rounded border border-red-300 opacity-60" />
+                    <span className="text-[9px] text-red-500">before</span>
+                  </div>
+                )}
+                {oldVal !== undefined && newVal !== undefined && (
+                  <span className="text-muted-foreground">→</span>
+                )}
+                {newVal !== undefined && (
+                  <div className="flex flex-col items-center gap-0.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={String(newVal)} alt="new" className="h-8 w-8 object-cover rounded border border-green-300" />
+                    <span className="text-[9px] text-green-600">after</span>
+                  </div>
+                )}
+                {newVal === undefined && oldVal !== undefined && (
+                  <span className="text-red-500 text-[10px]">(removed)</span>
+                )}
+              </div>
+            ) : oldVal !== undefined && newVal !== undefined ? (
+              <>
+                <span className="text-red-500 line-through">{formatValue(oldVal)}</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="text-green-600">{formatValue(newVal)}</span>
+              </>
+            ) : newVal !== undefined ? (
+              <span className="text-foreground/60">{formatValue(newVal)}</span>
+            ) : (
+              <span className="text-red-500 line-through">{formatValue(oldVal)}</span>
+            )}
+          </div>
+        ))}
+        {changes.length > 6 && (
+          <span className="text-xs text-muted-foreground">+{changes.length - 6} more</span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-1">
+      {logs.map((log) => (
+        <div
+          key={log.id}
+          className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+        >
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide mt-0.5 shrink-0 ${getActionBadgeColor(
+              log.action
+            )}`}
+          >
+            {ACTION_LABELS[getActionVerb(log.action)] || getActionVerb(log.action)}
+          </span>
+
+          <div className="flex-1 min-w-0">
+            <p className="text-sm leading-snug">{getChangeDescription(log)}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <User className="h-3 w-3" />
+                <span>{log.user_name || 'System'}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">·</span>
+              <span className="text-xs text-muted-foreground">
+                {formatDate(log.created_at)}
+              </span>
+            </div>
+            {renderFieldChanges(log)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── ShiftHistory Component ──────────────────────────────────────────
+
+function ShiftHistory() {
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchShifts = async () => {
+      setIsLoading(true);
+      try {
+        const result = await api.getShifts();
+        if (result.data) {
+          setShifts(result.data.slice(0, 10)); // Show last 10 shifts
+        }
+      } catch (error) {
+        console.error('Failed to fetch shifts:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchShifts();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (shifts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <Clock className="h-10 w-10 mb-2" />
+        <p className="text-sm">No shifts recorded yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {shifts.map((shift) => {
+        const isOpen = shift.status === 'open';
+        const openingCash = parseFloat(shift.opening_cash || '0');
+        const closingCash = shift.closing_cash ? parseFloat(shift.closing_cash) : null;
+
+        return (
+          <div
+            key={shift.id}
+            className={`rounded-lg border p-4 transition-colors ${isOpen
+              ? 'border-green-500/50 bg-green-500/5'
+              : 'hover:bg-muted/50'
+              }`}
+          >
+            {/* Top row: status + employee + time */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                {isOpen ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-green-600 text-white">
+                    <CircleDot className="h-3 w-3" />
+                    Open
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-gray-600 text-white">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Closed
+                  </span>
+                )}
+                <div className="flex items-center gap-1 text-sm font-medium">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  {shift.employee_name || 'Unknown'}
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {formatDateTime(shift.started_at)}
+              </span>
+            </div>
+
+            {/* Cash info row */}
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-xs">Open:</span>
+                <span className="font-medium">{formatCurrencyShort(openingCash)}</span>
+              </div>
+              {!isOpen && closingCash !== null && (
+                <>
+                  <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground text-xs">Close:</span>
+                    <span className="font-medium">{formatCurrencyShort(closingCash)}</span>
+                  </div>
+                </>
+              )}
+              {!isOpen && shift.ended_at && (
+                <div className="ml-auto text-xs text-muted-foreground">
+                  Ended: {formatDateTime(shift.ended_at)}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main Dashboard Page ─────────────────────────────────────────────
+
 export default function DashboardPage() {
-  const { user, hasPermission } = useAuth();
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,7 +451,6 @@ export default function DashboardPage() {
         const summary = summaryResult.data;
         const lowStock = lowStockResult.data || [];
 
-        // Calculate average sale
         const totalSales = summary?.total_sales ? parseFloat(summary.total_sales) : 0;
         const transactionCount = summary?.transaction_count || 0;
         const averageSale = transactionCount > 0 ? totalSales / transactionCount : 0;
@@ -77,7 +485,7 @@ export default function DashboardPage() {
     <div className="flex flex-col h-full">
       <Header title="Dashboard" />
 
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 overflow-auto">
         {/* Welcome message */}
         <div className="mb-6">
           <h2 className="text-2xl font-bold">Welcome back, {user?.name}!</h2>
@@ -103,9 +511,7 @@ export default function DashboardPage() {
                   <div className="text-2xl font-bold">
                     {formatCurrency(stats?.todaySales || 0)}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Total revenue today
-                  </p>
+                  <p className="text-xs text-muted-foreground">Total revenue today</p>
                 </CardContent>
               </Card>
 
@@ -115,12 +521,8 @@ export default function DashboardPage() {
                   <ShoppingCart className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {stats?.todayTransactions || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Sales completed today
-                  </p>
+                  <div className="text-2xl font-bold">{stats?.todayTransactions || 0}</div>
+                  <p className="text-xs text-muted-foreground">Sales completed today</p>
                 </CardContent>
               </Card>
 
@@ -133,9 +535,7 @@ export default function DashboardPage() {
                   <div className="text-2xl font-bold">
                     {formatCurrency(stats?.averageSale || 0)}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Per transaction
-                  </p>
+                  <p className="text-xs text-muted-foreground">Per transaction</p>
                 </CardContent>
               </Card>
 
@@ -145,19 +545,15 @@ export default function DashboardPage() {
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {stats?.lowStockCount || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Products need attention
-                  </p>
+                  <div className="text-2xl font-bold">{stats?.lowStockCount || 0}</div>
+                  <p className="text-xs text-muted-foreground">Products need attention</p>
                 </CardContent>
               </Card>
             </div>
 
             {/* Low stock alert */}
             {lowStockItems.length > 0 && (
-              <Card>
+              <Card className="mb-6">
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-yellow-500" />
@@ -197,33 +593,52 @@ export default function DashboardPage() {
           </>
         )}
 
-        {/* Quick Actions */}
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {navItems
-              .filter((item) => item.href !== '/')
-              .filter((item) => !item.permission || hasPermission(item.permission))
-              .map((item) => (
-                <Link key={item.href} href={item.href}>
-                  <Card className="h-full hover:bg-muted/50 transition-colors cursor-pointer border-muted-foreground/20 hover:border-primary/50">
-                    <CardContent className="p-6 flex flex-col h-full">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={`p-2 rounded-lg bg-muted ${item.color?.replace('text-', 'bg-')}/10`}>
-                          <div className={item.color}>{item.icon}</div>
-                        </div>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <h4 className="font-semibold mb-1">{item.label}</h4>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {item.description}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </Link>
+        {/* Shift History — dedicated section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              <CardTitle>Shift History</CardTitle>
+            </div>
+            <CardDescription>
+              Recent and active shifts across all employees
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ShiftHistory />
+          </CardContent>
+        </Card>
+
+        {/* Recent Changes — audit-based tabs */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              <CardTitle>Recent Changes</CardTitle>
+            </div>
+            <CardDescription>
+              Activity log across all areas of your store
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="product">
+              <TabsList className="w-full justify-start flex overflow-x-auto lg:w-auto lg:inline-flex mb-4 no-scrollbar pb-1">
+                {CHANGE_TABS.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5">
+                    {tab.icon}
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {CHANGE_TABS.map((tab) => (
+                <TabsContent key={tab.value} value={tab.value}>
+                  <ChangesList entityType={tab.value} />
+                </TabsContent>
               ))}
-          </div>
-        </div>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
