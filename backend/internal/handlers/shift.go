@@ -165,6 +165,7 @@ func (h *ShiftHandler) CloseShift(c *fiber.Ctx) error {
 }
 
 // GetCurrentShift handles GET /api/v1/shifts/current
+// Supports ?blind=true to hide financial details for blind close
 func (h *ShiftHandler) GetCurrentShift(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -182,6 +183,16 @@ func (h *ShiftHandler) GetCurrentShift(c *fiber.Ctx) error {
 			"shift":   nil,
 			"message": "No open shift",
 		})
+	}
+
+	// Blind close mode: hide financial details so cashier can't match their count
+	blind := c.Query("blind") == "true"
+	if blind {
+		shift.TotalSales = decimal.Zero
+		shift.TotalRefunds = decimal.Zero
+		shift.ExpectedCash = nil
+		shift.TransactionCount = 0
+		shift.RefundCount = 0
 	}
 
 	return c.JSON(fiber.Map{

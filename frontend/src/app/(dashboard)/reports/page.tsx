@@ -1096,7 +1096,7 @@ export default function ReportsPage() {
       ) : cashReport ? (
         <>
           {/* Cash flow summary */}
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Opening Cash</CardTitle>
@@ -1130,6 +1130,30 @@ export default function ReportsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Pay In</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  +{formatCurrency(cashReport.pay_in_total ?? '0')}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Cash added to drawer</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Pay Out</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  -{formatCurrency(cashReport.pay_out_total ?? '0')}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Cash removed from drawer</p>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Expected vs Actual */}
@@ -1141,7 +1165,7 @@ export default function ReportsPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(cashReport.expected_cash)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Opening + Sales - Refunds
+                  Opening + Sales - Refunds + Pay In - Pay Out
                 </p>
               </CardContent>
             </Card>

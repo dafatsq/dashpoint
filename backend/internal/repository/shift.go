@@ -58,6 +58,12 @@ func (r *ShiftRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sh
 		SELECT 
 			s.id, s.employee_id, s.started_at, s.ended_at, s.opening_cash, s.closing_cash,
 			s.expected_cash, s.cash_difference, s.total_sales, s.total_refunds,
+			(
+				SELECT COALESCE(SUM(p.amount), 0)
+				FROM payments p
+				JOIN sales s2 ON p.sale_id = s2.id
+				WHERE s2.shift_id = s.id AND p.payment_method = 'cash' AND p.status = 'completed'
+			) as total_cash_sales,
 			s.transaction_count, s.refund_count, s.status, s.notes, s.created_at, s.updated_at,
 			u.name as employee_name
 		FROM shifts s
@@ -77,6 +83,7 @@ func (r *ShiftRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sh
 		&shift.CashDifference,
 		&shift.TotalSales,
 		&shift.TotalRefunds,
+		&shift.TotalCashSales,
 		&shift.TransactionCount,
 		&shift.RefundCount,
 		&shift.Status,
@@ -97,11 +104,19 @@ func (r *ShiftRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sh
 }
 
 // GetOpenShiftByEmployee gets the current open shift for an employee
+// GetOpenShiftByEmployee gets the current open shift for an employee, or falls back to any open shift
 func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID uuid.UUID) (*models.Shift, error) {
+	// First, try to find a shift specifically for this employee
 	query := `
 		SELECT 
 			s.id, s.employee_id, s.started_at, s.ended_at, s.opening_cash, s.closing_cash,
 			s.expected_cash, s.cash_difference, s.total_sales, s.total_refunds,
+			(
+				SELECT COALESCE(SUM(p.amount), 0)
+				FROM payments p
+				JOIN sales s2 ON p.sale_id = s2.id
+				WHERE s2.shift_id = s.id AND p.payment_method = 'cash' AND p.status = 'completed'
+			) as total_cash_sales,
 			s.transaction_count, s.refund_count, s.status, s.notes, s.created_at, s.updated_at,
 			u.name as employee_name
 		FROM shifts s
@@ -123,6 +138,56 @@ func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID
 		&shift.CashDifference,
 		&shift.TotalSales,
 		&shift.TotalRefunds,
+		&shift.TotalCashSales,
+		&shift.TransactionCount,
+		&shift.RefundCount,
+		&shift.Status,
+		&shift.Notes,
+		&shift.CreatedAt,
+		&shift.UpdatedAt,
+		&shift.EmployeeName,
+	)
+
+	if err == nil {
+		return shift, nil
+	}
+
+	if err != pgx.ErrNoRows {
+		return nil, err
+	}
+
+	// Falls back to ANY open shift (shared drawer mode)
+	fallbackQuery := `
+		SELECT 
+			s.id, s.employee_id, s.started_at, s.ended_at, s.opening_cash, s.closing_cash,
+			s.expected_cash, s.cash_difference, s.total_sales, s.total_refunds,
+			(
+				SELECT COALESCE(SUM(p.amount), 0)
+				FROM payments p
+				JOIN sales s2 ON p.sale_id = s2.id
+				WHERE s2.shift_id = s.id AND p.payment_method = 'cash' AND p.status = 'completed'
+			) as total_cash_sales,
+			s.transaction_count, s.refund_count, s.status, s.notes, s.created_at, s.updated_at,
+			u.name as employee_name
+		FROM shifts s
+		LEFT JOIN users u ON s.employee_id = u.id
+		WHERE s.status = 'open'
+		ORDER BY s.started_at DESC
+		LIMIT 1
+	`
+
+	err = r.pool.QueryRow(ctx, fallbackQuery).Scan(
+		&shift.ID,
+		&shift.EmployeeID,
+		&shift.StartedAt,
+		&shift.EndedAt,
+		&shift.OpeningCash,
+		&shift.ClosingCash,
+		&shift.ExpectedCash,
+		&shift.CashDifference,
+		&shift.TotalSales,
+		&shift.TotalRefunds,
+		&shift.TotalCashSales,
 		&shift.TransactionCount,
 		&shift.RefundCount,
 		&shift.Status,
@@ -146,13 +211,50 @@ func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID
 func (r *ShiftRepository) CloseShift(ctx context.Context, shiftID uuid.UUID, closingCash decimal.Decimal, notes *string) error {
 	now := time.Now()
 
+	// expected_cash = opening + sales - refunds + pay_ins - pay_outs
 	query := `
 		UPDATE shifts 
 		SET 
 			ended_at = $1,
 			closing_cash = $2,
-			expected_cash = opening_cash + total_sales - total_refunds,
-			cash_difference = $2 - (opening_cash + total_sales - total_refunds),
+			expected_cash = opening_cash 
+				+ COALESCE((
+					SELECT SUM(p.amount) 
+					FROM payments p 
+					JOIN sales s ON p.sale_id = s.id 
+					WHERE s.shift_id = $5 
+					AND p.payment_method = 'cash' 
+					AND p.status = 'completed'
+				), 0)
+				- COALESCE((
+					SELECT SUM(p.amount) 
+					FROM payments p 
+					JOIN sales s ON p.sale_id = s.id 
+					WHERE s.shift_id = $5 
+					AND p.payment_method = 'cash' 
+					AND p.status = 'refunded'
+				), 0)
+				+ COALESCE((SELECT SUM(amount) FROM cash_drawer_operations WHERE shift_id = $5 AND type = 'pay_in'), 0)
+				- COALESCE((SELECT SUM(amount) FROM cash_drawer_operations WHERE shift_id = $5 AND type = 'pay_out'), 0),
+			cash_difference = $2 - (opening_cash 
+				+ COALESCE((
+					SELECT SUM(p.amount) 
+					FROM payments p 
+					JOIN sales s ON p.sale_id = s.id 
+					WHERE s.shift_id = $5 
+					AND p.payment_method = 'cash' 
+					AND p.status = 'completed'
+				), 0)
+				- COALESCE((
+					SELECT SUM(p.amount) 
+					FROM payments p 
+					JOIN sales s ON p.sale_id = s.id 
+					WHERE s.shift_id = $5 
+					AND p.payment_method = 'cash' 
+					AND p.status = 'refunded'
+				), 0)
+				+ COALESCE((SELECT SUM(amount) FROM cash_drawer_operations WHERE shift_id = $5 AND type = 'pay_in'), 0)
+				- COALESCE((SELECT SUM(amount) FROM cash_drawer_operations WHERE shift_id = $5 AND type = 'pay_out'), 0)),
 			status = 'closed',
 			notes = COALESCE($3, notes),
 			updated_at = $4

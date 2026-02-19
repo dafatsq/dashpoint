@@ -99,11 +99,20 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get current shift (optional but recommended)
+	// Get current shift (required for cashiers)
 	var shiftID *uuid.UUID
 	shift, _ := h.shiftRepo.GetOpenShiftByEmployee(c.Context(), userID)
 	if shift != nil {
 		shiftID = &shift.ID
+	} else {
+		// Cashiers must have an open shift to create sales
+		roleName := middleware.GetRoleName(c)
+		if roleName == "cashier" {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"code":    "NO_OPEN_SHIFT",
+				"message": "You must start a shift before processing sales",
+			})
+		}
 	}
 
 	// Parse items
@@ -238,6 +247,7 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 			"message": err.Error(),
 		})
 	}
+
 
 	// Audit log
 	audit.LogFromFiber(c, models.AuditActionSaleCreate, models.AuditEntitySale, sale.ID.String(), "Created sale")
@@ -428,11 +438,11 @@ func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
 		})
 	}
 
+	// Fetch the updated sale for the response
+	sale, _ := h.saleRepo.GetByID(c.Context(), id)
+
 	// Audit log
 	audit.LogFromFiber(c, models.AuditActionSaleVoid, models.AuditEntitySale, id.String(), "Voided sale: "+req.Reason)
-
-	// Fetch the updated sale
-	sale, _ := h.saleRepo.GetByID(c.Context(), id)
 
 	return c.JSON(fiber.Map{
 		"message": "Sale voided successfully",
@@ -589,6 +599,18 @@ func (h *SaleHandler) toSaleListResponse(s *models.Sale) fiber.Map {
 	}
 	if s.CustomerName != nil {
 		response["customer_name"] = *s.CustomerName
+	}
+
+	// Include primary payment method if available
+	if len(s.Payments) > 0 {
+		var payments []fiber.Map
+		for _, payment := range s.Payments {
+			paymentMap := fiber.Map{
+				"payment_method": payment.PaymentMethod,
+			}
+			payments = append(payments, paymentMap)
+		}
+		response["payments"] = payments
 	}
 
 	return response

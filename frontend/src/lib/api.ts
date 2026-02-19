@@ -460,6 +460,30 @@ class ApiClient {
     return { data: result.data?.shifts || [] };
   }
 
+  async payIn(amount: string, reason: string): Promise<ApiResponse<import('@/types').CashDrawerOperation>> {
+    const result = await this.request<{ operation: import('@/types').CashDrawerOperation }>('/shifts/pay-in', {
+      method: 'POST',
+      body: { amount, reason },
+    });
+    if (result.error) return { error: result.error };
+    return { data: result.data?.operation };
+  }
+
+  async payOut(amount: string, reason: string): Promise<ApiResponse<import('@/types').CashDrawerOperation>> {
+    const result = await this.request<{ operation: import('@/types').CashDrawerOperation }>('/shifts/pay-out', {
+      method: 'POST',
+      body: { amount, reason },
+    });
+    if (result.error) return { error: result.error };
+    return { data: result.data?.operation };
+  }
+
+  async getShiftOperations(shiftId: string): Promise<ApiResponse<import('@/types').CashDrawerOperationsResponse>> {
+    const result = await this.request<import('@/types').CashDrawerOperationsResponse>(`/shifts/${shiftId}/operations`);
+    if (result.error) return { error: result.error };
+    return { data: result.data };
+  }
+
   // Sales endpoints
   async createSale(sale: import('@/types').CreateSaleRequest): Promise<ApiResponse<import('@/types').Sale>> {
     const result = await this.request<{ sale: import('@/types').Sale }>('/sales', { method: 'POST', body: sale });

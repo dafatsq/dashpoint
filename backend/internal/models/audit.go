@@ -47,6 +47,8 @@ const (
 	// Shift actions
 	AuditActionShiftStart AuditAction = "shift.start"
 	AuditActionShiftClose AuditAction = "shift.close"
+	AuditActionCashPayIn  AuditAction = "shift.pay_in"
+	AuditActionCashPayOut AuditAction = "shift.pay_out"
 
 	// Expense actions
 	AuditActionExpenseCreate AuditAction = "expense.create"

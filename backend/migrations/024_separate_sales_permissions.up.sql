@@ -8,9 +8,13 @@ SET name = 'Create Sales',
 WHERE key = 'can_create_sale';
 
 -- Add new permissions
-INSERT INTO permissions (id, key, name, description, category) VALUES
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaab', 'can_view_sales', 'View Sales History', 'Can view sales transactions and history', 'sales'),
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaac', 'can_void_sale', 'Void Sales', 'Can void/cancel sales transactions', 'sales');
+INSERT INTO permissions (key, name, description, category) VALUES
+    ('can_view_sales', 'View Sales History', 'Can view sales transactions and history', 'sales'),
+    ('can_void_sale', 'Void Sales', 'Can void/cancel sales transactions', 'sales')
+ON CONFLICT (key) DO UPDATE 
+SET name = EXCLUDED.name, 
+    description = EXCLUDED.description, 
+    category = EXCLUDED.category;
 
 -- Assign new permissions to owner role (already has all)
 INSERT INTO role_permissions (role_id, permission_id)

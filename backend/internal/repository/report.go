@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -97,6 +98,8 @@ type CashReport struct {
 	OpeningCash  decimal.Decimal `json:"opening_cash"`
 	CashSales    decimal.Decimal `json:"cash_sales"`
 	CashRefunds  decimal.Decimal `json:"cash_refunds"`
+	PayInTotal   decimal.Decimal `json:"pay_in_total"`
+	PayOutTotal  decimal.Decimal `json:"pay_out_total"`
 	ExpectedCash decimal.Decimal `json:"expected_cash"`
 	ActualCash   decimal.Decimal `json:"actual_cash"`
 	Difference   decimal.Decimal `json:"difference"`
@@ -484,11 +487,30 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate
 		return nil, err
 	}
 
-	report.ExpectedCash = report.OpeningCash.Add(report.CashSales).Sub(report.CashRefunds)
+	// Get pay-in and pay-out totals from cash drawer operations
+	// (only for shifts that fall within the date range)
+	err = r.pool.QueryRow(ctx, `
+		SELECT 
+			COALESCE(SUM(CASE WHEN cdo.type = 'pay_in' THEN cdo.amount ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN cdo.type = 'pay_out' THEN cdo.amount ELSE 0 END), 0)
+		FROM cash_drawer_operations cdo
+		JOIN shifts sh ON cdo.shift_id = sh.id
+		WHERE sh.started_at >= $1 AND sh.started_at < $2
+	`, startDate, endDate).Scan(&report.PayInTotal, &report.PayOutTotal)
+	if err != nil {
+		return nil, err
+	}
+
+	report.ExpectedCash = report.OpeningCash.
+		Add(report.CashSales).
+		Sub(report.CashRefunds).
+		Add(report.PayInTotal).
+		Sub(report.PayOutTotal)
 	report.Difference = report.ActualCash.Sub(report.ExpectedCash)
 
 	return report, nil
 }
+
 
 // GetEmployeeSalesReport gets sales by employee
 func (r *ReportRepository) GetEmployeeSalesReport(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {

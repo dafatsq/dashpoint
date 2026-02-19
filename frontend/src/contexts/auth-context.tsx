@@ -388,4 +388,9 @@ export const PERMISSIONS = {
 
   // Settings
   SETTINGS_MANAGE: 'can_manage_settings',
+
+  // POS
+  POS_VIEW: 'can_view_pos',
+  POS_SHIFT_START: 'can_start_shift',
+  POS_SHIFT_END: 'can_end_shift',
 } as const;

@@ -68,6 +68,7 @@ func main() {
 	reportRepo := repository.NewReportRepository(db.Pool)
 	auditRepo := repository.NewAuditRepository(db.Pool)
 	expenseRepo := repository.NewExpenseRepository(db.Pool)
+	cashDrawerRepo := repository.NewCashDrawerRepository(db.Pool)
 
 	// Initialize audit service
 	audit.Init(auditRepo)
@@ -93,6 +94,7 @@ func main() {
 	auditHandler := handlers.NewAuditHandler(auditRepo)
 	expenseHandler := handlers.NewExpenseHandler(expenseRepo, inventoryRepo, productRepo)
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
+	cashDrawerHandler := handlers.NewCashDrawerHandler(cashDrawerRepo, shiftRepo)
 
 	// Create permission checker function
 	permissionChecker := func(c *fiber.Ctx, userID uuid.UUID, permission string) (bool, error) {
@@ -136,7 +138,7 @@ func main() {
 	})
 
 	// Setup routes
-	setupRoutes(app, jwtManager, userRepo, permissionChecker, healthHandler, authHandler, userHandler, roleHandler, productHandler, categoryHandler, shiftHandler, saleHandler, reportHandler, auditHandler, expenseHandler, eventsHandler, uploadHandler)
+	setupRoutes(app, jwtManager, userRepo, permissionChecker, healthHandler, authHandler, userHandler, roleHandler, productHandler, categoryHandler, shiftHandler, saleHandler, reportHandler, auditHandler, expenseHandler, eventsHandler, uploadHandler, cashDrawerHandler)
 
 	// Start server in goroutine
 	go func() {
@@ -196,6 +198,7 @@ func setupRoutes(
 	expenseHandler *handlers.ExpenseHandler,
 	eventsHandler *handlers.EventsHandler,
 	uploadHandler *handlers.UploadHandler,
+	cashDrawerHandler *handlers.CashDrawerHandler,
 ) {
 	// Root endpoint
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -282,8 +285,11 @@ func setupRoutes(
 	shifts.Get("/current", shiftHandler.GetCurrentShift)
 	shifts.Post("/start", shiftHandler.StartShift)
 	shifts.Post("/close", shiftHandler.CloseShift)
+	shifts.Post("/pay-in", cashDrawerHandler.PayIn)
+	shifts.Post("/pay-out", cashDrawerHandler.PayOut)
 	shifts.Get("/", shiftHandler.ListShifts)
 	shifts.Get("/:id", shiftHandler.GetShift)
+	shifts.Get("/:id/operations", cashDrawerHandler.ListOperations)
 
 	// Sales endpoints
 	sales := protected.Group("/sales")

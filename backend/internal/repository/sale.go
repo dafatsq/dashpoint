@@ -514,7 +514,8 @@ func (r *SaleRepository) List(ctx context.Context, employeeID, shiftID *uuid.UUI
 			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
 			s.item_count, s.payment_status, s.amount_paid, s.change_amount,
 			s.employee_id, s.shift_id, s.customer_name, s.status, s.created_at, s.updated_at,
-			u.name as employee_name
+			u.name as employee_name,
+			(SELECT payment_method FROM payments WHERE sale_id = s.id LIMIT 1) as payment_method
 		FROM sales s
 		LEFT JOIN users u ON s.employee_id = u.id
 		%s
@@ -533,15 +534,24 @@ func (r *SaleRepository) List(ctx context.Context, employeeID, shiftID *uuid.UUI
 	var sales []models.Sale
 	for rows.Next() {
 		var s models.Sale
+		var paymentMethod *string
 		err := rows.Scan(
 			&s.ID, &s.InvoiceNo, &s.Subtotal, &s.TaxAmount, &s.DiscountAmount, &s.TotalAmount,
 			&s.ItemCount, &s.PaymentStatus, &s.AmountPaid, &s.ChangeAmount,
 			&s.EmployeeID, &s.ShiftID, &s.CustomerName, &s.Status, &s.CreatedAt, &s.UpdatedAt,
 			&s.EmployeeName,
+			&paymentMethod,
 		)
 		if err != nil {
 			return nil, 0, err
 		}
+
+		if paymentMethod != nil {
+			s.Payments = []models.Payment{
+				{PaymentMethod: models.PaymentMethod(*paymentMethod)},
+			}
+		}
+
 		sales = append(sales, s)
 	}
 

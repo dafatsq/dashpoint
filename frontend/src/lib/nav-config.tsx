@@ -33,7 +33,7 @@ export const navItems: NavItem[] = [
     href: '/pos',
     label: 'Point of Sale',
     icon: <ShoppingCart className="h-5 w-5" />,
-    permission: PERMISSIONS.SALES_CREATE,
+    permission: PERMISSIONS.POS_VIEW,
     description: 'Process sales and manage cart',
     color: 'text-green-500',
   },

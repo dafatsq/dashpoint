@@ -150,7 +150,7 @@ export interface InventoryAdjustment {
 }
 
 // Shift types
-export type ShiftStatus = 'open' | 'closed';
+export type ShiftStatus = 'open' | 'closed' | 'suspended';
 
 export interface Shift {
   id: string;
@@ -165,6 +165,7 @@ export interface Shift {
   cash_difference?: string;
   // Summary
   total_sales: string;
+  total_cash_sales: string;
   total_refunds: string;
   transaction_count: number;
   refund_count: number;
@@ -173,6 +174,26 @@ export interface Shift {
   updated_at: string;
   // Joined fields
   employee_name?: string;
+}
+
+// Cash drawer operation types
+export type CashDrawerOpType = 'pay_in' | 'pay_out';
+
+export interface CashDrawerOperation {
+  id: string;
+  shift_id: string;
+  type: CashDrawerOpType;
+  amount: string;
+  reason: string;
+  performed_by: string;
+  created_at: string;
+  performed_by_name?: string;
+}
+
+export interface CashDrawerOperationsResponse {
+  operations: CashDrawerOperation[];
+  pay_in_total: string;
+  pay_out_total: string;
 }
 
 // Sale types
@@ -339,6 +360,8 @@ export interface CashReport {
   opening_cash: string;
   cash_sales: string;
   cash_refunds: string;
+  pay_in_total: string;
+  pay_out_total: string;
   expected_cash: string;
   actual_cash: string;
   difference: string;
