@@ -132,10 +132,12 @@ function getChangeDescription(log: AuditLog): string {
 
   if (log.entity_type === 'sale') {
     const invoice = newVals.invoice_no || '';
+    const itemsSummary = newVals.items_summary || '';
     const total = newVals.total;
     if (verb === 'create') {
-      return invoice
-        ? `Sale ${invoice}${total ? ` — ${formatCurrencyShort(Number(total))}` : ''}`
+      const details = itemsSummary || invoice;
+      return details
+        ? `Sale: ${details}${total ? ` — ${formatCurrencyShort(Number(total))}` : ''}`
         : 'New sale created';
     }
     if (verb === 'void') return `Voided sale ${invoice}`;

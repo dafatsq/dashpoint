@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -248,10 +249,22 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 		})
 	}
 
+	// Build items summary
+	var itemsSummary string
+	for i, item := range sale.Items {
+		if i > 0 {
+			itemsSummary += ", "
+		}
+		itemsSummary += fmt.Sprintf("%sx %s", item.Quantity.StringFixed(0), item.ProductName)
+	}
 
 	// Audit log
-	audit.LogFromFiber(c, models.AuditActionSaleCreate, models.AuditEntitySale, sale.ID.String(), "Created sale")
-
+	newVals := map[string]interface{}{
+		"invoice_no":    sale.InvoiceNo,
+		"items_summary": itemsSummary,
+		"total":         sale.TotalAmount.String(),
+	}
+	audit.LogWithValues(c, models.AuditActionSaleCreate, models.AuditEntitySale, sale.ID.String(), "Created sale", nil, newVals)
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Sale completed successfully",
 		"sale":    h.toSaleResponse(sale),
