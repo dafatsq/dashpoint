@@ -226,7 +226,7 @@ export default function ProductsPage() {
           barcode: formData.barcode || undefined,
           price: formData.price,
           cost: formData.cost || undefined,
-          tax_rate: formData.tax_rate || undefined,
+          tax_rate: formData.tax_rate === '' ? '0' : formData.tax_rate,
           category_id: formData.category_id || undefined,
           image_url: formData.image_url, // Empty string clears, undefined skips update
         };
@@ -255,7 +255,7 @@ export default function ProductsPage() {
           barcode: formData.barcode || undefined,
           price: formData.price,
           cost: formData.cost || undefined,
-          tax_rate: formData.tax_rate || undefined,
+          tax_rate: formData.tax_rate === '' ? '0' : formData.tax_rate,
           initial_quantity: formData.initial_quantity || undefined,
           low_stock_threshold: formData.low_stock_threshold || undefined,
           category_id: formData.category_id || undefined,
