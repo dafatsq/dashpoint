@@ -251,10 +251,11 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
 
     const isImageField = (key: string) => key === 'image_url';
 
-    const formatValue = (val: unknown): string => {
+    const formatValue = (key: string, val: unknown): string => {
       if (val === null || val === undefined) return '—';
       if (typeof val === 'boolean') return val ? 'Yes' : 'No';
       if (typeof val === 'object') return JSON.stringify(val);
+      if (key === 'tax_rate') return `${String(val)}%`;
       return String(val);
     };
 
@@ -289,14 +290,14 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
               </div>
             ) : oldVal !== undefined && newVal !== undefined ? (
               <>
-                <span className="text-red-500 line-through">{formatValue(oldVal)}</span>
+                <span className="text-red-500 line-through">{formatValue(key, oldVal)}</span>
                 <span className="text-muted-foreground">→</span>
-                <span className="text-green-600">{formatValue(newVal)}</span>
+                <span className="text-green-600">{formatValue(key, newVal)}</span>
               </>
             ) : newVal !== undefined ? (
-              <span className="text-foreground/60">{formatValue(newVal)}</span>
+              <span className="text-foreground/60">{formatValue(key, newVal)}</span>
             ) : (
-              <span className="text-red-500 line-through">{formatValue(oldVal)}</span>
+              <span className="text-red-500 line-through">{formatValue(key, oldVal)}</span>
             )}
           </div>
         ))}
@@ -419,45 +420,45 @@ function ShiftHistory() {
               }`}
           >
             {/* Top row: status + employee + time */}
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
                 {isOpen ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-green-600 text-white">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-green-600 text-white whitespace-nowrap">
                     <CircleDot className="h-3 w-3" />
                     Open
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-gray-600 text-white">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-gray-600 text-white whitespace-nowrap">
                     <CheckCircle2 className="h-3 w-3" />
                     Closed
                   </span>
                 )}
-                <div className="flex items-center gap-1 text-sm font-medium">
-                  <User className="h-3.5 w-3.5 text-muted-foreground" />
-                  {shift.employee_name || 'Unknown'}
+                <div className="flex items-center gap-1 text-sm font-medium flex-wrap">
+                  <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="truncate max-w-[120px] sm:max-w-[200px]">{shift.employee_name || 'Unknown'}</span>
                   {!isOpen && shift.closed_by_name && (
-                    <span className="text-muted-foreground text-xs font-normal ml-1">
+                    <span className="text-muted-foreground text-[10px] sm:text-xs font-normal">
                       (Closed by {shift.closed_by_name})
                     </span>
                   )}
                 </div>
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {formatDateTime(shift.started_at)}
               </span>
             </div>
 
             {/* Cash info row */}
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm mt-3">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className="text-muted-foreground text-xs">Open:</span>
                 <span className="font-medium">{formatCurrencyShort(openingCash)}</span>
               </div>
               {!isOpen && closingCash !== null && (
                 <>
-                  <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground text-xs">Close:</span>
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
+                    <span className="text-muted-foreground text-xs sm:ml-0">Close:</span>
                     <span className="font-medium">{formatCurrencyShort(closingCash)}</span>
                     {shift.cash_difference && (
                       <span className={`text-xs ml-1 font-medium ${parseFloat(shift.cash_difference) > 0 ? 'text-green-600' : parseFloat(shift.cash_difference) < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
@@ -468,7 +469,7 @@ function ShiftHistory() {
                 </>
               )}
               {!isOpen && shift.ended_at && (
-                <div className="ml-auto text-xs text-muted-foreground">
+                <div className="w-full sm:w-auto sm:ml-auto text-[11px] sm:text-xs text-muted-foreground mt-1 sm:mt-0">
                   Ended: {formatDateTime(shift.ended_at)}
                 </div>
               )}
