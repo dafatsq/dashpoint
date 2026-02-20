@@ -40,7 +40,7 @@ import {
   ArrowUpCircle,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { Product, CartItem, Category, Shift, PaymentMethod, CreateSaleRequest, CashDrawerOperation, CashDrawerOperationsResponse } from '@/types';
+import { Product, CartItem, Category, Shift, PaymentMethod, CreateSaleRequest, CashDrawerOperation, CashDrawerOperationsResponse, User } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
 import {
   Sheet,
@@ -97,7 +97,7 @@ interface CartViewProps {
   onClear: () => void;
   onUpdateQuantity: (id: string, delta: number) => void;
   onRemove: (id: string) => void;
-  user: any;
+  user: User | null;
   subtotal: number;
   totalTax: number;
   discount: number;
