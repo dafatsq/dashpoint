@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 import {
   DollarSign,
   ShoppingCart,
@@ -172,7 +174,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
     const fetchLogs = async () => {
       setIsLoading(true);
       try {
-        const result = await api.getDashboardChanges({ entity_type: entityType, limit: 15 });
+        const result = await api.getDashboardChanges({ entity_type: entityType, limit: 5 });
         if (result.data) {
           setLogs(result.data);
         }
@@ -356,7 +358,7 @@ function ShiftHistory() {
     try {
       const result = await api.getShifts();
       if (result.data) {
-        setShifts(result.data.slice(0, 10));
+        setShifts(result.data.slice(0, 5));
       } else if (result.error) {
         setFetchError(true);
       }
@@ -670,7 +672,7 @@ export default function DashboardPage() {
         )}
 
         {/* Shift History — dedicated section */}
-        <Card className="mb-6">
+        <Card className="mb-6 flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
@@ -680,13 +682,18 @@ export default function DashboardPage() {
               Recent and active shifts across all employees
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1">
             <ShiftHistory />
           </CardContent>
+          <div className="p-4 pt-0 mt-auto">
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/shifts">View More</Link>
+            </Button>
+          </div>
         </Card>
 
         {/* Recent Changes — audit-based tabs */}
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-2">
               <History className="h-5 w-5 text-primary" />
@@ -696,7 +703,7 @@ export default function DashboardPage() {
               Activity log across all areas of your store
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1">
             <Tabs defaultValue="product">
               <TabsList className="w-full justify-start flex overflow-x-auto lg:w-auto lg:inline-flex mb-4 no-scrollbar pb-1">
                 {CHANGE_TABS.map((tab) => (
@@ -714,6 +721,11 @@ export default function DashboardPage() {
               ))}
             </Tabs>
           </CardContent>
+          <div className="p-4 pt-0 mt-auto">
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/changes">View More</Link>
+            </Button>
+          </div>
         </Card>
       </div>
     </div>
