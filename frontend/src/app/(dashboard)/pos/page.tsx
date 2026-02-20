@@ -99,7 +99,9 @@ interface CartViewProps {
   onRemove: (id: string) => void;
   user: any;
   subtotal: number;
+  totalTax: number;
   discount: number;
+  discountAmount: number;
   setDiscount: (val: number) => void;
   total: number;
   canApplyDiscount: boolean;
@@ -114,7 +116,9 @@ function CartView({
   onRemove,
   user,
   subtotal,
+  totalTax,
   discount,
+  discountAmount,
   setDiscount,
   total,
   canApplyDiscount,
@@ -198,16 +202,38 @@ function CartView({
             <span className="text-muted-foreground">Subtotal</span>
             <span>{formatCurrency(subtotal)}</span>
           </div>
-          {canApplyDiscount && (
+          {totalTax > 0 && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Discount</span>
-              <Input
-                type="number"
-                value={discount || ''}
-                onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                className="w-28 h-7 text-right"
-                placeholder="0"
-              />
+              <span className="text-muted-foreground">Tax</span>
+              <span>{formatCurrency(totalTax)}</span>
+            </div>
+          )}
+          {canApplyDiscount && (
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Discount (%)</span>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    value={discount || ''}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setDiscount(Math.min(100, Math.max(0, val)));
+                    }}
+                    className="w-16 h-7 text-right"
+                    placeholder="0"
+                    max="100"
+                    min="0"
+                  />
+                  <span className="text-sm font-medium w-4">%</span>
+                </div>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-destructive">
+                  <span className="text-xs">Discount Amount</span>
+                  <span>-{formatCurrency(discountAmount)}</span>
+                </div>
+              )}
             </div>
           )}
           <Separator />
@@ -306,8 +332,15 @@ export default function POSPage() {
     (sum, item) => sum + getProductPrice(item.product) * item.quantity,
     0
   );
-  const discountAmount = discount;
-  const total = subtotal - discountAmount;
+
+  const totalTax = cartItems.reduce((sum, item) => {
+    const itemSubtotal = getProductPrice(item.product) * item.quantity;
+    const taxRate = item.product.tax_rate ? parseFloat(item.product.tax_rate.toString()) : 0;
+    return sum + (itemSubtotal * taxRate) / 100;
+  }, 0);
+
+  const discountAmount = (subtotal * discount) / 100;
+  const total = subtotal + totalTax - discountAmount;
   const change = parseFloat(amountPaid || '0') - total;
 
   // Fetch initial data
@@ -542,8 +575,8 @@ export default function POSPage() {
           change_given: paymentMethod === 'cash' && change > 0 ? change.toString() : undefined,
         },
       ],
-      discount_value: discountAmount > 0 ? discountAmount.toString() : undefined,
-      discount_type: discountAmount > 0 ? 'fixed' : undefined,
+      discount_value: discount > 0 ? discount.toString() : undefined,
+      discount_type: discount > 0 ? 'percentage' : undefined,
     };
 
     try {
@@ -584,7 +617,9 @@ export default function POSPage() {
     onRemove: removeFromCart,
     user,
     subtotal,
+    totalTax,
     discount,
+    discountAmount,
     setDiscount,
     total,
     canApplyDiscount,

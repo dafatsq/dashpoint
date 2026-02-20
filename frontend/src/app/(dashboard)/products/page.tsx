@@ -76,6 +76,7 @@ interface FormData {
   barcode: string;
   price: string;
   cost: string;
+  tax_rate: string;
   initial_quantity: string;
   low_stock_threshold: string;
   category_id: string;
@@ -112,6 +113,7 @@ export default function ProductsPage() {
     barcode: '',
     price: '',
     cost: '',
+    tax_rate: '0',
     initial_quantity: '',
     low_stock_threshold: '5',
     category_id: '',
@@ -161,6 +163,7 @@ export default function ProductsPage() {
       barcode: '',
       price: '',
       cost: '',
+      tax_rate: '0',
       initial_quantity: '',
       low_stock_threshold: '5',
       category_id: '',
@@ -185,7 +188,8 @@ export default function ProductsPage() {
       sku: product.sku || '',
       barcode: product.barcode || '',
       price: product.price,
-      cost: product.cost,
+      cost: product.cost || '',
+      tax_rate: product.tax_rate?.toString() || '0',
       initial_quantity: '',  // Not editable on update
       low_stock_threshold: product.inventory?.low_stock_threshold || '5',
       category_id: product.category_id || '',
@@ -222,6 +226,7 @@ export default function ProductsPage() {
           barcode: formData.barcode || undefined,
           price: formData.price,
           cost: formData.cost || undefined,
+          tax_rate: formData.tax_rate || undefined,
           category_id: formData.category_id || undefined,
           image_url: formData.image_url, // Empty string clears, undefined skips update
         };
@@ -250,6 +255,7 @@ export default function ProductsPage() {
           barcode: formData.barcode || undefined,
           price: formData.price,
           cost: formData.cost || undefined,
+          tax_rate: formData.tax_rate || undefined,
           initial_quantity: formData.initial_quantity || undefined,
           low_stock_threshold: formData.low_stock_threshold || undefined,
           category_id: formData.category_id || undefined,
@@ -494,6 +500,10 @@ export default function ProductsPage() {
                                 {quantity}
                               </span>
                             </div>
+                            <div>
+                              <span className="text-muted-foreground">Tax: </span>
+                              <span className="font-medium">{product.tax_rate ? `${parseFloat(product.tax_rate)}%` : '0%'}</span>
+                            </div>
                           </div>
 
                           {(canEdit || canDelete) && (
@@ -582,6 +592,7 @@ export default function ProductsPage() {
                         <th className="pb-3 font-medium">SKU</th>
                         <th className="pb-3 font-medium">Category</th>
                         <th className="pb-3 font-medium text-right">Price</th>
+                        <th className="pb-3 font-medium text-right">Tax Rate</th>
                         <th className="pb-3 font-medium text-right">Stock</th>
                         {viewMode !== 'active' && (
                           <th className="pb-3 font-medium text-center">Status</th>
@@ -638,6 +649,9 @@ export default function ProductsPage() {
                             </td>
                             <td className="py-3 text-right font-medium">
                               {formatCurrency(getProductPrice(product))}
+                            </td>
+                            <td className="py-3 text-right font-medium text-muted-foreground">
+                              {product.tax_rate ? `${parseFloat(product.tax_rate)}%` : '0%'}
                             </td>
                             <td className="py-3 text-right">
                               <span className={isLowStock ? 'text-destructive font-medium' : ''}>
@@ -839,6 +853,17 @@ export default function ProductsPage() {
                     setFormData({ ...formData, cost: e.target.value })
                   }
                   placeholder="8000"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="tax_rate">Tax Rate (%)</Label>
+                <Input
+                  id="tax_rate"
+                  type="number"
+                  step="0.01"
+                  value={formData.tax_rate}
+                  onChange={(e) => setFormData({ ...formData, tax_rate: e.target.value })}
+                  placeholder="11"
                 />
               </div>
             </div>

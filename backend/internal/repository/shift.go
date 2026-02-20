@@ -65,9 +65,31 @@ func (r *ShiftRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sh
 				WHERE s2.shift_id = s.id AND p.payment_method = 'cash' AND p.status = 'completed'
 			) as total_cash_sales,
 			s.transaction_count, s.refund_count, s.status, s.notes, s.created_at, s.updated_at,
-			u.name as employee_name
+			u.name as employee_name,
+			s.closed_by, cu.name as closed_by_name,
+			(
+				SELECT COALESCE(
+					json_agg(
+						json_build_object(
+							'id', c.id,
+							'shift_id', c.shift_id,
+							'type', c.type,
+							'amount', c.amount,
+							'reason', c.reason,
+							'performed_by', c.performed_by,
+							'created_at', c.created_at,
+							'performed_by_name', pu.name
+						) ORDER BY c.created_at ASC
+					),
+					'[]'::json
+				)
+				FROM cash_drawer_operations c
+				LEFT JOIN users pu ON c.performed_by = pu.id
+				WHERE c.shift_id = s.id
+			) as operations
 		FROM shifts s
 		LEFT JOIN users u ON s.employee_id = u.id
+		LEFT JOIN users cu ON s.closed_by = cu.id
 		WHERE s.id = $1
 	`
 
@@ -91,6 +113,9 @@ func (r *ShiftRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sh
 		&shift.CreatedAt,
 		&shift.UpdatedAt,
 		&shift.EmployeeName,
+		&shift.ClosedBy,
+		&shift.ClosedByName,
+		&shift.Operations,
 	)
 
 	if err != nil {
@@ -118,9 +143,31 @@ func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID
 				WHERE s2.shift_id = s.id AND p.payment_method = 'cash' AND p.status = 'completed'
 			) as total_cash_sales,
 			s.transaction_count, s.refund_count, s.status, s.notes, s.created_at, s.updated_at,
-			u.name as employee_name
+			u.name as employee_name,
+			s.closed_by, cu.name as closed_by_name,
+			(
+				SELECT COALESCE(
+					json_agg(
+						json_build_object(
+							'id', c.id,
+							'shift_id', c.shift_id,
+							'type', c.type,
+							'amount', c.amount,
+							'reason', c.reason,
+							'performed_by', c.performed_by,
+							'created_at', c.created_at,
+							'performed_by_name', pu.name
+						) ORDER BY c.created_at ASC
+					),
+					'[]'::json
+				)
+				FROM cash_drawer_operations c
+				LEFT JOIN users pu ON c.performed_by = pu.id
+				WHERE c.shift_id = s.id
+			) as operations
 		FROM shifts s
 		LEFT JOIN users u ON s.employee_id = u.id
+		LEFT JOIN users cu ON s.closed_by = cu.id
 		WHERE s.employee_id = $1 AND s.status = 'open'
 		ORDER BY s.started_at DESC
 		LIMIT 1
@@ -146,6 +193,9 @@ func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID
 		&shift.CreatedAt,
 		&shift.UpdatedAt,
 		&shift.EmployeeName,
+		&shift.ClosedBy,
+		&shift.ClosedByName,
+		&shift.Operations,
 	)
 
 	if err == nil {
@@ -168,9 +218,31 @@ func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID
 				WHERE s2.shift_id = s.id AND p.payment_method = 'cash' AND p.status = 'completed'
 			) as total_cash_sales,
 			s.transaction_count, s.refund_count, s.status, s.notes, s.created_at, s.updated_at,
-			u.name as employee_name
+			u.name as employee_name,
+			s.closed_by, cu.name as closed_by_name,
+			(
+				SELECT COALESCE(
+					json_agg(
+						json_build_object(
+							'id', c.id,
+							'shift_id', c.shift_id,
+							'type', c.type,
+							'amount', c.amount,
+							'reason', c.reason,
+							'performed_by', c.performed_by,
+							'created_at', c.created_at,
+							'performed_by_name', pu.name
+						) ORDER BY c.created_at ASC
+					),
+					'[]'::json
+				)
+				FROM cash_drawer_operations c
+				LEFT JOIN users pu ON c.performed_by = pu.id
+				WHERE c.shift_id = s.id
+			) as operations
 		FROM shifts s
 		LEFT JOIN users u ON s.employee_id = u.id
+		LEFT JOIN users cu ON s.closed_by = cu.id
 		WHERE s.status = 'open'
 		ORDER BY s.started_at DESC
 		LIMIT 1
@@ -195,6 +267,9 @@ func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID
 		&shift.CreatedAt,
 		&shift.UpdatedAt,
 		&shift.EmployeeName,
+		&shift.ClosedBy,
+		&shift.ClosedByName,
+		&shift.Operations,
 	)
 
 	if err != nil {
@@ -208,7 +283,7 @@ func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID
 }
 
 // CloseShift closes a shift
-func (r *ShiftRepository) CloseShift(ctx context.Context, shiftID uuid.UUID, closingCash decimal.Decimal, notes *string) error {
+func (r *ShiftRepository) CloseShift(ctx context.Context, shiftID uuid.UUID, closingCash decimal.Decimal, notes *string, closedBy uuid.UUID) error {
 	now := time.Now()
 
 	// expected_cash = opening + sales - refunds + pay_ins - pay_outs
@@ -257,11 +332,12 @@ func (r *ShiftRepository) CloseShift(ctx context.Context, shiftID uuid.UUID, clo
 				- COALESCE((SELECT SUM(amount) FROM cash_drawer_operations WHERE shift_id = $5 AND type = 'pay_out'), 0)),
 			status = 'closed',
 			notes = COALESCE($3, notes),
-			updated_at = $4
+			updated_at = $4,
+			closed_by = $6
 		WHERE id = $5 AND status = 'open'
 	`
 
-	result, err := r.pool.Exec(ctx, query, now, closingCash, notes, now, shiftID)
+	result, err := r.pool.Exec(ctx, query, now, closingCash, notes, now, shiftID, closedBy)
 	if err != nil {
 		return err
 	}
@@ -317,9 +393,31 @@ func (r *ShiftRepository) List(ctx context.Context, employeeID *uuid.UUID, limit
 			s.id, s.employee_id, s.started_at, s.ended_at, s.opening_cash, s.closing_cash,
 			s.expected_cash, s.cash_difference, s.total_sales, s.total_refunds,
 			s.transaction_count, s.refund_count, s.status, s.notes, s.created_at, s.updated_at,
-			u.name as employee_name
+			u.name as employee_name,
+			s.closed_by, cu.name as closed_by_name,
+			(
+				SELECT COALESCE(
+					json_agg(
+						json_build_object(
+							'id', c.id,
+							'shift_id', c.shift_id,
+							'type', c.type,
+							'amount', c.amount,
+							'reason', c.reason,
+							'performed_by', c.performed_by,
+							'created_at', c.created_at,
+							'performed_by_name', pu.name
+						) ORDER BY c.created_at ASC
+					),
+					'[]'::json
+				)
+				FROM cash_drawer_operations c
+				LEFT JOIN users pu ON c.performed_by = pu.id
+				WHERE c.shift_id = s.id
+			) as operations
 		FROM shifts s
 		LEFT JOIN users u ON s.employee_id = u.id
+		LEFT JOIN users cu ON s.closed_by = cu.id
 		WHERE ($1::uuid IS NULL OR s.employee_id = $1)
 		ORDER BY s.started_at DESC
 		LIMIT $2 OFFSET $3
@@ -352,6 +450,9 @@ func (r *ShiftRepository) List(ctx context.Context, employeeID *uuid.UUID, limit
 			&s.CreatedAt,
 			&s.UpdatedAt,
 			&s.EmployeeName,
+			&s.ClosedBy,
+			&s.ClosedByName,
+			&s.Operations,
 		)
 		if err != nil {
 			return nil, 0, err

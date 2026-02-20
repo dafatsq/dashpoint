@@ -107,6 +107,7 @@ export interface CreateProductRequest {
   barcode?: string;
   price: string;
   cost?: string;
+  tax_rate?: string;
   initial_quantity?: string;
   low_stock_threshold?: string;
   category_id?: string;
@@ -120,6 +121,7 @@ export interface UpdateProductRequest {
   barcode?: string;
   price?: string;
   cost?: string;
+  tax_rate?: string;
   category_id?: string;
   is_active?: boolean;
   image_url?: string;
@@ -174,6 +176,9 @@ export interface Shift {
   updated_at: string;
   // Joined fields
   employee_name?: string;
+  closed_by?: string;
+  closed_by_name?: string;
+  operations?: CashDrawerOperation[];
 }
 
 // Cash drawer operation types

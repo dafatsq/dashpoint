@@ -43,7 +43,10 @@ type Shift struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// Joined fields
-	EmployeeName *string `json:"employee_name,omitempty"`
+	EmployeeName *string               `json:"employee_name,omitempty"`
+	ClosedBy     *uuid.UUID            `json:"closed_by,omitempty"`
+	ClosedByName *string               `json:"closed_by_name,omitempty"`
+	Operations   []CashDrawerOperation `json:"operations,omitempty"`
 }
 
 // SaleStatus represents the status of a sale

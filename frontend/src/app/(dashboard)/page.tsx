@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,6 +40,9 @@ const ACTION_LABELS: Record<string, string> = {
   'delete': 'Deleted',
   'void': 'Voided',
   'adjust': 'Adjusted',
+  'count': 'Counted',
+  'start': 'Started',
+  'close': 'Closed',
 };
 
 const getActionVerb = (action: string): string => {
@@ -63,6 +66,8 @@ const getActionBadgeColor = (action: string) => {
       return 'bg-orange-600 text-white';
     case 'adjust':
       return 'bg-purple-600 text-white';
+    case 'count':
+      return 'bg-blue-600 text-white';
     default:
       return 'bg-gray-600 text-white';
   }
@@ -108,10 +113,18 @@ function getChangeDescription(log: AuditLog): string {
   }
 
   if (log.entity_type === 'inventory') {
-    const product = newVals.product_name || oldVals.product_name || newVals.affected_product || oldVals.affected_product || '';
+    const productName = newVals.product_name || oldVals.product_name || newVals.affected_product || oldVals.affected_product || '';
+    const adjType = newVals.adjustment_type as string | undefined;
     const qty = newVals.quantity;
-    if (product && qty !== undefined) return `Adjusted ${product}: ${qty}`;
-    if (product) return `Stock change: ${product}`;
+    const newQty = newVals.new_quantity;
+    const adjTypeLabel = adjType
+      ? adjType.charAt(0).toUpperCase() + adjType.slice(1)
+      : 'Adjusted';
+    if (productName && qty !== undefined && newQty !== undefined) {
+      return `${adjTypeLabel}: ${productName} → ${newQty} (Δ${qty})`;
+    }
+    if (productName && qty !== undefined) return `${adjTypeLabel} ${productName}: ${qty}`;
+    if (productName) return `Stock change: ${productName}`;
     return 'Stock adjustment';
   }
 
@@ -190,7 +203,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
   }
 
   // Fields to skip (already shown in the description or not useful)
-  const SKIP_FIELDS = new Set(['affected_product', 'affected_category', 'affected_expense', 'affected_user']);
+  const SKIP_FIELDS = new Set(['affected_product', 'affected_category', 'affected_expense', 'affected_user', 'product_name']);
 
   const renderFieldChanges = (log: AuditLog) => {
     const oldVals = log.old_values || {};
@@ -211,7 +224,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
           changes.push({ key, oldVal, newVal });
         }
-      } else if (verb === 'create' || verb === 'start') {
+      } else if (verb === 'create' || verb === 'start' || verb === 'adjust' || verb === 'count') {
         // Show new values
         if (newVal !== undefined && newVal !== null && newVal !== '') {
           changes.push({ key, oldVal: undefined, newVal });
@@ -229,6 +242,10 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
     const formatFieldName = (key: string): string => {
       if (key === 'image_url') return 'Photo';
       if (key === 'is_active') return 'Active';
+      if (key === 'adjustment_type') return 'Type';
+      if (key === 'new_quantity') return 'New Stock';
+      if (key === 'quantity') return 'Change';
+      if (key === 'reason') return 'Notes';
       return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     };
 
@@ -330,28 +347,49 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
 function ShiftHistory() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
+
+  const fetchShifts = useCallback(async () => {
+    setIsLoading(true);
+    setFetchError(false);
+    try {
+      const result = await api.getShifts();
+      if (result.data) {
+        setShifts(result.data.slice(0, 10));
+      } else if (result.error) {
+        setFetchError(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch shifts:', error);
+      setFetchError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchShifts = async () => {
-      setIsLoading(true);
-      try {
-        const result = await api.getShifts();
-        if (result.data) {
-          setShifts(result.data.slice(0, 10)); // Show last 10 shifts
-        }
-      } catch (error) {
-        console.error('Failed to fetch shifts:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchShifts();
-  }, []);
+  }, [fetchShifts]);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+        <Clock className="h-10 w-10 mb-2" />
+        <p className="text-sm">Could not load shifts</p>
+        <button
+          onClick={fetchShifts}
+          className="text-xs text-primary hover:underline"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -397,6 +435,11 @@ function ShiftHistory() {
                 <div className="flex items-center gap-1 text-sm font-medium">
                   <User className="h-3.5 w-3.5 text-muted-foreground" />
                   {shift.employee_name || 'Unknown'}
+                  {!isOpen && shift.closed_by_name && (
+                    <span className="text-muted-foreground text-xs font-normal ml-1">
+                      (Closed by {shift.closed_by_name})
+                    </span>
+                  )}
                 </div>
               </div>
               <span className="text-xs text-muted-foreground">
@@ -416,6 +459,11 @@ function ShiftHistory() {
                   <div className="flex items-center gap-1.5">
                     <span className="text-muted-foreground text-xs">Close:</span>
                     <span className="font-medium">{formatCurrencyShort(closingCash)}</span>
+                    {shift.cash_difference && (
+                      <span className={`text-xs ml-1 font-medium ${parseFloat(shift.cash_difference) > 0 ? 'text-green-600' : parseFloat(shift.cash_difference) < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                        ({parseFloat(shift.cash_difference) > 0 ? '+' : ''}{formatCurrencyShort(parseFloat(shift.cash_difference))})
+                      </span>
+                    )}
                   </div>
                 </>
               )}
@@ -425,6 +473,33 @@ function ShiftHistory() {
                 </div>
               )}
             </div>
+
+            {/* Operations List */}
+            {shift.operations && shift.operations.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-dashed space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Cash Drawer Log</p>
+                {shift.operations.map((op) => (
+                  <div key={op.id} className="flex justify-between items-center bg-muted/30 p-2 rounded-md">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-bold uppercase ${op.type === 'pay_in' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'}`}>
+                          {op.type === 'pay_in' ? '+ Pay In' : '- Pay Out'}
+                        </span>
+                        <span className="text-xs font-medium text-foreground">{op.reason || 'No reason specified'}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">
+                        {op.performed_by_name || 'System'} • {formatDateTime(op.created_at)}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className={`text-sm font-semibold tabular-nums tracking-tight ${op.type === 'pay_in' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                        {formatCurrencyShort(parseFloat(op.amount))}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}

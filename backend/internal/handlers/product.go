@@ -880,6 +880,30 @@ func (h *ProductHandler) AdjustStock(c *fiber.Ctx) error {
 		})
 	}
 
+	// Audit log
+	product, _ := h.productRepo.GetByID(c.Context(), productID)
+	productName := ""
+	if product != nil {
+		productName = product.Name
+	}
+	auditAction := models.AuditActionStockAdjust
+	if adjType == models.AdjustmentCount {
+		auditAction = models.AuditActionStockCount
+	}
+	auditValues := map[string]interface{}{
+		"product_name":    productName,
+		"adjustment_type": string(adjType),
+		"quantity":        quantity.String(),
+	}
+	if req.Reason != "" {
+		auditValues["reason"] = req.Reason
+	}
+	if adjustment != nil {
+		auditValues["new_quantity"] = adjustment.QuantityAfter.String()
+	}
+	audit.LogWithValues(c, auditAction, models.AuditEntityInventory, productID.String(),
+		"Stock adjusted: "+productName, nil, auditValues)
+
 	return c.JSON(fiber.Map{
 		"message":    "Stock adjusted successfully",
 		"adjustment": adjustment,

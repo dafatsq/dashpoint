@@ -144,7 +144,7 @@ func (h *ShiftHandler) CloseShift(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := h.shiftRepo.CloseShift(c.Context(), shift.ID, closingCash, req.Notes); err != nil {
+	if err := h.shiftRepo.CloseShift(c.Context(), shift.ID, closingCash, req.Notes, userID); err != nil {
 		log.Error().Err(err).Msg("Failed to close shift")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"code":    "INTERNAL_ERROR",
@@ -250,12 +250,8 @@ func (h *ShiftHandler) ListShifts(c *fiber.Ctx) error {
 		}
 	}
 
-	// For non-owner/manager, only show their own shifts
-	roleName := middleware.GetRoleName(c)
-	if roleName == "cashier" {
-		userID := middleware.GetUserID(c)
-		employeeID = &userID
-	}
+	// In a shared cash drawer system, all roles can see the shift history
+	// so they know if a shift is already open.
 
 	shifts, total, err := h.shiftRepo.List(c.Context(), employeeID, limit, offset)
 	if err != nil {
