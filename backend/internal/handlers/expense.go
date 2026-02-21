@@ -359,6 +359,16 @@ func (h *ExpenseHandler) Create(c *fiber.Ctx) error {
 	}
 	if created.CategoryID != nil {
 		newValues["category_id"] = created.CategoryID.String()
+		// Also find and log category name
+		categories, err := h.repo.ListCategories(c.Context(), false)
+		if err == nil {
+			for _, cat := range categories {
+				if cat.ID == *created.CategoryID {
+					newValues["category"] = cat.Name
+					break
+				}
+			}
+		}
 	}
 	if created.ProductID != nil {
 		newValues["product_id"] = created.ProductID.String()

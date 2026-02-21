@@ -109,7 +109,18 @@ export function DateRangePicker({
           startMonth={new Date(2020, 0)}
           endMonth={new Date(2030, 11)}
         />
-        <div className="border-t p-3 flex justify-end gap-2">
+        <div className="border-t p-3 flex justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const today = new Date()
+              handleSelect({ from: today, to: today })
+              setMonth(today)
+            }}
+          >
+            Today
+          </Button>
           <Button
             variant="outline"
             size="sm"
