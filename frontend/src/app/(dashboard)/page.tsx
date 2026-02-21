@@ -108,10 +108,10 @@ function getChangeDescription(log: AuditLog): string {
   const verb = getActionVerb(log.action);
 
   if (log.entity_type === 'product') {
-    const name = newVals.name || oldVals.name || '';
-    if (verb === 'create') return `Added product: ${name}`;
-    if (verb === 'update') return `Updated product: ${name}`;
-    if (verb === 'delete') return `Deleted product: ${name}`;
+    const name = String(newVals.name || oldVals.name || '');
+    if (verb === 'create') return name || 'New product';
+    if (verb === 'update') return name || 'Updated product';
+    if (verb === 'delete') return name || 'Deleted product';
   }
 
   if (log.entity_type === 'inventory') {
@@ -131,25 +131,20 @@ function getChangeDescription(log: AuditLog): string {
   }
 
   if (log.entity_type === 'sale') {
-    const invoice = newVals.invoice_no || '';
-    const itemsSummary = newVals.items_summary || '';
-    const total = newVals.total;
+    const invoice = String(newVals.invoice_no || '');
     if (verb === 'create') {
-      const details = itemsSummary || invoice;
-      return details
-        ? `Sale: ${details}${total ? ` — ${formatCurrencyShort(Number(total))}` : ''}`
-        : 'New sale created';
+      return invoice || 'New sale created';
     }
-    if (verb === 'void') return `Voided sale ${invoice}`;
-    if (verb === 'delete') return `Deleted sale ${invoice}`;
+    if (verb === 'void') return invoice || 'Voided sale';
+    if (verb === 'delete') return invoice || 'Deleted sale';
   }
 
   if (log.entity_type === 'expense') {
-    const desc = newVals.description || newVals.affected_expense || oldVals.affected_expense || '';
+    const desc = String(newVals.description || newVals.affected_expense || oldVals.affected_expense || '');
     const amount = newVals.amount;
-    if (verb === 'create') return `New expense: ${desc}${amount ? ` — ${formatCurrencyShort(Number(amount))}` : ''}`;
-    if (verb === 'update') return `Updated expense: ${desc}`;
-    if (verb === 'delete') return `Deleted expense: ${desc}`;
+    if (verb === 'create') return `${desc}${amount ? ` — ${formatCurrencyShort(Number(amount))}` : ''}`;
+    if (verb === 'update') return desc || 'Updated expense';
+    if (verb === 'delete') return desc || 'Deleted expense';
   }
 
   return `${ACTION_LABELS[verb] || verb} ${log.entity_type}`;
@@ -207,7 +202,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
   }
 
   // Fields to skip (already shown in the description or not useful)
-  const SKIP_FIELDS = new Set(['affected_product', 'affected_category', 'affected_expense', 'affected_user', 'product_name']);
+  const SKIP_FIELDS = new Set(['affected_product', 'affected_category', 'affected_expense', 'affected_user', 'product_name', 'invoice_no', 'category_id', 'product_id']);
 
   const renderFieldChanges = (log: AuditLog) => {
     const oldVals = log.old_values || {};
@@ -260,6 +255,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
       if (typeof val === 'boolean') return val ? 'Yes' : 'No';
       if (typeof val === 'object') return JSON.stringify(val);
       if (key === 'tax_rate') return `${String(val)}%`;
+      if (key === 'total' || key === 'amount') return formatCurrencyShort(Number(val));
       return String(val);
     };
 
