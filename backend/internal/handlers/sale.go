@@ -455,7 +455,11 @@ func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
 	sale, _ := h.saleRepo.GetByID(c.Context(), id)
 
 	// Audit log
-	audit.LogFromFiber(c, models.AuditActionSaleVoid, models.AuditEntitySale, id.String(), "Voided sale: "+req.Reason)
+	newVals := map[string]interface{}{
+		"invoice_no": sale.InvoiceNo,
+		"reason":     req.Reason,
+	}
+	audit.LogWithValues(c, models.AuditActionSaleVoid, models.AuditEntitySale, id.String(), "Voided sale: "+req.Reason, nil, newVals)
 
 	return c.JSON(fiber.Map{
 		"message": "Sale voided successfully",

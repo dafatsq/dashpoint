@@ -223,7 +223,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
           changes.push({ key, oldVal, newVal });
         }
-      } else if (verb === 'create' || verb === 'start' || verb === 'adjust' || verb === 'count') {
+      } else if (verb === 'create' || verb === 'start' || verb === 'adjust' || verb === 'count' || verb === 'void') {
         // Show new values
         if (newVal !== undefined && newVal !== null && newVal !== '') {
           changes.push({ key, oldVal: undefined, newVal });
@@ -244,7 +244,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
       if (key === 'adjustment_type') return 'Type';
       if (key === 'new_quantity') return 'New Stock';
       if (key === 'quantity') return 'Change';
-      if (key === 'reason') return 'Notes';
+      if (key === 'reason') return verb === 'void' ? 'Reason' : 'Notes';
       return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     };
 
@@ -309,32 +309,37 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
   };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
       {logs.map((log) => (
         <div
           key={log.id}
-          className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+          className="rounded-xl border p-4 bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow"
         >
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide mt-0.5 shrink-0 ${getActionBadgeColor(
-              log.action
-            )}`}
-          >
-            {ACTION_LABELS[getActionVerb(log.action)] || getActionVerb(log.action)}
-          </span>
-
-          <div className="flex-1 min-w-0">
-            <p className="text-sm leading-snug">{getChangeDescription(log)}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <User className="h-3 w-3" />
-                <span>{log.user_name || 'System'}</span>
-              </div>
-              <span className="text-xs text-muted-foreground">·</span>
-              <span className="text-xs text-muted-foreground">
-                {formatDate(log.created_at)}
+          {/* Top row: status + employee + time */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap ${getActionBadgeColor(
+                  log.action
+                )}`}
+              >
+                {ACTION_LABELS[getActionVerb(log.action)] || getActionVerb(log.action)}
               </span>
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="truncate max-w-[150px] sm:max-w-[200px]">{log.user_name || 'System'}</span>
+              </div>
             </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {formatDate(log.created_at)}
+            </span>
+          </div>
+
+          {/* Description and Details */}
+          <div>
+            <p className="text-base font-medium leading-snug mb-3">
+              {getChangeDescription(log)}
+            </p>
             {renderFieldChanges(log)}
           </div>
         </div>
@@ -414,9 +419,9 @@ function ShiftHistory() {
         return (
           <div
             key={shift.id}
-            className={`rounded-lg border p-4 transition-colors ${isOpen
-              ? 'border-green-500/50 bg-green-500/5'
-              : 'hover:bg-muted/50'
+            className={`rounded-xl border p-4 shadow-sm transition-shadow hover:shadow-md ${isOpen
+              ? 'border-green-500/50 bg-green-50/50 dark:bg-green-500/10'
+              : 'bg-card text-card-foreground'
               }`}
           >
             {/* Top row: status + employee + time */}
@@ -670,8 +675,8 @@ export default function DashboardPage() {
         )}
 
         {/* Shift History — dedicated section */}
-        <Card className="mb-6 flex flex-col">
-          <CardHeader>
+        <Card className="mb-6 flex flex-col border-0 shadow-none bg-transparent md:border md:shadow md:bg-card">
+          <CardHeader className="px-0 pt-0 pb-4 md:p-6">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
               <CardTitle>Shift History</CardTitle>
@@ -680,19 +685,19 @@ export default function DashboardPage() {
               Recent and active shifts across all employees
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex-1">
+          <CardContent className="flex-1 px-0 pb-4 md:px-6 md:pb-6 md:pt-0">
             <ShiftHistory />
           </CardContent>
-          <div className="p-4 pt-0 mt-auto">
-            <Button variant="outline" className="w-full" asChild>
+          <div className="mt-auto px-0 pb-0 md:p-4 md:pt-0">
+            <Button variant="outline" className="w-full bg-background md:bg-transparent" asChild>
               <Link href="/shifts">View More</Link>
             </Button>
           </div>
         </Card>
 
         {/* Recent Changes — audit-based tabs */}
-        <Card className="flex flex-col">
-          <CardHeader>
+        <Card className="flex flex-col border-0 shadow-none bg-transparent md:border md:shadow md:bg-card">
+          <CardHeader className="px-0 pt-0 pb-4 md:p-6">
             <div className="flex items-center gap-2">
               <History className="h-5 w-5 text-primary" />
               <CardTitle>Recent Changes</CardTitle>
@@ -701,7 +706,7 @@ export default function DashboardPage() {
               Activity log across all areas of your store
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex-1">
+          <CardContent className="flex-1 px-0 pb-4 md:px-6 md:pb-6 md:pt-0">
             <Tabs defaultValue="product">
               <TabsList className="w-full justify-start flex overflow-x-auto lg:w-auto lg:inline-flex mb-4 no-scrollbar pb-1">
                 {CHANGE_TABS.map((tab) => (
@@ -719,8 +724,8 @@ export default function DashboardPage() {
               ))}
             </Tabs>
           </CardContent>
-          <div className="p-4 pt-0 mt-auto">
-            <Button variant="outline" className="w-full" asChild>
+          <div className="mt-auto px-0 pb-0 md:p-4 md:pt-0">
+            <Button variant="outline" className="w-full bg-background md:bg-transparent" asChild>
               <Link href="/changes">View More</Link>
             </Button>
           </div>
