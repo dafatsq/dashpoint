@@ -379,11 +379,17 @@ func (r *ShiftRepository) UpdateSalesTotals(ctx context.Context, shiftID uuid.UU
 }
 
 // List retrieves shifts with pagination
-func (r *ShiftRepository) List(ctx context.Context, employeeID *uuid.UUID, limit, offset int) ([]models.Shift, int, error) {
-	countQuery := `SELECT COUNT(*) FROM shifts WHERE ($1::uuid IS NULL OR employee_id = $1)`
+func (r *ShiftRepository) List(ctx context.Context, employeeID *uuid.UUID, startDate, endDate *time.Time, limit, offset int) ([]models.Shift, int, error) {
+	countQuery := `
+		SELECT COUNT(*) 
+		FROM shifts 
+		WHERE ($1::uuid IS NULL OR employee_id = $1)
+		AND ($2::timestamp IS NULL OR started_at >= $2)
+		AND ($3::timestamp IS NULL OR started_at <= $3)
+	`
 
 	var total int
-	err := r.pool.QueryRow(ctx, countQuery, employeeID).Scan(&total)
+	err := r.pool.QueryRow(ctx, countQuery, employeeID, startDate, endDate).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -419,11 +425,13 @@ func (r *ShiftRepository) List(ctx context.Context, employeeID *uuid.UUID, limit
 		LEFT JOIN users u ON s.employee_id = u.id
 		LEFT JOIN users cu ON s.closed_by = cu.id
 		WHERE ($1::uuid IS NULL OR s.employee_id = $1)
+		AND ($2::timestamp IS NULL OR s.started_at >= $2)
+		AND ($3::timestamp IS NULL OR s.started_at <= $3)
 		ORDER BY s.started_at DESC
-		LIMIT $2 OFFSET $3
+		LIMIT $4 OFFSET $5
 	`
 
-	rows, err := r.pool.Query(ctx, query, employeeID, limit, offset)
+	rows, err := r.pool.Query(ctx, query, employeeID, startDate, endDate, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}

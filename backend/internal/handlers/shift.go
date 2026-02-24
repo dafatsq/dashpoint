@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -243,17 +244,37 @@ func (h *ShiftHandler) ListShifts(c *fiber.Ctx) error {
 	}
 
 	var employeeID *uuid.UUID
-	if empIDStr := c.Query("employee_id"); empIDStr != "" {
+	empIDStr := c.Query("employee_id")
+	if empIDStr == "" {
+		empIDStr = c.Query("user_id") // Frontend uses user_id
+	}
+	if empIDStr != "" {
 		id, err := uuid.Parse(empIDStr)
 		if err == nil {
 			employeeID = &id
 		}
 	}
 
+	var startDate, endDate *time.Time
+	if startStr := c.Query("from"); startStr != "" {
+		t, err := time.Parse("2006-01-02", startStr)
+		if err == nil {
+			startDate = &t
+		}
+	}
+
+	if endStr := c.Query("to"); endStr != "" {
+		t, err := time.Parse("2006-01-02", endStr)
+		if err == nil {
+			endOfDay := t.Add(24*time.Hour - time.Second)
+			endDate = &endOfDay
+		}
+	}
+
 	// In a shared cash drawer system, all roles can see the shift history
 	// so they know if a shift is already open.
 
-	shifts, total, err := h.shiftRepo.List(c.Context(), employeeID, limit, offset)
+	shifts, total, err := h.shiftRepo.List(c.Context(), employeeID, startDate, endDate, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list shifts")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
