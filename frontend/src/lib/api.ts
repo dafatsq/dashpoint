@@ -12,6 +12,7 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  total?: number;
 }
 
 // Response wrapper types matching backend
@@ -44,6 +45,7 @@ interface SalesResponse {
 
 interface ShiftsResponse {
   shifts: import('@/types').Shift[];
+  total: number;
 }
 
 interface TopSellersResponse {
@@ -449,15 +451,17 @@ class ApiClient {
     return { data: result.data?.shift };
   }
 
-  async getShifts(params?: { user_id?: string; from?: string; to?: string }): Promise<ApiResponse<import('@/types').Shift[]>> {
+  async getShifts(params?: { user_id?: string; from?: string; to?: string; limit?: number; offset?: number }): Promise<ApiResponse<import('@/types').Shift[]>> {
     const searchParams = new URLSearchParams();
     if (params?.user_id) searchParams.set('user_id', params.user_id);
     if (params?.from) searchParams.set('from', params.from);
     if (params?.to) searchParams.set('to', params.to);
+    if (params?.limit !== undefined) searchParams.set('limit', String(params.limit));
+    if (params?.offset !== undefined) searchParams.set('offset', String(params.offset));
     const query = searchParams.toString();
     const result = await this.request<ShiftsResponse>(`/shifts${query ? `?${query}` : ''}`);
     if (result.error) return { error: result.error };
-    return { data: result.data?.shifts || [] };
+    return { data: result.data?.shifts || [], total: result.data?.total || 0 };
   }
 
   async payIn(amount: string, reason: string): Promise<ApiResponse<import('@/types').CashDrawerOperation>> {
@@ -673,14 +677,22 @@ class ApiClient {
   async getDashboardChanges(params?: {
     entity_type?: string;
     limit?: number;
+    offset?: number;
+    user_id?: string;
+    from?: string;
+    to?: string;
   }): Promise<ApiResponse<import('@/types').AuditLog[]>> {
     const searchParams = new URLSearchParams();
     if (params?.entity_type) searchParams.set('entity_type', params.entity_type);
-    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.limit !== undefined) searchParams.set('limit', String(params.limit));
+    if (params?.offset !== undefined) searchParams.set('offset', String(params.offset));
+    if (params?.user_id) searchParams.set('user_id', params.user_id);
+    if (params?.from) searchParams.set('start_date', params.from);
+    if (params?.to) searchParams.set('end_date', params.to);
     const query = searchParams.toString();
     const result = await this.request<AuditLogsResponse>(`/dashboard/changes${query ? `?${query}` : ''}`);
     if (result.error) return { error: result.error };
-    return { data: result.data?.logs || [] };
+    return { data: result.data?.logs || [], total: result.data?.total || 0 };
   }
 
   // Expense endpoints
