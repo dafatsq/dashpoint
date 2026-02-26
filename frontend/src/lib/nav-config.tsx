@@ -7,6 +7,8 @@ import {
   BarChart3,
   Users,
   ScrollText,
+  Clock,
+  History,
   Settings,
   Wallet,
 } from 'lucide-react';
@@ -36,6 +38,21 @@ export const navItems: NavItem[] = [
     permission: PERMISSIONS.POS_VIEW,
     description: 'Process sales and manage cart',
     color: 'text-green-500',
+  },
+  {
+    href: '/shifts',
+    label: 'Shifts',
+    icon: <Clock className="h-5 w-5" />,
+    permission: PERMISSIONS.POS_VIEW,
+    description: 'View register shifts and cash drawer',
+    color: 'text-amber-500',
+  },
+  {
+    href: '/changes',
+    label: 'Recent Changes',
+    icon: <History className="h-5 w-5" />,
+    description: 'Track price and inventory updates',
+    color: 'text-rose-500',
   },
   {
     href: '/products',
@@ -93,6 +110,7 @@ export const navItems: NavItem[] = [
     description: 'View system activity',
     color: 'text-gray-500',
   },
+
   {
     href: '/settings',
     label: 'Settings',
