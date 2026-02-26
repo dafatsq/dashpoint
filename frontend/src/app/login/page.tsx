@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Store, Loader2, AlertCircle, Mail, Info } from 'lucide-react';
 
 // Message mapping for different logout reasons
@@ -32,6 +33,7 @@ function LoginPageContent() {
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [staySignedIn, setStaySignedIn] = useState(true);
   const [hasSavedAccounts, setHasSavedAccounts] = useState(false);
   const [activeTab, setActiveTab] = useState<'saved' | 'email'>('saved');
 
@@ -78,7 +80,7 @@ function LoginPageContent() {
     setIsSubmitting(true);
 
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, staySignedIn);
 
       if (result.success) {
         router.push('/');
@@ -168,6 +170,21 @@ function LoginPageContent() {
                     required
                     disabled={isSubmitting}
                   />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="staySignedIn"
+                    checked={staySignedIn}
+                    onCheckedChange={(checked) => setStaySignedIn(checked as boolean)}
+                    disabled={isSubmitting}
+                  />
+                  <Label
+                    htmlFor="staySignedIn"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Stay signed in for quick access
+                  </Label>
                 </div>
 
                 <Button
