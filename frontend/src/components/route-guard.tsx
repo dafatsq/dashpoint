@@ -16,7 +16,7 @@ const routePermissions: Record<string, string | undefined> = {
   '/expenses': PERMISSIONS.REPORTS_VIEW,
   '/users': PERMISSIONS.USERS_VIEW,
   '/audit': PERMISSIONS.AUDIT_VIEW,
-  '/settings': PERMISSIONS.SETTINGS_MANAGE,
+  // '/settings' explicitly has no permission requirement so everyone can access it
 };
 
 interface RouteGuardProps {

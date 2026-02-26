@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import Cropper from 'react-easy-crop';
 import type { Area } from 'react-easy-crop';
+import { getSessionItem } from '@/lib/session';
 
 interface ImageUploadProps {
   value?: string;
@@ -24,7 +25,7 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Crop state
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -103,10 +104,10 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
 
       // Get the cropped image blob
       const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
-      
+
       // Upload the cropped image
       await uploadImageBlob(croppedBlob);
-      
+
       // Clean up
       setImageToCrop(null);
       setCrop({ x: 0, y: 0 });
@@ -137,7 +138,7 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
       const response = await fetch('http://localhost:8080/api/v1/upload/image', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Authorization': `Bearer ${getSessionItem('access_token')}`,
         },
         body: formData,
       });
@@ -240,11 +241,10 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
         </div>
       ) : (
         <div
-          className={`relative border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer ${
-            isDragging
-              ? 'border-primary bg-primary/5'
-              : 'border-muted-foreground/25 hover:border-primary/50'
-          }`}
+          className={`relative border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer ${isDragging
+            ? 'border-primary bg-primary/5'
+            : 'border-muted-foreground/25 hover:border-primary/50'
+            }`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}

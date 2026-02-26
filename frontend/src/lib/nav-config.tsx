@@ -97,7 +97,6 @@ export const navItems: NavItem[] = [
     href: '/settings',
     label: 'Settings',
     icon: <Settings className="h-5 w-5" />,
-    permission: PERMISSIONS.SETTINGS_MANAGE,
     description: 'Configure system options',
     color: 'text-slate-500',
   },

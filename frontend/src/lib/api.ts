@@ -1,6 +1,7 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
 import { Permission, PermissionOverride } from '@/types';
+import { getSessionItem, setSessionItem, removeSessionItem } from './session';
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
@@ -73,25 +74,25 @@ class ApiClient {
 
   private getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('access_token');
+    return getSessionItem('access_token');
   }
 
   private getRefreshToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('refresh_token');
+    return getSessionItem('refresh_token');
   }
 
   setTokens(accessToken: string, refreshToken: string): void {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('access_token', accessToken);
-    localStorage.setItem('refresh_token', refreshToken);
+    setSessionItem('access_token', accessToken);
+    setSessionItem('refresh_token', refreshToken);
   }
 
   clearTokens(): void {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    removeSessionItem('access_token');
+    removeSessionItem('refresh_token');
+    removeSessionItem('user');
   }
 
   async refreshTokens(): Promise<boolean> {
@@ -113,7 +114,7 @@ class ApiClient {
       const data = await response.json();
       this.setTokens(data.access_token, data.refresh_token);
 
-      // Also update user data in localStorage if returned
+      // Also update user data in session storage if returned
       // The backend returns updated user info with new role/permissions
       if (data.user) {
         console.log('[API] Updating user data from refresh response:', data.user.role_name);
@@ -129,7 +130,7 @@ class ApiClient {
           created_at: data.user.created_at || '',
           updated_at: data.user.updated_at || '',
         };
-        localStorage.setItem('user', JSON.stringify(userData));
+        setSessionItem('user', JSON.stringify(userData));
       }
 
       return true;
