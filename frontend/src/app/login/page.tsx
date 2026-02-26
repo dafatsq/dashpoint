@@ -33,7 +33,7 @@ function LoginPageContent() {
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [staySignedIn, setStaySignedIn] = useState(true);
+  const [staySignedIn, setStaySignedIn] = useState(false);
   const [hasSavedAccounts, setHasSavedAccounts] = useState(false);
   const [activeTab, setActiveTab] = useState<'saved' | 'email'>('saved');
 

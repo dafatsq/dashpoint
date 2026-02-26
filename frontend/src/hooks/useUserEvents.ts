@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { getSessionItem, setSessionItem } from '@/lib/session';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
 // Helper function to refresh the access token
 async function tryRefreshToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem('refresh_token');
+  const refreshToken = getSessionItem('refresh_token');
   if (!refreshToken) return null;
 
   try {
@@ -21,8 +22,8 @@ async function tryRefreshToken(): Promise<string | null> {
     }
 
     const data = await response.json();
-    localStorage.setItem('access_token', data.access_token);
-    localStorage.setItem('refresh_token', data.refresh_token);
+    setSessionItem('access_token', data.access_token);
+    setSessionItem('refresh_token', data.refresh_token);
     return data.access_token;
   } catch {
     return null;
@@ -125,7 +126,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
 
   const getAccessToken = useCallback(() => {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('access_token');
+    return getSessionItem('access_token');
   }, []);
 
   const disconnect = useCallback(() => {
@@ -141,7 +142,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
   }, []);
 
   // Use a ref to store the connect function so we can call it recursively
-  const connectRef = useRef<() => void>(() => {});
+  const connectRef = useRef<() => void>(() => { });
 
   const connect = useCallback(() => {
     const token = getAccessToken();
@@ -165,7 +166,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
 
     const url = `${API_BASE_URL}/events/subscribe?token=${encodeURIComponent(token)}`;
     console.log('[SSE] Connecting to:', API_BASE_URL + '/events/subscribe');
-    
+
     // Pre-flight check: verify token is valid by making a quick HEAD request
     // This helps diagnose issues before EventSource silently fails
     fetch(`${API_BASE_URL}/me`, {
@@ -175,7 +176,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
       }
     }).then(async response => {
       let validToken = token;
-      
+
       if (response.status === 401) {
         console.log('[SSE] Token expired, attempting refresh...');
         const newToken = await tryRefreshToken();
@@ -192,9 +193,9 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
         callbacksRef.current.onError?.(new Event('Token validation failed'));
         return;
       }
-      
+
       console.log('[SSE] Token validated, establishing SSE connection...');
-      
+
       const sseUrl = `${API_BASE_URL}/events/subscribe?token=${encodeURIComponent(validToken)}`;
       const eventSource = new EventSource(sseUrl);
       eventSourceRef.current = eventSource;
@@ -211,7 +212,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
         // ERR_INCOMPLETE_CHUNKED_ENCODING is normal when navigating away
         const readyState = eventSource.readyState;
         const isClosed = readyState === EventSource.CLOSED;
-        
+
         if (isClosed) {
           // This is expected when navigating - don't log as warning
           console.log('[SSE] Connection closed');
@@ -219,7 +220,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
           // Only log actual errors, not navigation-related disconnects
           console.log('[SSE] Connection interrupted, will attempt reconnect');
         }
-        
+
         setIsConnected(false);
         callbacksRef.current.onDisconnected?.();
 
@@ -231,7 +232,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
         if (reconnectAttemptsRef.current < maxReconnectAttempts && enabledRef.current) {
           const delay = baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current);
           reconnectAttemptsRef.current += 1;
-          
+
           reconnectTimeoutRef.current = setTimeout(() => {
             // Re-check if still enabled before reconnecting
             if (enabledRef.current && getAccessToken()) {
@@ -261,7 +262,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
             const event: UserEvent = JSON.parse(e.data);
             console.log('[SSE] Received event:', event.type, 'for user:', event.user_id);
             console.log('[SSE] Event data:', JSON.stringify(event));
-            
+
             // Call specific handler
             switch (event.type) {
               case 'connected':

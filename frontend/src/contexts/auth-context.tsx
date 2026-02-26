@@ -5,6 +5,7 @@ import { User } from '@/types';
 import api from '@/lib/api';
 import { AccountManager } from '@/lib/account-manager';
 import { useUserEvents, UserEvent } from '@/hooks/useUserEvents';
+import { getSessionItem, setSessionItem, removeSessionItem, clearSession } from '@/lib/session';
 
 interface AuthContextType {
   user: User | null;
@@ -38,7 +39,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isRefreshingRef.current = true;
 
     try {
-      const token = localStorage.getItem('access_token');
+      const token = getSessionItem('access_token');
       if (!token) {
         isRefreshingRef.current = false;
         return;
@@ -58,7 +59,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           created_at: result.data.created_at || '',
           updated_at: result.data.updated_at || '',
         };
-        localStorage.setItem('user', JSON.stringify(userData));
+        setSessionItem('user', JSON.stringify(userData));
         setUser(userData);
 
         // Update saved account info if has PIN
@@ -99,8 +100,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return;
     }
 
-    // Get current user from localStorage since the closure might have stale data
-    const storedUser = localStorage.getItem('user');
+    // Get current user from sessionStorage/localStorage since the closure might have stale data
+    const storedUser = getSessionItem('user');
     if (!storedUser) {
       console.log('[Auth] No user in localStorage, ignoring event');
       return;
@@ -132,7 +133,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           console.error('[Auth] Failed to refresh tokens after role change, forcing re-login');
           // Force re-login if token refresh fails
           api.clearTokens();
-          localStorage.removeItem('user');
+          removeSessionItem('user');
           setUser(null);
           if (typeof window !== 'undefined') {
             window.location.href = '/login?message=role_changed_relogin';
@@ -154,7 +155,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       case 'force_logout':
         // Force logout the user
         api.clearTokens();
-        localStorage.removeItem('user');
+        removeSessionItem('user');
         setUser(null);
         // Redirect to login with a message
         if (typeof window !== 'undefined') {
@@ -189,8 +190,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Check for existing session on mount
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('access_token');
-      const storedUser = localStorage.getItem('user');
+      const token = getSessionItem('access_token');
+      const storedUser = getSessionItem('user');
 
       if (token && storedUser) {
         try {
@@ -201,12 +202,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (typeof parsedUser.role === 'string') {
               parsedUser.role_name = parsedUser.role;
             }
-            // Save migrated user back to localStorage
-            localStorage.setItem('user', JSON.stringify(parsedUser));
+            // Save migrated user back to session storage
+            setSessionItem('user', JSON.stringify(parsedUser));
           }
           setUser(parsedUser);
         } catch {
-          localStorage.removeItem('user');
+          removeSessionItem('user');
         }
       }
       setIsLoading(false);
@@ -237,7 +238,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         created_at: result.data.user.created_at || '',
         updated_at: result.data.user.updated_at || '',
       };
-      localStorage.setItem('user', JSON.stringify(userData));
+      setSessionItem('user', JSON.stringify(userData));
       setUser(userData);
 
       // Save account for quick switching (if enabled and user has PIN)
@@ -279,7 +280,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         created_at: result.data.user.created_at || '',
         updated_at: result.data.user.updated_at || '',
       };
-      localStorage.setItem('user', JSON.stringify(userData));
+      setSessionItem('user', JSON.stringify(userData));
       setUser(userData);
 
       // Update saved account info
@@ -302,8 +303,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(async (removeFromSaved = false) => {
     const currentUserId = user?.id;
 
-    await api.logout();
-    localStorage.removeItem('user');
+    await api.clearTokens();
+    clearSession();
     setUser(null);
 
     // Optionally remove from saved accounts
@@ -386,8 +387,8 @@ export const PERMISSIONS = {
   // Audit logs
   AUDIT_VIEW: 'can_view_audit_logs',
 
-  // Settings
-  SETTINGS_MANAGE: 'can_manage_settings',
+  // Settings - Removed: Everyone can access Settings page now
+  // SETTINGS_MANAGE: 'can_manage_settings',
 
   // POS
   POS_VIEW: 'can_view_pos',
