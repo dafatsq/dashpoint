@@ -663,8 +663,8 @@ class ApiClient {
     if (params?.user_id) searchParams.set('user_id', params.user_id);
     if (params?.action) searchParams.set('action', params.action);
     if (params?.entity_type) searchParams.set('entity_type', params.entity_type);
-    if (params?.from) searchParams.set('from', params.from);
-    if (params?.to) searchParams.set('to', params.to);
+    if (params?.from) searchParams.set('start_date', params.from);
+    if (params?.to) searchParams.set('end_date', params.to);
     if (params?.limit) searchParams.set('limit', String(params.limit));
     if (params?.offset) searchParams.set('offset', String(params.offset));
     const query = searchParams.toString();
