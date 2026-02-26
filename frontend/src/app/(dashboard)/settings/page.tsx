@@ -12,10 +12,14 @@ import {
   Loader2,
 } from 'lucide-react';
 import { REMEMBER_ME_KEY } from '@/lib/session';
+import { useAuth } from '@/contexts/auth-context';
+import { AccountManager } from '@/lib/account-manager';
 
 export default function SettingsPage() {
+  const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [quickAccess, setQuickAccess] = useState(false);
 
   // Load saved preference on mount
   useEffect(() => {
@@ -28,13 +32,34 @@ export default function SettingsPage() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
       setRememberMe(true);
     }
-  }, []);
+
+    if (user) {
+      const isSaved = AccountManager.getAccount(user.id) !== null;
+      setQuickAccess(isSaved);
+    }
+  }, [user]);
 
   const handleSave = async () => {
     setIsSaving(true);
 
     // Save the auth preference globally
     localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? 'true' : 'false');
+
+    // Manage quick access
+    if (user) {
+      const shouldSaveQuickAccess = rememberMe || quickAccess;
+      if (shouldSaveQuickAccess && user.has_pin) {
+        AccountManager.saveAccount({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role_name: user.role_name,
+          has_pin: user.has_pin
+        });
+      } else {
+        AccountManager.removeAccount(user.id);
+      }
+    }
 
     await new Promise((resolve) => setTimeout(resolve, 500));
     setIsSaving(false);
@@ -59,8 +84,8 @@ export default function SettingsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 space-y-0.5">
                   <Label>Automatic Sign-In (Remember Me)</Label>
                   <p className="text-sm text-muted-foreground">
                     Keep me signed in across browser restarts. Turning this off is recommended for shared devices.
@@ -68,7 +93,24 @@ export default function SettingsPage() {
                 </div>
                 <Switch
                   checked={rememberMe}
-                  onCheckedChange={setRememberMe}
+                  onCheckedChange={(checked) => {
+                    setRememberMe(checked);
+                    if (checked) setQuickAccess(true);
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 pt-4 border-t">
+                <div className="flex-1 space-y-0.5">
+                  <Label>Quick Access (Stay Signed In)</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Save this account for quick PIN login. (Account must have a PIN set)
+                  </p>
+                </div>
+                <Switch
+                  checked={rememberMe ? true : quickAccess}
+                  onCheckedChange={setQuickAccess}
+                  disabled={rememberMe || !user?.has_pin}
                 />
               </div>
             </CardContent>
