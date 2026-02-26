@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import {
   Search,
   Loader2,
@@ -57,6 +58,7 @@ export default function AuditLogsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState<string>('all');
   const [selectedEntity, setSelectedEntity] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -75,6 +77,8 @@ export default function AuditLogsPage() {
         const params: {
           action?: string;
           entity_type?: string;
+          from?: string;
+          to?: string;
           limit: number;
           offset: number;
         } = {
@@ -84,6 +88,8 @@ export default function AuditLogsPage() {
 
         if (selectedAction !== 'all') params.action = selectedAction;
         if (selectedEntity !== 'all') params.entity_type = selectedEntity;
+        if (dateRange.start) params.from = dateRange.start;
+        if (dateRange.end) params.to = dateRange.end;
 
         const result = await api.getAuditLogs(params);
         if (result.data) {
@@ -98,7 +104,7 @@ export default function AuditLogsPage() {
     };
 
     fetchLogs();
-  }, [page, selectedAction, selectedEntity]);
+  }, [page, selectedAction, selectedEntity, dateRange]);
 
   // Filter logs by search
   const filteredLogs = logs.filter((log) => {
@@ -222,8 +228,8 @@ export default function AuditLogsPage() {
         {/* Toolbar */}
         <Card className="mb-6">
           <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search logs..."
@@ -232,8 +238,17 @@ export default function AuditLogsPage() {
                   className="pl-9 w-full"
                 />
               </div>
+              <DateRangePicker
+                value={dateRange}
+                onChange={(newRange) => {
+                  setDateRange(newRange);
+                  setPage(1);
+                }}
+                placeholder="Filter by date..."
+                className="w-full"
+              />
               <Select value={selectedAction} onValueChange={(v) => { setSelectedAction(v); setPage(1); }}>
-                <SelectTrigger className="w-full sm:w-40">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Actions" />
                 </SelectTrigger>
                 <SelectContent>
@@ -247,7 +262,7 @@ export default function AuditLogsPage() {
                 </SelectContent>
               </Select>
               <Select value={selectedEntity} onValueChange={(v) => { setSelectedEntity(v); setPage(1); }}>
-                <SelectTrigger className="w-full sm:w-40">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Entities" />
                 </SelectTrigger>
                 <SelectContent>
