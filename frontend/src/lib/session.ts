@@ -23,20 +23,9 @@ export const setSessionItem = (key: string, value: string): void => {
 };
 
 export const getSessionItem = (key: string): string | null => {
-    // Always check both stores to be safe, starting with the preferred one.
     if (typeof window === 'undefined') return null;
     const store = getStorage();
-
-    if (store) {
-        const val = store.getItem(key);
-        if (val) return val;
-    }
-
-    // Fallback: check the other store if not found in the preferred one
-    // This prevents losing a session if the user toggles the setting mid-session
-    const otherStore = store === window.localStorage ? window.sessionStorage : window.localStorage;
-    if (otherStore) return otherStore.getItem(key);
-
+    if (store) return store.getItem(key);
     return null;
 };
 
@@ -50,4 +39,25 @@ export const clearSession = (): void => {
     removeSessionItem('access_token');
     removeSessionItem('refresh_token');
     removeSessionItem('user');
+};
+
+/**
+ * Migrate session tokens from one storage to the other.
+ * Call this when the user changes the "Remember Me" preference.
+ * @param toLocalStorage - if true, migrate from sessionStorage to localStorage; if false, the reverse.
+ */
+export const migrateSession = (toLocalStorage: boolean): void => {
+    if (typeof window === 'undefined') return;
+
+    const source = toLocalStorage ? window.sessionStorage : window.localStorage;
+    const target = toLocalStorage ? window.localStorage : window.sessionStorage;
+    const keys = ['access_token', 'refresh_token', 'user'];
+
+    for (const key of keys) {
+        const value = source.getItem(key);
+        if (value) {
+            target.setItem(key, value);
+            source.removeItem(key);
+        }
+    }
 };

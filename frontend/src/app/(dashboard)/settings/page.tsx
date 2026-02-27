@@ -11,7 +11,7 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import { REMEMBER_ME_KEY } from '@/lib/session';
+import { REMEMBER_ME_KEY, migrateSession } from '@/lib/session';
 import { useAuth } from '@/contexts/auth-context';
 import { AccountManager } from '@/lib/account-manager';
 
@@ -44,6 +44,9 @@ export default function SettingsPage() {
 
     // Save the auth preference globally
     localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? 'true' : 'false');
+
+    // Migrate existing tokens to the correct storage backend
+    migrateSession(rememberMe);
 
     // Manage quick access
     if (user) {
