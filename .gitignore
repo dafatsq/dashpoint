@@ -83,6 +83,8 @@ service-account.json
 # Skills
 .agents/
 .agent/
+.claude/
+skills-lock.json
 .github/
 .opencode/
 
