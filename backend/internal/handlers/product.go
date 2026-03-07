@@ -453,11 +453,26 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 
 	// Audit log with new values
 	newValues := map[string]interface{}{
-		"name":  product.Name,
-		"price": product.Price.String(),
+		"name":                 product.Name,
+		"price":                product.Price.String(),
+		"cost":                 product.Cost.String(),
+		"tax_rate":             product.TaxRate.String(),
+		"unit":                 product.Unit,
+		"is_active":            product.IsActive,
+		"track_inventory":      product.TrackInventory,
+		"allow_negative_stock": product.AllowNegativeStock,
 	}
 	if product.SKU != nil {
 		newValues["sku"] = *product.SKU
+	}
+	if product.Barcode != nil {
+		newValues["barcode"] = *product.Barcode
+	}
+	if product.Description != nil {
+		newValues["description"] = *product.Description
+	}
+	if product.CategoryID != nil {
+		newValues["category_id"] = product.CategoryID.String()
 	}
 	if product.ImageURL != nil {
 		newValues["image_url"] = *product.ImageURL
@@ -499,12 +514,26 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 
 	// Capture old values for audit
 	oldValues := map[string]interface{}{
-		"name":      product.Name,
-		"price":     product.Price.String(),
-		"is_active": product.IsActive,
+		"name":                 product.Name,
+		"price":                product.Price.String(),
+		"cost":                 product.Cost.String(),
+		"tax_rate":             product.TaxRate.String(),
+		"unit":                 product.Unit,
+		"is_active":            product.IsActive,
+		"track_inventory":      product.TrackInventory,
+		"allow_negative_stock": product.AllowNegativeStock,
 	}
 	if product.SKU != nil {
 		oldValues["sku"] = *product.SKU
+	}
+	if product.Barcode != nil {
+		oldValues["barcode"] = *product.Barcode
+	}
+	if product.Description != nil {
+		oldValues["description"] = *product.Description
+	}
+	if product.CategoryID != nil {
+		oldValues["category_id"] = product.CategoryID.String()
 	}
 	if product.ImageURL != nil {
 		oldValues["image_url"] = *product.ImageURL
@@ -626,12 +655,26 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 
 	// Audit log with old/new values
 	newValues := map[string]interface{}{
-		"name":      product.Name,
-		"price":     product.Price.String(),
-		"is_active": product.IsActive,
+		"name":                 product.Name,
+		"price":                product.Price.String(),
+		"cost":                 product.Cost.String(),
+		"tax_rate":             product.TaxRate.String(),
+		"unit":                 product.Unit,
+		"is_active":            product.IsActive,
+		"track_inventory":      product.TrackInventory,
+		"allow_negative_stock": product.AllowNegativeStock,
 	}
 	if product.SKU != nil {
 		newValues["sku"] = *product.SKU
+	}
+	if product.Barcode != nil {
+		newValues["barcode"] = *product.Barcode
+	}
+	if product.Description != nil {
+		newValues["description"] = *product.Description
+	}
+	if product.CategoryID != nil {
+		newValues["category_id"] = product.CategoryID.String()
 	}
 	if product.ImageURL != nil {
 		newValues["image_url"] = *product.ImageURL

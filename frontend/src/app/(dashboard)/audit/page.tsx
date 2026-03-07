@@ -40,6 +40,26 @@ const ACTION_LABELS: Record<string, string> = {
   'delete': 'Delete',
   'void': 'Void',
   'adjust': 'Adjust',
+  'auth.login': 'Login',
+  'auth.login_failed': 'Login Failed',
+  'auth.logout': 'Logout',
+  'auth.pin_login': 'PIN Login',
+  'user.create': 'Create User',
+  'user.update': 'Update User',
+  'user.delete': 'Delete User',
+  'product.create': 'Create Product',
+  'product.update': 'Update Product',
+  'product.delete': 'Delete Product',
+  'inventory.adjust': 'Adjust Stock',
+  'inventory.count': 'Stock Count',
+  'category.create': 'Create Category',
+  'category.update': 'Update Category',
+  'category.delete': 'Delete Category',
+  'sale.create': 'Sale',
+  'sale.void': 'Void Sale',
+  'sale.refund': 'Refund',
+  'shift.start': 'Start Shift',
+  'shift.close': 'Close Shift',
 };
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -49,7 +69,8 @@ const ENTITY_LABELS: Record<string, string> = {
   'sale': 'Sale',
   'shift': 'Shift',
   'inventory': 'Inventory',
-  'auth': 'Authentication',
+  'auth': 'Auth',
+  'expense': 'Expense',
 };
 
 export default function AuditLogsPage() {
