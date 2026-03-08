@@ -20,15 +20,18 @@ const (
 	AuditActionUserCreate       AuditAction = "user.create"
 	AuditActionUserUpdate       AuditAction = "user.update"
 	AuditActionUserDelete       AuditAction = "user.delete"
-	AuditActionUserDeactivate   AuditAction = "user.deactivate"
+	AuditActionUserArchive      AuditAction = "user.archive"
+	AuditActionUserRestore      AuditAction = "user.restore"
 	AuditActionPasswordChange   AuditAction = "user.password_change"
 	AuditActionPINChange        AuditAction = "user.pin_change"
 	AuditActionPermissionChange AuditAction = "user.permission_change"
 
 	// Product actions
-	AuditActionProductCreate AuditAction = "product.create"
-	AuditActionProductUpdate AuditAction = "product.update"
-	AuditActionProductDelete AuditAction = "product.delete"
+	AuditActionProductCreate  AuditAction = "product.create"
+	AuditActionProductUpdate  AuditAction = "product.update"
+	AuditActionProductDelete  AuditAction = "product.delete"
+	AuditActionProductArchive AuditAction = "product.archive"
+	AuditActionProductRestore AuditAction = "product.restore"
 
 	// Inventory actions
 	AuditActionStockAdjust AuditAction = "inventory.adjust"

@@ -582,7 +582,18 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 		oldValues["password"] = "[set]"
 		newValues["password"] = "[changed]"
 	}
-	audit.LogWithValues(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(), "Updated user: "+user.Name, oldValues, newValues)
+	// Check if this is a restore action
+	oldIsActive, ok := oldValues["is_active"].(bool)
+	isRestore := req.IsActive != nil && *req.IsActive && ok && !oldIsActive
+
+	action := models.AuditActionUserUpdate
+	actionMsg := "Updated user: " + user.Name
+	if isRestore {
+		action = models.AuditActionUserRestore
+		actionMsg = "Restored user: " + user.Name
+	}
+
+	audit.LogWithValues(c, action, models.AuditEntityUser, id.String(), actionMsg, oldValues, newValues)
 
 	// Fetch updated user with Role join
 	updatedUser, err := h.userRepo.GetByID(c.Context(), id)
@@ -931,10 +942,10 @@ func (h *UserHandler) Delete(c *fiber.Ctx) error {
 	if user.Role != nil {
 		roleName = user.Role.Name
 	}
-	audit.LogWithValues(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(),
+	audit.LogWithValues(c, models.AuditActionUserArchive, models.AuditEntityUser, id.String(),
 		"Archived user: "+user.Name,
 		map[string]interface{}{"affected_user": user.Name, "name": user.Name, "role": roleName, "status": "active"},
-		map[string]interface{}{"affected_user": user.Name, "name": user.Name, "role": roleName, "status": "archived"},
+		nil,
 	)
 
 	// Broadcast deactivation event and disconnect the user

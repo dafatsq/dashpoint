@@ -511,7 +511,6 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate
 	return report, nil
 }
 
-
 // GetEmployeeSalesReport gets sales by employee
 func (r *ReportRepository) GetEmployeeSalesReport(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
 	query := `

@@ -45,6 +45,8 @@ const ACTION_LABELS: Record<string, string> = {
   'count': 'Counted',
   'start': 'Started',
   'close': 'Closed',
+  'archive': 'Archived',
+  'restore': 'Restored',
 };
 
 const getActionVerb = (action: string): string => {
@@ -61,7 +63,10 @@ const getActionBadgeColor = (action: string) => {
       return 'bg-green-600 text-white';
     case 'update':
     case 'close':
+    case 'restore':
       return 'bg-yellow-600 text-white';
+    case 'archive':
+      return 'bg-orange-500 text-white';
     case 'delete':
       return 'bg-red-600 text-white';
     case 'void':
@@ -111,6 +116,8 @@ function getChangeDescription(log: AuditLog): string {
     const name = String(newVals.name || oldVals.name || '');
     if (verb === 'create') return name || 'New product';
     if (verb === 'update') return name || 'Updated product';
+    if (verb === 'archive') return name || 'Archived product';
+    if (verb === 'restore') return name || 'Restored product';
     if (verb === 'delete') return name || 'Deleted product';
   }
 
@@ -145,6 +152,15 @@ function getChangeDescription(log: AuditLog): string {
     if (verb === 'create') return `${desc}${amount ? ` — ${formatCurrencyShort(Number(amount))}` : ''}`;
     if (verb === 'update') return desc || 'Updated expense';
     if (verb === 'delete') return desc || 'Deleted expense';
+  }
+
+  if (log.entity_type === 'user') {
+    const name = String(newVals.name || oldVals.name || oldVals.affected_user || newVals.affected_user || '');
+    if (verb === 'create') return name || 'New user';
+    if (verb === 'update') return name || 'Updated user';
+    if (verb === 'archive') return name || 'Archived user';
+    if (verb === 'restore') return name || 'Restored user';
+    if (verb === 'delete') return name || 'Deleted user';
   }
 
   return `${ACTION_LABELS[verb] || verb} ${log.entity_type}`;
@@ -218,7 +234,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
       const oldVal = oldVals[key];
       const newVal = newVals[key];
 
-      if (verb === 'update' || verb === 'close') {
+      if (verb === 'update' || verb === 'close' || verb === 'restore') {
         // Only show fields that actually changed
         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
           changes.push({ key, oldVal, newVal });
@@ -228,7 +244,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
         if (newVal !== undefined && newVal !== null && newVal !== '') {
           changes.push({ key, oldVal: undefined, newVal });
         }
-      } else if (verb === 'delete') {
+      } else if (verb === 'delete' || verb === 'archive') {
         // Show old values for deleted items
         if (oldVal !== undefined && oldVal !== null && oldVal !== '') {
           changes.push({ key, oldVal, newVal: undefined });
