@@ -453,6 +453,7 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 
 	// Audit log with new values
 	newValues := map[string]interface{}{
+		"affected_product":     product.Name,
 		"name":                 product.Name,
 		"price":                product.Price.String(),
 		"cost":                 product.Cost.String(),
@@ -514,6 +515,7 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 
 	// Capture old values for audit
 	oldValues := map[string]interface{}{
+		"affected_product":     product.Name,
 		"name":                 product.Name,
 		"price":                product.Price.String(),
 		"cost":                 product.Cost.String(),
@@ -655,6 +657,7 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 
 	// Audit log with old/new values
 	newValues := map[string]interface{}{
+		"affected_product":     product.Name,
 		"name":                 product.Name,
 		"price":                product.Price.String(),
 		"cost":                 product.Cost.String(),
@@ -679,7 +682,18 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	if product.ImageURL != nil {
 		newValues["image_url"] = *product.ImageURL
 	}
-	audit.LogWithValues(c, models.AuditActionProductUpdate, models.AuditEntityProduct, id.String(), "Updated product: "+product.Name, oldValues, newValues)
+	// Check if this is a restore action
+	oldIsActive, ok := oldValues["is_active"].(bool)
+	isRestore := req.IsActive != nil && *req.IsActive && ok && !oldIsActive
+
+	action := models.AuditActionProductUpdate
+	actionMsg := "Updated product: " + product.Name
+	if isRestore {
+		action = models.AuditActionProductRestore
+		actionMsg = "Restored product: " + product.Name
+	}
+
+	audit.LogWithValues(c, action, models.AuditEntityProduct, id.String(), actionMsg, oldValues, newValues)
 
 	updated, _ := h.productRepo.GetByID(c.Context(), id)
 	if updated != nil {
@@ -703,6 +717,22 @@ func (h *ProductHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
+	// Fetch the product first so we can log its details
+	productToDelete, err := h.productRepo.GetByID(c.Context(), id)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get product")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to retrieve product",
+		})
+	}
+	if productToDelete == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"code":    "NOT_FOUND",
+			"message": "Product not found",
+		})
+	}
+
 	if err := h.productRepo.Delete(c.Context(), id); err != nil {
 		log.Error().Err(err).Msg("Failed to delete product")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -711,8 +741,17 @@ func (h *ProductHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
+	// Capture old values for audit
+	oldValues := map[string]interface{}{
+		"affected_product": productToDelete.Name,
+		"name": productToDelete.Name,
+	}
+	if productToDelete.SKU != nil {
+		oldValues["sku"] = *productToDelete.SKU
+	}
+
 	// Audit log
-	audit.LogFromFiber(c, models.AuditActionProductDelete, models.AuditEntityProduct, id.String(), "Deleted product")
+	audit.LogWithValues(c, models.AuditActionProductArchive, models.AuditEntityProduct, id.String(), "Archived product: "+productToDelete.Name, oldValues, nil)
 
 	return c.JSON(fiber.Map{
 		"message": "Product deleted successfully",
@@ -775,6 +814,18 @@ func (h *ProductHandler) PermanentDelete(c *fiber.Ctx) error {
 	if productToDelete.ImageURL != nil {
 		h.deleteImageFile(*productToDelete.ImageURL)
 	}
+
+	// Capture old values for audit
+	oldValues := map[string]interface{}{
+		"affected_product": productToDelete.Name,
+		"name": productToDelete.Name,
+	}
+	if productToDelete.SKU != nil {
+		oldValues["sku"] = *productToDelete.SKU
+	}
+
+	// Audit log
+	audit.LogWithValues(c, models.AuditActionProductDelete, models.AuditEntityProduct, id.String(), "Permanently deleted product: "+productToDelete.Name, oldValues, nil)
 
 	return c.JSON(fiber.Map{
 		"message": "Product permanently deleted",

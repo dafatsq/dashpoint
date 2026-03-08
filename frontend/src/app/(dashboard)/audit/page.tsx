@@ -47,9 +47,13 @@ const ACTION_LABELS: Record<string, string> = {
   'user.create': 'Create User',
   'user.update': 'Update User',
   'user.delete': 'Delete User',
+  'user.archive': 'Archive User',
+  'user.restore': 'Restore User',
   'product.create': 'Create Product',
   'product.update': 'Update Product',
   'product.delete': 'Delete Product',
+  'product.archive': 'Archive Product',
+  'product.restore': 'Restore Product',
   'inventory.adjust': 'Adjust Stock',
   'inventory.count': 'Stock Count',
   'category.create': 'Create Category',
@@ -162,9 +166,14 @@ export default function AuditLogsPage() {
         return 'bg-red-600 text-white dark:bg-red-600/90 dark:text-white';
       case 'void':
         return 'bg-orange-600 text-white dark:bg-orange-600/90 dark:text-white';
-      default:
-        return 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white';
     }
+    if (action.includes('archive')) {
+      return 'bg-orange-500 text-white dark:bg-orange-500/90 dark:text-white';
+    }
+    if (action.includes('restore')) {
+      return 'bg-emerald-600 text-white dark:bg-emerald-600/90 dark:text-white';
+    }
+    return 'bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white';
   };
 
   const openDetailDialog = (log: AuditLog) => {
@@ -278,6 +287,8 @@ export default function AuditLogsPage() {
                   <SelectItem value="login_failed">Login Failed</SelectItem>
                   <SelectItem value="create">Create</SelectItem>
                   <SelectItem value="update">Update</SelectItem>
+                  <SelectItem value="archive">Archive</SelectItem>
+                  <SelectItem value="restore">Restore</SelectItem>
                   <SelectItem value="delete">Delete</SelectItem>
                   <SelectItem value="void">Void</SelectItem>
                 </SelectContent>
