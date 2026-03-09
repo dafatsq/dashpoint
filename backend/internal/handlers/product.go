@@ -985,6 +985,7 @@ func (h *ProductHandler) AdjustStock(c *fiber.Ctx) error {
 		auditAction = models.AuditActionStockCount
 	}
 	auditValues := map[string]interface{}{
+		"affected_product": productName,
 		"product_name":    productName,
 		"adjustment_type": string(adjType),
 		"quantity":        quantity.String(),

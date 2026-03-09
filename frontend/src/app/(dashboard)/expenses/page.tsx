@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Search,
   Plus,
@@ -752,12 +753,10 @@ export default function ExpensesPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="expense_date" className={!formData.category_id ? 'opacity-50' : ''}>Date *</Label>
-                <Input
-                  id="expense_date"
-                  type="date"
-                  value={formData.expense_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, expense_date: e.target.value })
+                <DatePicker
+                  date={formData.expense_date}
+                  onSelect={(date) =>
+                    setFormData({ ...formData, expense_date: date })
                   }
                   disabled={!formData.category_id}
                 />

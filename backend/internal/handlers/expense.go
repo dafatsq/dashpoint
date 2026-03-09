@@ -376,6 +376,9 @@ func (h *ExpenseHandler) Create(c *fiber.Ctx) error {
 	if created.Vendor != nil {
 		newValues["vendor"] = *created.Vendor
 	}
+	if created.Notes != nil {
+		newValues["notes"] = *created.Notes
+	}
 	audit.LogWithValues(c, models.AuditActionExpenseCreate, models.AuditEntityExpense, created.ID.String(), "Created expense: "+created.Description, nil, newValues)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
