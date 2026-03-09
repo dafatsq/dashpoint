@@ -277,7 +277,7 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
 
     return (
       <div className="mt-2 ml-0 space-y-0.5">
-        {changes.slice(0, 6).map(({ key, oldVal, newVal }) => (
+        {changes.map(({ key, oldVal, newVal }) => (
           <div key={key} className="text-xs flex items-start gap-1.5 text-muted-foreground">
             <span className="font-medium text-foreground/70 shrink-0 pt-0.5">{formatFieldName(key)}:</span>
             {isImageField(key) ? (
@@ -317,9 +317,6 @@ function ChangesList({ entityType }: { entityType: ChangeTab }) {
             )}
           </div>
         ))}
-        {changes.length > 6 && (
-          <span className="text-xs text-muted-foreground">+{changes.length - 6} more</span>
-        )}
       </div>
     );
   };
