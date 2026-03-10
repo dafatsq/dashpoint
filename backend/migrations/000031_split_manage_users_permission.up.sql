@@ -2,9 +2,9 @@
 
 -- 1. Insert the new granular permissions
 INSERT INTO permissions (id, key, name, description, category) VALUES
-    ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeed', 'can_create_user', 'Create Users', 'Can create new employees', 'users'),
-    ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee', 'can_edit_user', 'Edit Users', 'Can modify employee details', 'users'),
-    ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeef', 'can_delete_user', 'Delete/Archive Users', 'Can archive or delete employees', 'users');
+    ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeedd', 'can_create_user', 'Create Users', 'Can create new employees', 'users'),
+    ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'can_edit_user', 'Edit Users', 'Can modify employee details', 'users'),
+    ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeff', 'can_delete_user', 'Delete/Archive Users', 'Can archive or delete employees', 'users');
 
 -- 2. Migrate roles that currently have 'can_manage_users' to have all three new permissions
 INSERT INTO role_permissions (role_id, permission_id)
