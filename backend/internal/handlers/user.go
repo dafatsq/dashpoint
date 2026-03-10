@@ -412,6 +412,28 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 		})
 	}
 
+	// Ensure Role is fetched for hierarchy check
+	if user.Role == nil {
+		userWithRole, err := h.userRepo.GetByID(c.Context(), id)
+		if err == nil && userWithRole != nil {
+			user.Role = userWithRole.Role
+		}
+	}
+
+	currentRoleName := middleware.GetRoleName(c)
+	targetRoleName := ""
+	if user.Role != nil {
+		targetRoleName = user.Role.Name
+	}
+
+	// Enforce strict role hierarchy: Cannot modify users with a strictly higher role
+	if getRoleLevel(currentRoleName) < getRoleLevel(targetRoleName) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "You do not have permission to modify a user with a higher role level.",
+		})
+	}
+
 	// Capture old values for audit (include affected user name at top)
 	oldValues := map[string]interface{}{
 		"affected_user": user.Name,
@@ -655,6 +677,26 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 		})
 	}
 
+	user, err := h.userRepo.GetByID(c.Context(), id)
+	if err != nil || user == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"code":    "NOT_FOUND",
+			"message": "User not found",
+		})
+	}
+
+	currentRoleName := middleware.GetRoleName(c)
+	targetRoleName := ""
+	if user.Role != nil {
+		targetRoleName = user.Role.Name
+	}
+	if getRoleLevel(currentRoleName) < getRoleLevel(targetRoleName) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "You do not have permission to modify a user with a higher role level.",
+		})
+	}
+
 	if req.Password == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"code":    "VALIDATION_ERROR",
@@ -681,7 +723,7 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 	}
 
 	// Get user name for audit
-	user, _ := h.userRepo.GetByID(c.Context(), id)
+	user, _ = h.userRepo.GetByID(c.Context(), id)
 	userName := "Unknown"
 	if user != nil {
 		userName = user.Name
@@ -716,6 +758,26 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 		})
 	}
 
+	user, err := h.userRepo.GetByID(c.Context(), id)
+	if err != nil || user == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"code":    "NOT_FOUND",
+			"message": "User not found",
+		})
+	}
+
+	currentRoleName := middleware.GetRoleName(c)
+	targetRoleName := ""
+	if user.Role != nil {
+		targetRoleName = user.Role.Name
+	}
+	if getRoleLevel(currentRoleName) < getRoleLevel(targetRoleName) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "You do not have permission to modify a user with a higher role level.",
+		})
+	}
+
 	var pinHash *string
 	if req.PIN != nil && *req.PIN != "" {
 		hash, err := auth.HashPIN(*req.PIN)
@@ -738,7 +800,7 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 	}
 
 	// Get user name for audit
-	user, _ := h.userRepo.GetByID(c.Context(), id)
+	user, _ = h.userRepo.GetByID(c.Context(), id)
 	userName := "Unknown"
 	if user != nil {
 		userName = user.Name
@@ -1103,18 +1165,21 @@ func (h *UserHandler) toUserDetailResponse(user *models.User) UserDetailResponse
 	return response
 }
 
+// getRoleLevel returns an integer representing the hierarchy of the role
+func getRoleLevel(roleName string) int {
+	switch roleName {
+	case "owner":
+		return 3
+	case "manager":
+		return 2
+	case "cashier":
+		return 1
+	default:
+		return 0
+	}
+}
+
 // canAssignRole checks if a user with the given role can assign another role
 func canAssignRole(currentRole, targetRole string) bool {
-	// Owner can assign any role
-	if currentRole == "owner" {
-		return true
-	}
-
-	// Manager can only assign manager or cashier
-	if currentRole == "manager" {
-		return targetRole == "manager" || targetRole == "cashier"
-	}
-
-	// Cashiers cannot assign roles
-	return false
+	return getRoleLevel(currentRole) >= getRoleLevel(targetRole)
 }

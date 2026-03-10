@@ -61,18 +61,28 @@ const CATEGORY_ORDER = ['pos', 'sales', 'inventory', 'reports', 'expenses', 'use
 
 export default function UsersPage() {
   const { user: currentUser, hasPermission } = useAuth();
-  const canManageUsers = hasPermission(PERMISSIONS.USERS_MANAGE);
+  const canCreateUser = hasPermission(PERMISSIONS.USERS_CREATE);
+  const canEditUserAny = hasPermission(PERMISSIONS.USERS_EDIT);
+  const canDeleteUserAny = hasPermission(PERMISSIONS.USERS_DELETE);
   const canManagePermissions = hasPermission(PERMISSIONS.USERS_PERMISSIONS);
   const isOwner = currentUser?.role_name === 'owner';
 
   // Helper to check if current user can edit a specific user
   const canEditUser = (targetUser: User) => {
-    if (!canManageUsers) return false;
-    // Owners can edit anyone
-    if (isOwner) return true;
-    // Non-owners cannot edit owners
+    if (!canEditUserAny) return false;
+    const currentLevel = roleHierarchy[currentUser?.role_name || ''] || 0;
+    const targetLevel = roleHierarchy[targetUser.role_name] || 0;
+    return currentLevel >= targetLevel;
+  };
+
+  // Helper to check if current user can delete/archive a specific user
+  const canDeleteUser = (targetUser: User) => {
+    if (!canDeleteUserAny) return false;
+    // Cannot delete owners from UI
     if (targetUser.role_name === 'owner') return false;
-    return true;
+    const currentLevel = roleHierarchy[currentUser?.role_name || ''] || 0;
+    const targetLevel = roleHierarchy[targetUser.role_name] || 0;
+    return currentLevel >= targetLevel;
   };
 
   // Helper to check if current user can manage permissions of a specific user
@@ -613,7 +623,7 @@ export default function UsersPage() {
                   <SelectItem value="cashier">Cashier</SelectItem>
                 </SelectContent>
               </Select>
-              {canManageUsers && viewMode === 'active' && (
+              {canCreateUser && viewMode === 'active' && (
                 <Button onClick={openCreateDialog} className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Add User
@@ -635,7 +645,7 @@ export default function UsersPage() {
               <p className="text-muted-foreground">
                 {viewMode === 'active' ? 'No users found' : 'No archived users'}
               </p>
-              {canManageUsers && viewMode === 'active' && (
+              {canCreateUser && viewMode === 'active' && (
                 <Button variant="link" onClick={openCreateDialog}>
                   Add your first user
                 </Button>
@@ -660,7 +670,7 @@ export default function UsersPage() {
                         <th className="pb-3 font-medium">Role</th>
                         <th className="pb-3 font-medium text-center">PIN Set</th>
                         <th className="pb-3 font-medium text-center">Status</th>
-                        {(canManageUsers || canManagePermissions) && (
+                        {(canCreateUser || canEditUserAny || canDeleteUserAny || canManagePermissions) && (
                           <th className="pb-3 font-medium text-right">Actions</th>
                         )}
                       </tr>
@@ -704,7 +714,7 @@ export default function UsersPage() {
                               {user.is_active ? 'Active' : 'Archived'}
                             </span>
                           </td>
-                          {(canManageUsers || canManagePermissions) && (
+                          {(canCreateUser || canEditUserAny || canDeleteUserAny || canManagePermissions) && (
                             <td className="py-3 text-right">
                               <div className="flex items-center justify-end gap-1">
                                 {viewMode === 'active' ? (
@@ -729,7 +739,7 @@ export default function UsersPage() {
                                         <Settings2 className="h-4 w-4" />
                                       </Button>
                                     )}
-                                    {canEditUser(user) && user.role_name !== 'owner' && (
+                                    {canDeleteUser(user) && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
@@ -756,7 +766,7 @@ export default function UsersPage() {
                                         Restore
                                       </Button>
                                     )}
-                                    {canEditUser(user) && user.role_name !== 'owner' && (
+                                    {canDeleteUser(user) && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -819,7 +829,7 @@ export default function UsersPage() {
                       </div>
                     </div>
 
-                    {(canManageUsers || canManagePermissions) && (
+                    {(canCreateUser || canEditUserAny || canDeleteUserAny || canManagePermissions) && (
                       <div className="flex justify-end gap-2 pt-2 border-t">
                         {viewMode === 'active' ? (
                           <>
@@ -845,7 +855,7 @@ export default function UsersPage() {
                                 Perms
                               </Button>
                             )}
-                            {canEditUser(user) && user.role_name !== 'owner' && (
+                            {canDeleteUser(user) && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -874,7 +884,7 @@ export default function UsersPage() {
                                 Restore
                               </Button>
                             )}
-                            {canEditUser(user) && user.role_name !== 'owner' && (
+                            {canDeleteUser(user) && (
                               <Button
                                 variant="outline"
                                 size="sm"
