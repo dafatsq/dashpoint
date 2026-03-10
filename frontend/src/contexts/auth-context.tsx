@@ -362,7 +362,9 @@ export function useAuth() {
 export const PERMISSIONS = {
   // User management
   USERS_VIEW: 'can_view_users',
-  USERS_MANAGE: 'can_manage_users',
+  USERS_CREATE: 'can_create_user',
+  USERS_EDIT: 'can_edit_user',
+  USERS_DELETE: 'can_delete_user',
   USERS_PERMISSIONS: 'can_manage_permissions',
 
   // Product management
