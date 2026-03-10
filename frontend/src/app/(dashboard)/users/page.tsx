@@ -1123,7 +1123,9 @@ export default function UsersPage() {
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {isOwner && (
+                  {roleHierarchy[
+                    (currentUser?.role_name || "").toLowerCase()
+                  ] >= 3 && (
                     <SelectItem value="owner">
                       <div className="flex items-center gap-2">
                         <ShieldAlert className="h-4 w-4" />
@@ -1131,12 +1133,16 @@ export default function UsersPage() {
                       </div>
                     </SelectItem>
                   )}
-                  <SelectItem value="manager">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4" />
-                      Manager - Most access
-                    </div>
-                  </SelectItem>
+                  {roleHierarchy[
+                    (currentUser?.role_name || "").toLowerCase()
+                  ] >= 2 && (
+                    <SelectItem value="manager">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4" />
+                        Manager - Most access
+                      </div>
+                    </SelectItem>
+                  )}
                   <SelectItem value="cashier">
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4" />
