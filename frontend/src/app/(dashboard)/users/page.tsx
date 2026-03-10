@@ -70,8 +70,8 @@ export default function UsersPage() {
   // Helper to check if current user can edit a specific user
   const canEditUser = (targetUser: User) => {
     if (!canEditUserAny) return false;
-    const currentLevel = roleHierarchy[currentUser?.role_name || ''] || 0;
-    const targetLevel = roleHierarchy[targetUser.role_name] || 0;
+    const currentLevel = roleHierarchy[(currentUser?.role_name || '').toLowerCase()] || 0;
+    const targetLevel = roleHierarchy[targetUser.role_name.toLowerCase()] || 0;
     return currentLevel >= targetLevel;
   };
 
@@ -79,19 +79,19 @@ export default function UsersPage() {
   const canDeleteUser = (targetUser: User) => {
     if (!canDeleteUserAny) return false;
     // Cannot delete owners from UI
-    if (targetUser.role_name === 'owner') return false;
-    const currentLevel = roleHierarchy[currentUser?.role_name || ''] || 0;
-    const targetLevel = roleHierarchy[targetUser.role_name] || 0;
+    if (targetUser.role_name.toLowerCase() === 'owner') return false;
+    const currentLevel = roleHierarchy[(currentUser?.role_name || '').toLowerCase()] || 0;
+    const targetLevel = roleHierarchy[targetUser.role_name.toLowerCase()] || 0;
     return currentLevel >= targetLevel;
   };
 
   // Helper to check if current user can manage permissions of a specific user
   const canManageUserPermissions = (targetUser: User) => {
     if (!canManagePermissions) return false;
-    const currentLevel = roleHierarchy[currentUser?.role_name || ''] || 0;
-    const targetLevel = roleHierarchy[targetUser.role_name] || 0;
-    // Can only manage permissions of users with strictly lower role level
-    return targetLevel < currentLevel;
+    const currentLevel = roleHierarchy[(currentUser?.role_name || '').toLowerCase()] || 0;
+    const targetLevel = roleHierarchy[targetUser.role_name.toLowerCase()] || 0;
+    // Can only manage permissions of users with same or lower role level
+    return currentLevel >= targetLevel;
   };
 
   const [users, setUsers] = useState<User[]>([]);

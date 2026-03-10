@@ -852,21 +852,14 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 		targetRoleName = user.Role.Name
 	}
 
-	// Define role hierarchy: owner > manager > cashier
-	roleHierarchy := map[string]int{
-		"owner":   3,
-		"manager": 2,
-		"cashier": 1,
-	}
+	currentRoleLevel := getRoleLevel(currentRoleName)
+	targetRoleLevel := getRoleLevel(targetRoleName)
 
-	currentRoleLevel := roleHierarchy[currentRoleName]
-	targetRoleLevel := roleHierarchy[targetRoleName]
-
-	// Can only modify permissions of users with strictly lower role level
-	if targetRoleLevel >= currentRoleLevel {
+	// Can only modify permissions of users with same or lower role level
+	if targetRoleLevel > currentRoleLevel {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    "FORBIDDEN",
-			"message": "You can only modify permissions of users with roles lower than yours",
+			"message": "You can only modify permissions of users with roles the same as or lower than yours",
 		})
 	}
 
@@ -981,12 +974,25 @@ func (h *UserHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get user information for audit log
+	// Get user information for audit log and hierarchy check
 	user, err := h.userRepo.GetByID(c.Context(), id)
 	if err != nil || user == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"code":    "NOT_FOUND",
 			"message": "User not found",
+		})
+	}
+
+	// Enforce strict role hierarchy: Cannot modify users with a strictly higher role
+	currentRoleName := middleware.GetRoleName(c)
+	targetRoleName := ""
+	if user.Role != nil {
+		targetRoleName = user.Role.Name
+	}
+	if getRoleLevel(currentRoleName) < getRoleLevel(targetRoleName) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "You do not have permission to modify a user with a higher role level.",
 		})
 	}
 
@@ -1041,12 +1047,25 @@ func (h *UserHandler) PermanentDelete(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get user information for audit log
+	// Get user information for audit log and hierarchy check
 	user, err := h.userRepo.GetByID(c.Context(), id)
 	if err != nil || user == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"code":    "NOT_FOUND",
 			"message": "User not found",
+		})
+	}
+
+	// Enforce strict role hierarchy: Cannot modify users with a strictly higher role
+	currentRoleName := middleware.GetRoleName(c)
+	targetRoleName := ""
+	if user.Role != nil {
+		targetRoleName = user.Role.Name
+	}
+	if getRoleLevel(currentRoleName) < getRoleLevel(targetRoleName) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "You do not have permission to modify a user with a higher role level.",
 		})
 	}
 
@@ -1167,7 +1186,7 @@ func (h *UserHandler) toUserDetailResponse(user *models.User) UserDetailResponse
 
 // getRoleLevel returns an integer representing the hierarchy of the role
 func getRoleLevel(roleName string) int {
-	switch roleName {
+	switch strings.ToLower(roleName) {
 	case "owner":
 		return 3
 	case "manager":
