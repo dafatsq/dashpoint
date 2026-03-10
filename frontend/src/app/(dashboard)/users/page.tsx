@@ -35,6 +35,7 @@ import {
   Archive,
   Settings2,
   ShoppingCart,
+  Receipt,
   Package,
   BarChart3,
   Lock,
@@ -54,6 +55,9 @@ const roleHierarchy: Record<string, number> = {
   manager: 2,
   cashier: 1,
 };
+
+// Custom order for permission categories to match sidebar
+const CATEGORY_ORDER = ['pos', 'sales', 'inventory', 'reports', 'expenses', 'users', 'system'];
 
 export default function UsersPage() {
   const { user: currentUser, hasPermission } = useAuth();
@@ -1125,102 +1129,109 @@ export default function UsersPage() {
             ) : (
               <div className="h-full overflow-y-auto custom-scrollbar">
                 <div className="space-y-6 pb-6">
-                  {Object.entries(allPermissions).map(([category, permissions]) => {
-                    const sortedPermissions = sortPermissions(permissions);
+                  {Object.entries(allPermissions)
+                    .sort(([a], [b]) => {
+                      const ahead = CATEGORY_ORDER.indexOf(a);
+                      const bhead = CATEGORY_ORDER.indexOf(b);
+                      return (ahead === -1 ? 99 : ahead) - (bhead === -1 ? 99 : bhead);
+                    })
+                    .map(([category, permissions]) => {
+                      const sortedPermissions = sortPermissions(permissions);
 
-                    // improved category icons
-                    const getCategoryIcon = (cat: string) => {
-                      switch (cat) {
-                        case 'sales': return <ShoppingCart className="h-4 w-4" />;
-                        case 'inventory': return <Package className="h-4 w-4" />;
-                        case 'reports': return <BarChart3 className="h-4 w-4" />;
-                        case 'users': return <Users className="h-4 w-4" />;
-                        case 'system': return <Settings2 className="h-4 w-4" />;
-                        case 'expenses': return <Wallet className="h-4 w-4" />;
-                        default: return <Lock className="h-4 w-4" />;
-                      }
-                    };
+                      // improved category icons
+                      const getCategoryIcon = (cat: string) => {
+                        switch (cat) {
+                          case 'pos': return <ShoppingCart className="h-4 w-4" />;
+                          case 'sales': return <Receipt className="h-4 w-4" />;
+                          case 'inventory': return <Package className="h-4 w-4" />;
+                          case 'reports': return <BarChart3 className="h-4 w-4" />;
+                          case 'expenses': return <Wallet className="h-4 w-4" />;
+                          case 'users': return <Users className="h-4 w-4" />;
+                          case 'system': return <Settings2 className="h-4 w-4" />;
+                          default: return <Lock className="h-4 w-4" />;
+                        }
+                      };
 
-                    return (
-                      <Card key={category} className="overflow-hidden border-none shadow-sm bg-muted/20">
-                        <CardHeader className="pb-3 pt-4 px-4 border-b bg-muted/30">
-                          <CardTitle className="text-base flex items-center gap-2 capitalize">
-                            {getCategoryIcon(category)}
-                            {category} Permissions
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                          <div className="divide-y divide-border/50">
-                            {sortedPermissions.map((permission) => {
-                              const isViewPerm = isViewPermission(permission);
-                              const isEnabled = isPermissionEnabled(permission);
-                              const status = getPermissionStatus(permission);
-                              const isDisabled = isPermissionDisabledByParent(permission, category);
+                      return (
+                        <Card key={category} className="overflow-hidden border-none shadow-sm bg-muted/20">
+                          <CardHeader className="pb-3 pt-4 px-4 border-b bg-muted/30">
+                            <CardTitle className="text-base flex items-center gap-2 capitalize">
+                              {getCategoryIcon(category)}
+                              {category === 'pos' ? 'POS' : category} Permissions
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-0">
+                            <div className="divide-y divide-border/50">
+                              {sortedPermissions.map((permission) => {
+                                const isViewPerm = isViewPermission(permission);
+                                const isEnabled = isPermissionEnabled(permission);
+                                const status = getPermissionStatus(permission);
+                                const isDisabled = isPermissionDisabledByParent(permission, category);
 
-                              // Status Badge Logic
-                              const getStatusBadge = () => {
-                                if (permissionChanges[permission.id] !== undefined) {
-                                  return <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50">Modified</Badge>;
-                                }
-                                const override = getPermissionOverride(permission.id);
-                                if (override) {
-                                  return override.allowed
-                                    ? <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Granted</Badge>
-                                    : <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">Denied</Badge>;
-                                }
-                                return <Badge variant="secondary" className="text-muted-foreground font-normal">Default</Badge>;
-                              };
+                                // Status Badge Logic
+                                const getStatusBadge = () => {
+                                  if (permissionChanges[permission.id] !== undefined) {
+                                    return <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50">Modified</Badge>;
+                                  }
+                                  const override = getPermissionOverride(permission.id);
+                                  if (override) {
+                                    return override.allowed
+                                      ? <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Granted</Badge>
+                                      : <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">Denied</Badge>;
+                                  }
+                                  return <Badge variant="secondary" className="text-muted-foreground font-normal">Default</Badge>;
+                                };
 
-                              return (
-                                <div
-                                  key={permission.id}
-                                  className={`flex items-start justify-between p-4 transition-colors ${isDisabled ? 'opacity-50 bg-muted/10' : 'hover:bg-muted/30'
-                                    }`}
-                                >
-                                  <div className="flex-1 mr-4">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className={`font-medium text-sm ${isDisabled ? 'text-muted-foreground' : ''}`}>
-                                        {getPermissionDisplayName(permission, category)}
-                                      </span>
-                                      {isViewPerm && (
-                                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 text-blue-600 border-blue-200 bg-blue-50">
-                                          Access
-                                        </Badge>
+                                return (
+                                  <div
+                                    key={permission.id}
+                                    className={`flex items-start justify-between p-4 transition-colors ${isDisabled ? 'opacity-50 bg-muted/10' : 'hover:bg-muted/30'
+                                      }`}
+                                  >
+                                    <div className="flex-1 mr-4">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className={`font-medium text-sm ${isDisabled ? 'text-muted-foreground' : ''}`}>
+                                          {getPermissionDisplayName(permission, category)}
+                                        </span>
+                                        {isViewPerm && (
+                                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 text-blue-600 border-blue-200 bg-blue-50">
+                                            Access
+                                          </Badge>
+                                        )}
+                                        {!isDisabled && getStatusBadge()}
+                                      </div>
+
+                                      {permission.description && (
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                          {permission.description}
+                                        </p>
                                       )}
-                                      {!isDisabled && getStatusBadge()}
+
+                                      {isDisabled && (
+                                        <p className="text-xs text-orange-600 mt-1.5 flex items-center gap-1.5">
+                                          <ShieldAlert className="h-3 w-3" />
+                                          {permission.key === 'can_void_sale'
+                                            ? 'Requires Sales History Access'
+                                            : `Requires ${category.charAt(0).toUpperCase() + category.slice(1)} Access`}
+                                        </p>
+                                      )}
                                     </div>
 
-                                    {permission.description && (
-                                      <p className="text-sm text-muted-foreground leading-relaxed">
-                                        {permission.description}
-                                      </p>
-                                    )}
-
-                                    {isDisabled && (
-                                      <p className="text-xs text-orange-600 mt-1.5 flex items-center gap-1.5">
-                                        <ShieldAlert className="h-3 w-3" />
-                                        {permission.key === 'can_void_sale'
-                                          ? 'Requires Sales History Access'
-                                          : `Requires ${category.charAt(0).toUpperCase() + category.slice(1)} Access`}
-                                      </p>
-                                    )}
+                                    <div className="flex items-center h-6 mt-1">
+                                      <Switch
+                                        checked={isDisabled ? false : isEnabled}
+                                        onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
+                                        disabled={isDisabled}
+                                      />
+                                    </div>
                                   </div>
-
-                                  <div className="flex items-center h-6 mt-1">
-                                    <Switch
-                                      checked={isDisabled ? false : isEnabled}
-                                      onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
-                                      disabled={isDisabled}
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                                );
+                              })}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                 </div>
               </div>
             )}
