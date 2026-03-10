@@ -482,6 +482,14 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 	}
 
 	if req.RoleID != nil {
+		// Prevent self-role change
+		if middleware.GetUserID(c) == id {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"code":    "CANNOT_CHANGE_OWN_ROLE",
+				"message": "You cannot change your own role",
+			})
+		}
+
 		roleID, err := uuid.Parse(*req.RoleID)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -842,6 +850,15 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"code":    "NOT_FOUND",
 			"message": "User not found",
+		})
+	}
+
+	// Prevent managing own permissions
+	currentUserID := middleware.GetUserID(c)
+	if currentUserID == id {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "CANNOT_MODIFY_SELF",
+			"message": "You cannot modify your own permissions",
 		})
 	}
 
