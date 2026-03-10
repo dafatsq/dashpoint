@@ -36,8 +36,14 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Expense, ExpenseCategory, CreateExpenseRequest, ExpenseSummary, Product } from '@/types';
+import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
+import { useRouter } from 'next/navigation';
 
 export default function ExpensesPage() {
+  const { hasPermission, isLoading: isAuthLoading } = useAuth();
+  const router = useRouter();
+  const canManage = hasPermission(PERMISSIONS.EXPENSES_MANAGE);
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -74,6 +80,13 @@ export default function ExpensesPage() {
   const [formErrors, setFormErrors] = useState<{ amount?: string; description?: string; general?: string }>({});
   const [isManualAmount, setIsManualAmount] = useState(false);
   const [isManualDescription, setIsManualDescription] = useState(false);
+
+  // Route guard
+  useEffect(() => {
+    if (!isAuthLoading && !hasPermission(PERMISSIONS.EXPENSES_VIEW)) {
+      router.push('/');
+    }
+  }, [hasPermission, isAuthLoading, router]);
 
   // Fetch data
   useEffect(() => {
@@ -403,10 +416,12 @@ export default function ExpensesPage() {
                 placeholder="Select date range"
                 className="w-full sm:w-[280px]"
               />
-              <Button onClick={openCreateDialog} className="w-full sm:w-auto">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Expense
-              </Button>
+              {canManage && (
+                <Button onClick={openCreateDialog} className="w-full sm:w-auto">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Expense
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -479,23 +494,27 @@ export default function ExpensesPage() {
                           </td>
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openEditDialog(expense)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setDeletingExpense(expense);
-                                  setDeleteDialogOpen(true);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                              {canManage && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openEditDialog(expense)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setDeletingExpense(expense);
+                                      setDeleteDialogOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -542,29 +561,31 @@ export default function ExpensesPage() {
                       </div>
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-2 border-t">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(expense)}
-                        className="h-8"
-                      >
-                        <Pencil className="h-3.5 w-3.5 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setDeletingExpense(expense);
-                          setDeleteDialogOpen(true);
-                        }}
-                        className="h-8 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" />
-                        Delete
-                      </Button>
-                    </div>
+                    {canManage && (
+                      <div className="flex justify-end gap-2 pt-2 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(expense)}
+                          className="h-8"
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setDeletingExpense(expense);
+                            setDeleteDialogOpen(true);
+                          }}
+                          className="h-8 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
