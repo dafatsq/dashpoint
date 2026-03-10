@@ -384,6 +384,10 @@ export const PERMISSIONS = {
   REPORTS_VIEW: 'can_view_reports',
   REPORTS_EXPORT: 'can_export_data',
 
+  // Expenses
+  EXPENSES_VIEW: 'can_view_expenses',
+  EXPENSES_MANAGE: 'can_manage_expenses',
+
   // Audit logs
   AUDIT_VIEW: 'can_view_audit_logs',
 

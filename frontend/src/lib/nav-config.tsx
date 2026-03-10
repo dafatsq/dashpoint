@@ -90,7 +90,7 @@ export const navItems: NavItem[] = [
     href: '/expenses',
     label: 'Expenses',
     icon: <Wallet className="h-5 w-5" />,
-    permission: PERMISSIONS.REPORTS_VIEW, // Owner/Manager only
+    permission: PERMISSIONS.EXPENSES_VIEW,
     description: 'Track business expenses',
     color: 'text-red-500',
   },
