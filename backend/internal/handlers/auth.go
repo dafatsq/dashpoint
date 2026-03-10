@@ -184,6 +184,14 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 		})
 	}
 
+	if user == nil {
+		log.Warn().Str("user_id", req.UserID).Msg("Attempted PIN login for non-existent user")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"code":    "INVALID_CREDENTIALS",
+			"message": "Invalid credentials",
+		})
+	}
+
 	// Check if user is active
 	if !user.IsActive {
 		log.Warn().Str("user_id", req.UserID).Msg("Attempted PIN login for inactive user")
