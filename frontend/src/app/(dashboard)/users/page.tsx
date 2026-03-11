@@ -410,8 +410,18 @@ export default function UsersPage() {
     return userEffectivePermissions.includes(permission.key);
   };
 
+  // Check if the current user is allowed to grant a specific permission
+  // Owners can grant anything; others can only grant permissions they themselves have
+  const currentUserCanGrant = (permission: Permission): boolean => {
+    if (isOwner) return true;
+    return currentUser?.permissions?.includes(permission.key) ?? false;
+  };
+
   // Handle permission toggle
   const handlePermissionToggle = (permission: Permission, enabled: boolean) => {
+    // Block granting a permission the current user doesn't have
+    if (enabled && !currentUserCanGrant(permission)) return;
+
     const newChanges = { ...permissionChanges };
 
     // Helper to set a single permission change
@@ -1353,6 +1363,11 @@ export default function UsersPage() {
                                   permission,
                                   category,
                                 );
+                                // Current user cannot toggle permissions they don't have
+                                const cannotGrant =
+                                  !currentUserCanGrant(permission);
+                                const isSwitchDisabled =
+                                  isDisabled || cannotGrant;
 
                                 // Status Badge Logic
                                 const getStatusBadge = () => {
@@ -1405,7 +1420,9 @@ export default function UsersPage() {
                                     className={`flex items-start justify-between p-4 transition-colors ${
                                       isDisabled
                                         ? "opacity-50 bg-muted/10"
-                                        : "hover:bg-muted/30"
+                                        : cannotGrant
+                                          ? "opacity-60 bg-muted/10"
+                                          : "hover:bg-muted/30"
                                     }`}
                                   >
                                     <div className="flex-1 mr-4">
@@ -1443,6 +1460,12 @@ export default function UsersPage() {
                                             : `Requires ${category.charAt(0).toUpperCase() + category.slice(1)} Access`}
                                         </p>
                                       )}
+                                      {!isDisabled && cannotGrant && (
+                                        <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                                          <Lock className="h-3 w-3" />
+                                          You don&apos;t have this permission
+                                        </p>
+                                      )}
                                     </div>
 
                                     <div className="flex items-center h-6 mt-1">
@@ -1454,7 +1477,7 @@ export default function UsersPage() {
                                             checked,
                                           )
                                         }
-                                        disabled={isDisabled}
+                                        disabled={isSwitchDisabled}
                                       />
                                     </div>
                                   </div>
