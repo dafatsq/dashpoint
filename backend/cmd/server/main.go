@@ -269,10 +269,10 @@ func setupRoutes(
 	products.Get("/lookup", productHandler.Lookup)
 	products.Get("/:id", productHandler.Get)
 	products.Get("/:id/inventory", productHandler.GetInventory)
-	products.Post("/", middleware.RequireRole("owner", "manager"), productHandler.Create)
-	products.Patch("/:id", middleware.RequireRole("owner", "manager"), productHandler.Update)
-	products.Delete("/:id", middleware.RequireRole("owner", "manager"), productHandler.Delete)
-	products.Delete("/:id/permanent", middleware.RequireRole("owner", "manager"), productHandler.PermanentDelete)
+	products.Post("/", middleware.RequirePermission(permissionChecker, "can_create_product"), productHandler.Create)
+	products.Patch("/:id", middleware.RequirePermission(permissionChecker, "can_edit_product"), productHandler.Update)
+	products.Delete("/:id", middleware.RequirePermission(permissionChecker, "can_delete_product"), productHandler.Delete)
+	products.Delete("/:id/permanent", middleware.RequirePermission(permissionChecker, "can_delete_product"), productHandler.PermanentDelete)
 
 	// Inventory endpoints
 	inventory := protected.Group("/inventory")
@@ -306,14 +306,14 @@ func setupRoutes(
 	reports.Get("/top-sellers", reportHandler.GetTopSellers)
 	reports.Get("/inventory", reportHandler.GetInventoryValuation)
 	reports.Get("/cash", reportHandler.GetCashReport)
-	reports.Get("/by-employee", middleware.RequireRole("owner", "manager"), reportHandler.GetEmployeeSalesReport)
+	reports.Get("/by-employee", middleware.RequirePermission(permissionChecker, "can_view_reports"), reportHandler.GetEmployeeSalesReport)
 	reports.Get("/by-category", reportHandler.GetCategorySalesReport)
 
-	// Export endpoints (owner/manager only)
-	reports.Get("/export/sales", reportHandler.ExportSalesCSV)
-	reports.Get("/export/inventory", reportHandler.ExportInventoryCSV)
-	reports.Get("/export/top-sellers", reportHandler.ExportTopSellersCSV)
-	reports.Get("/export/comprehensive", reportHandler.ExportComprehensiveReportCSV)
+	// Export endpoints (requires can_export_data permission)
+	reports.Get("/export/sales", middleware.RequirePermission(permissionChecker, "can_export_data"), reportHandler.ExportSalesCSV)
+	reports.Get("/export/inventory", middleware.RequirePermission(permissionChecker, "can_export_data"), reportHandler.ExportInventoryCSV)
+	reports.Get("/export/top-sellers", middleware.RequirePermission(permissionChecker, "can_export_data"), reportHandler.ExportTopSellersCSV)
+	reports.Get("/export/comprehensive", middleware.RequirePermission(permissionChecker, "can_export_data"), reportHandler.ExportComprehensiveReportCSV)
 
 	// Expense endpoints
 	expenses := protected.Group("/expenses")

@@ -11,7 +11,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 
-	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/repository"
 )
 
@@ -367,14 +366,6 @@ func (h *ReportHandler) GetCategorySalesReport(c *fiber.Ctx) error {
 
 // ExportSalesCSV handles GET /api/v1/reports/export/sales
 func (h *ReportHandler) ExportSalesCSV(c *fiber.Ctx) error {
-	// Check permission
-	roleName := middleware.GetRoleName(c)
-	if roleName != "owner" && roleName != "manager" {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    "FORBIDDEN",
-			"message": "Only owner or manager can export data",
-		})
-	}
 
 	startStr := c.Query("start_date")
 	endStr := c.Query("end_date")
@@ -478,14 +469,6 @@ func (h *ReportHandler) ExportSalesCSV(c *fiber.Ctx) error {
 
 // ExportInventoryCSV handles GET /api/v1/reports/export/inventory
 func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
-	// Check permission
-	roleName := middleware.GetRoleName(c)
-	if roleName != "owner" && roleName != "manager" {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    "FORBIDDEN",
-			"message": "Only owner or manager can export data",
-		})
-	}
 
 	valuation, err := h.reportRepo.GetInventoryValuation(c.Context(), nil, true)
 	if err != nil {
@@ -551,14 +534,6 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 
 // ExportTopSellersCSV handles GET /api/v1/reports/export/top-sellers
 func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
-	// Check permission
-	roleName := middleware.GetRoleName(c)
-	if roleName != "owner" && roleName != "manager" {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    "FORBIDDEN",
-			"message": "Only owner or manager can export data",
-		})
-	}
 
 	startStr := c.Query("start_date")
 	endStr := c.Query("end_date")
@@ -628,14 +603,6 @@ func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
 
 // ExportComprehensiveReportCSV exports all analytics and statistics in one CSV
 func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
-	// Check permission
-	roleName := middleware.GetRoleName(c)
-	if roleName != "owner" && roleName != "manager" {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    "FORBIDDEN",
-			"message": "Only owner or manager can export data",
-		})
-	}
 
 	startStr := c.Query("start_date")
 	endStr := c.Query("end_date")

@@ -376,12 +376,8 @@ func (h *SaleHandler) ListSales(c *fiber.Ctx) error {
 		}
 	}
 
-	// For cashiers, only show their own sales
-	roleName := middleware.GetRoleName(c)
-	if roleName == "cashier" {
-		userID := middleware.GetUserID(c)
-		employeeID = &userID
-	}
+	// All users who reach this handler already passed can_view_sales permission check.
+	// No role-based filtering needed — owners/managers can filter by employee_id via query param.
 
 	sales, total, err := h.saleRepo.List(c.Context(), employeeID, shiftID, status, startDate, endDate, limit, offset)
 	if err != nil {
@@ -408,14 +404,6 @@ func (h *SaleHandler) ListSales(c *fiber.Ctx) error {
 
 // VoidSale handles POST /api/v1/sales/:id/void
 func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
-	// Check permission (owner/manager only)
-	roleName := middleware.GetRoleName(c)
-	if roleName != "owner" && roleName != "manager" {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    "FORBIDDEN",
-			"message": "Only owner or manager can void sales",
-		})
-	}
 
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
