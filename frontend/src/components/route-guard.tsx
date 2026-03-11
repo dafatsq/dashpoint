@@ -1,22 +1,22 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
-import { Loader2 } from 'lucide-react';
+import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
+import { Loader2 } from "lucide-react";
 
 // Map routes to required permissions
 const routePermissions: Record<string, string | undefined> = {
-  '/': undefined, // Everyone can access dashboard
-  '/pos': PERMISSIONS.SALES_CREATE,
-  '/products': PERMISSIONS.PRODUCTS_VIEW,
-  '/inventory': PERMISSIONS.INVENTORY_VIEW,
-  '/sales': PERMISSIONS.SALES_CREATE,
-  '/reports': PERMISSIONS.REPORTS_VIEW,
-  '/expenses': PERMISSIONS.REPORTS_VIEW,
-  '/users': PERMISSIONS.USERS_VIEW,
-  '/audit': PERMISSIONS.AUDIT_VIEW,
-  '/shifts': PERMISSIONS.POS_VIEW,
+  "/": undefined, // Everyone can access dashboard
+  "/pos": PERMISSIONS.POS_VIEW,
+  "/products": PERMISSIONS.PRODUCTS_VIEW,
+  "/inventory": PERMISSIONS.INVENTORY_VIEW,
+  "/sales": PERMISSIONS.SALES_VIEW,
+  "/reports": PERMISSIONS.REPORTS_VIEW,
+  "/expenses": PERMISSIONS.REPORTS_VIEW,
+  "/users": PERMISSIONS.USERS_VIEW,
+  "/audit": PERMISSIONS.AUDIT_VIEW,
+  "/shifts": PERMISSIONS.POS_VIEW,
   // '/changes' has no permission requirement so everyone can access it
   // '/settings' explicitly has no permission requirement so everyone can access it
 };
@@ -46,9 +46,9 @@ export function RouteGuard({ children }: RouteGuardProps) {
       requiredPermission = routePermissions[pathname];
     } else {
       // Check if it's a sub-route (e.g., /users/123)
-      const pathParts = pathname.split('/');
+      const pathParts = pathname.split("/");
       for (let i = pathParts.length; i > 0; i--) {
-        const parentPath = pathParts.slice(0, i).join('/') || '/';
+        const parentPath = pathParts.slice(0, i).join("/") || "/";
         if (parentPath in routePermissions) {
           requiredPermission = routePermissions[parentPath];
           break;
@@ -58,8 +58,10 @@ export function RouteGuard({ children }: RouteGuardProps) {
 
     // If route requires permission and user doesn't have it, redirect
     if (requiredPermission && !hasPermission(requiredPermission)) {
-      console.log(`[RouteGuard] Access denied to ${pathname} - missing permission: ${requiredPermission}`);
-      router.replace('/?access_denied=true');
+      console.log(
+        `[RouteGuard] Access denied to ${pathname} - missing permission: ${requiredPermission}`,
+      );
+      router.replace("/?access_denied=true");
     }
   }, [pathname, user, hasPermission, isLoading, isAuthenticated, router]);
 
@@ -82,9 +84,9 @@ export function RouteGuard({ children }: RouteGuardProps) {
   if (routePermissions[pathname] !== undefined) {
     requiredPermission = routePermissions[pathname];
   } else {
-    const pathParts = pathname.split('/');
+    const pathParts = pathname.split("/");
     for (let i = pathParts.length; i > 0; i--) {
-      const parentPath = pathParts.slice(0, i).join('/') || '/';
+      const parentPath = pathParts.slice(0, i).join("/") || "/";
       if (parentPath in routePermissions) {
         requiredPermission = routePermissions[parentPath];
         break;

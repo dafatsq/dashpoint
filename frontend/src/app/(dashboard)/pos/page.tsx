@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { Header } from '@/components/layout/header';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { Header } from "@/components/layout/header";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -14,14 +14,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Search,
   Plus,
@@ -38,28 +38,39 @@ import {
   CheckCircle,
   ArrowDownCircle,
   ArrowUpCircle,
-} from 'lucide-react';
-import api from '@/lib/api';
-import { Product, CartItem, Category, Shift, PaymentMethod, CreateSaleRequest, CashDrawerOperation, CashDrawerOperationsResponse, User } from '@/types';
-import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
+} from "lucide-react";
+import api from "@/lib/api";
+import {
+  Product,
+  CartItem,
+  Category,
+  Shift,
+  PaymentMethod,
+  CreateSaleRequest,
+  CashDrawerOperation,
+  CashDrawerOperationsResponse,
+  User,
+} from "@/types";
+import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from '@/components/ui/sheet';
+} from "@/components/ui/sheet";
 
 // Helper to get full image URL
 function getImageUrl(path: string | null | undefined): string {
-  if (!path) return '';
-  if (path.startsWith('http://') || path.startsWith('https://')) {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) {
     return path;
   }
   // Use window.location for dynamic base URL, fallback to localhost:8080
-  const baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? `${window.location.protocol}//${window.location.hostname}:8080`
-    : 'http://localhost:8080';
+  const baseUrl =
+    typeof window !== "undefined" && window.location.hostname !== "localhost"
+      ? `${window.location.protocol}//${window.location.hostname}:8080`
+      : "http://localhost:8080";
   return `${baseUrl}${path}`;
 }
 
@@ -84,9 +95,9 @@ function getProductMinQuantity(product: Product): number {
 
 // Helper to format currency
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
     minimumFractionDigits: 0,
   }).format(amount);
 };
@@ -151,7 +162,9 @@ function CartView({
                 className="flex items-center gap-3 p-2 rounded-lg border bg-card"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{item.product.name}</p>
+                  <p className="font-medium text-sm truncate">
+                    {item.product.name}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {formatCurrency(getProductPrice(item.product))}
                   </p>
@@ -196,7 +209,7 @@ function CartView({
         <div className="space-y-2 text-sm">
           <div className="flex justify-between items-center pb-2 border-b">
             <span className="text-muted-foreground">Cashier</span>
-            <span className="font-medium">{user?.name || 'Unknown'}</span>
+            <span className="font-medium">{user?.name || "Unknown"}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
@@ -215,7 +228,7 @@ function CartView({
                 <div className="flex items-center gap-1">
                   <Input
                     type="number"
-                    value={discount || ''}
+                    value={discount || ""}
                     onChange={(e) => {
                       const val = parseFloat(e.target.value) || 0;
                       setDiscount(Math.min(100, Math.max(0, val)));
@@ -266,15 +279,15 @@ export default function POSPage() {
   // Redirect if no permission
   useEffect(() => {
     if (!hasPermission(PERMISSIONS.POS_VIEW)) {
-      router.replace('/');
+      router.replace("/");
     }
   }, [hasPermission, router]);
 
   // Product state
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
   // Cart state
@@ -284,20 +297,25 @@ export default function POSPage() {
   // Shift state
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
-  const [startingCash, setStartingCash] = useState('');
+  const [startingCash, setStartingCash] = useState("");
 
   // Shift details and end shift state
   const [shiftDetailsOpen, setShiftDetailsOpen] = useState(false);
-  const [endingCash, setEndingCash] = useState('');
-  const [closingNotes, setClosingNotes] = useState('');
+  const [endingCash, setEndingCash] = useState("");
+  const [closingNotes, setClosingNotes] = useState("");
 
   // Cash drawer operations state
   const [cashDrawerDialogOpen, setCashDrawerDialogOpen] = useState(false);
-  const [cashDrawerOpType, setCashDrawerOpType] = useState<'pay_in' | 'pay_out'>('pay_in');
-  const [cashDrawerAmount, setCashDrawerAmount] = useState('');
-  const [cashDrawerReason, setCashDrawerReason] = useState('');
+  const [cashDrawerOpType, setCashDrawerOpType] = useState<
+    "pay_in" | "pay_out"
+  >("pay_in");
+  const [cashDrawerAmount, setCashDrawerAmount] = useState("");
+  const [cashDrawerReason, setCashDrawerReason] = useState("");
   const [cashDrawerOps, setCashDrawerOps] = useState<CashDrawerOperation[]>([]);
-  const [cashDrawerTotals, setCashDrawerTotals] = useState<{ pay_in_total: string; pay_out_total: string }>({ pay_in_total: '0', pay_out_total: '0' });
+  const [cashDrawerTotals, setCashDrawerTotals] = useState<{
+    pay_in_total: string;
+    pay_out_total: string;
+  }>({ pay_in_total: "0", pay_out_total: "0" });
   const [isSubmittingOp, setIsSubmittingOp] = useState(false);
 
   // Blind close state
@@ -307,17 +325,17 @@ export default function POSPage() {
 
   // Checkout state
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
-  const [amountPaid, setAmountPaid] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [amountPaid, setAmountPaid] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
-  const [lastInvoice, setLastInvoice] = useState('');
+  const [lastInvoice, setLastInvoice] = useState("");
   const [lastChange, setLastChange] = useState(0);
 
   // Error dialog state
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
-  const [errorTitle, setErrorTitle] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorTitle, setErrorTitle] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const showError = (title: string, message: string) => {
     setErrorTitle(title);
@@ -330,28 +348,31 @@ export default function POSPage() {
   // Calculate totals
   const subtotal = cartItems.reduce(
     (sum, item) => sum + getProductPrice(item.product) * item.quantity,
-    0
+    0,
   );
 
   const totalTax = cartItems.reduce((sum, item) => {
     const itemSubtotal = getProductPrice(item.product) * item.quantity;
-    const taxRate = item.product.tax_rate ? parseFloat(item.product.tax_rate.toString()) : 0;
+    const taxRate = item.product.tax_rate
+      ? parseFloat(item.product.tax_rate.toString())
+      : 0;
     return sum + (itemSubtotal * taxRate) / 100;
   }, 0);
 
   const discountAmount = (subtotal * discount) / 100;
   const total = subtotal + totalTax - discountAmount;
-  const change = parseFloat(amountPaid || '0') - total;
+  const change = parseFloat(amountPaid || "0") - total;
 
   // Fetch initial data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [productsResult, categoriesResult, shiftResult] = await Promise.all([
-          api.getProducts({ active: true }),
-          api.getCategories(),
-          api.getCurrentShift(),
-        ]);
+        const [productsResult, categoriesResult, shiftResult] =
+          await Promise.all([
+            api.getProducts({ active: true }),
+            api.getCategories(),
+            api.getCurrentShift(),
+          ]);
 
         if (productsResult.data) setProducts(productsResult.data);
         if (categoriesResult.data) setCategories(categoriesResult.data);
@@ -359,7 +380,7 @@ export default function POSPage() {
           setCurrentShift(shiftResult.data);
         }
       } catch (error) {
-        console.error('Failed to fetch data:', error);
+        console.error("Failed to fetch data:", error);
       } finally {
         setIsLoadingProducts(false);
       }
@@ -373,7 +394,7 @@ export default function POSPage() {
     const pollData = async () => {
       await Promise.all([
         refreshShift(),
-        refreshProducts() // Keep inventory in sync
+        refreshProducts(), // Keep inventory in sync
       ]);
     };
 
@@ -388,7 +409,7 @@ export default function POSPage() {
         setProducts(result.data);
       }
     } catch (error) {
-      console.error('Failed to refresh products:', error);
+      console.error("Failed to refresh products:", error);
     }
   };
 
@@ -399,7 +420,7 @@ export default function POSPage() {
       product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.barcode?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
-      selectedCategory === 'all' || product.category_id === selectedCategory;
+      selectedCategory === "all" || product.category_id === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -411,13 +432,12 @@ export default function POSPage() {
         return items.map((item) =>
           item.product.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
-            : item
+            : item,
         );
       }
       return [...items, { product, quantity: 1 }];
     });
   }, []);
-
 
   const updateQuantity = useCallback((productId: string, delta: number) => {
     setCartItems((items) =>
@@ -425,14 +445,16 @@ export default function POSPage() {
         .map((item) =>
           item.product.id === productId
             ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-            : item
+            : item,
         )
-        .filter((item) => item.quantity > 0)
+        .filter((item) => item.quantity > 0),
     );
   }, []);
 
   const removeFromCart = useCallback((productId: string) => {
-    setCartItems((items) => items.filter((item) => item.product.id !== productId));
+    setCartItems((items) =>
+      items.filter((item) => item.product.id !== productId),
+    );
   }, []);
 
   const clearCart = useCallback(() => {
@@ -449,10 +471,10 @@ export default function POSPage() {
       if (result.data) {
         setCurrentShift(result.data);
         setShiftDialogOpen(false);
-        setStartingCash('');
+        setStartingCash("");
       }
     } catch (error) {
-      console.error('Failed to start shift:', error);
+      console.error("Failed to start shift:", error);
     }
   };
 
@@ -463,7 +485,10 @@ export default function POSPage() {
       // Handle case where shift was closed remotely
       if (!result.data && currentShift) {
         setCurrentShift(null);
-        showError('Shift Closed', 'The shift has been closed by another user. Sales are disabled.');
+        showError(
+          "Shift Closed",
+          "The shift has been closed by another user. Sales are disabled.",
+        );
         return;
       }
 
@@ -472,7 +497,7 @@ export default function POSPage() {
         setCurrentShift(result.data);
       }
     } catch (error) {
-      console.error('Failed to refresh shift:', error);
+      console.error("Failed to refresh shift:", error);
     }
   };
 
@@ -482,7 +507,7 @@ export default function POSPage() {
     // Validate input
     const cashAmount = parseFloat(endingCash);
     if (isNaN(cashAmount) || cashAmount < 0) {
-      showError('Invalid Amount', 'Please enter a valid positive cash amount');
+      showError("Invalid Amount", "Please enter a valid positive cash amount");
       return;
     }
 
@@ -495,11 +520,14 @@ export default function POSPage() {
         setShiftClosed(true);
         setCurrentShift(null);
       } else if (result.error) {
-        showError('End Shift Failed', result.error);
+        showError("End Shift Failed", result.error);
       }
     } catch (error) {
-      console.error('Failed to end shift:', error);
-      showError('End Shift Failed', 'An unexpected error occurred while ending the shift.');
+      console.error("Failed to end shift:", error);
+      showError(
+        "End Shift Failed",
+        "An unexpected error occurred while ending the shift.",
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -513,23 +541,23 @@ export default function POSPage() {
       if (opsResult.data) {
         setCashDrawerOps(opsResult.data.operations || []);
         setCashDrawerTotals({
-          pay_in_total: opsResult.data.pay_in_total || '0',
-          pay_out_total: opsResult.data.pay_out_total || '0',
+          pay_in_total: opsResult.data.pay_in_total || "0",
+          pay_out_total: opsResult.data.pay_out_total || "0",
         });
       }
     }
     setShiftClosed(false);
     setClosedShiftData(null);
-    setEndingCash('');
-    setClosingNotes('');
+    setEndingCash("");
+    setClosingNotes("");
     setShiftDetailsOpen(true);
   };
 
   // Cash drawer operations
-  const openCashDrawerDialog = (type: 'pay_in' | 'pay_out') => {
+  const openCashDrawerDialog = (type: "pay_in" | "pay_out") => {
     setCashDrawerOpType(type);
-    setCashDrawerAmount('');
-    setCashDrawerReason('');
+    setCashDrawerAmount("");
+    setCashDrawerReason("");
     setCashDrawerDialogOpen(true);
   };
 
@@ -537,18 +565,22 @@ export default function POSPage() {
     if (!cashDrawerAmount || !cashDrawerReason) return;
     setIsSubmittingOp(true);
     try {
-      const result = cashDrawerOpType === 'pay_in'
-        ? await api.payIn(cashDrawerAmount, cashDrawerReason)
-        : await api.payOut(cashDrawerAmount, cashDrawerReason);
+      const result =
+        cashDrawerOpType === "pay_in"
+          ? await api.payIn(cashDrawerAmount, cashDrawerReason)
+          : await api.payOut(cashDrawerAmount, cashDrawerReason);
       if (result.error) {
-        showError('Operation Failed', result.error);
+        showError("Operation Failed", result.error);
       } else {
         setCashDrawerDialogOpen(false);
         await refreshShift();
       }
     } catch (error) {
-      console.error('Failed cash drawer operation:', error);
-      showError('Operation Failed', 'Expected error occurred during cash drawer operation.');
+      console.error("Failed cash drawer operation:", error);
+      showError(
+        "Operation Failed",
+        "Expected error occurred during cash drawer operation.",
+      );
     } finally {
       setIsSubmittingOp(false);
     }
@@ -571,12 +603,15 @@ export default function POSPage() {
         {
           payment_method: paymentMethod,
           amount: total.toString(),
-          amount_tendered: paymentMethod === 'cash' ? amountPaid : undefined,
-          change_given: paymentMethod === 'cash' && change > 0 ? change.toString() : undefined,
+          amount_tendered: paymentMethod === "cash" ? amountPaid : undefined,
+          change_given:
+            paymentMethod === "cash" && change > 0
+              ? change.toString()
+              : undefined,
         },
       ],
       discount_value: discount > 0 ? discount.toString() : undefined,
-      discount_type: discount > 0 ? 'percentage' : undefined,
+      discount_type: discount > 0 ? "percentage" : undefined,
     };
 
     try {
@@ -587,14 +622,17 @@ export default function POSPage() {
         setLastChange(change > 0 ? change : 0);
         setSaleComplete(true);
         clearCart();
-        setAmountPaid('');
+        setAmountPaid("");
         refreshShift(); // Refresh shift totals after sale
       } else if (result.error) {
-        showError('Transaction Failed', result.error);
+        showError("Transaction Failed", result.error);
       }
     } catch (error) {
-      console.error('Failed to process sale:', error);
-      showError('Transaction Failed', 'An unexpected error occurred while processing the sale.');
+      console.error("Failed to process sale:", error);
+      showError(
+        "Transaction Failed",
+        "An unexpected error occurred while processing the sale.",
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -603,7 +641,7 @@ export default function POSPage() {
   const closeCheckoutDialog = () => {
     setCheckoutDialogOpen(false);
     setSaleComplete(false);
-    setAmountPaid('');
+    setAmountPaid("");
     setLastChange(0);
   };
 
@@ -629,7 +667,10 @@ export default function POSPage() {
       const result = await api.getCurrentShift();
       if (!result.data) {
         setCurrentShift(null);
-        showError('Shift Closed', 'Shift has been closed. Cannot process sale.');
+        showError(
+          "Shift Closed",
+          "Shift has been closed. Cannot process sale.",
+        );
         return;
       }
       setCurrentShift(result.data);
@@ -649,7 +690,9 @@ export default function POSPage() {
         <div className="bg-card border-b border-l-4 border-l-yellow-500 px-6 py-4 flex items-center justify-between flex-shrink-0 shadow-sm">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-yellow-600" />
-            <span className="text-sm font-medium">No active shift. Start a shift to begin selling.</span>
+            <span className="text-sm font-medium">
+              No active shift. Start a shift to begin selling.
+            </span>
           </div>
           {hasPermission(PERMISSIONS.POS_SHIFT_START) && (
             <Button size="sm" onClick={() => setShiftDialogOpen(true)}>
@@ -668,11 +711,21 @@ export default function POSPage() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => openCashDrawerDialog('pay_in')} className="gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openCashDrawerDialog("pay_in")}
+              className="gap-1.5"
+            >
               <ArrowDownCircle className="h-4 w-4 text-green-600" />
               <span className="hidden sm:inline">Pay In</span>
             </Button>
-            <Button size="sm" variant="outline" onClick={() => openCashDrawerDialog('pay_out')} className="gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openCashDrawerDialog("pay_out")}
+              className="gap-1.5"
+            >
               <ArrowUpCircle className="h-4 w-4 text-red-600" />
               <span className="hidden sm:inline">Pay Out</span>
             </Button>
@@ -700,7 +753,10 @@ export default function POSPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <Select
+              value={selectedCategory}
+              onValueChange={setSelectedCategory}
+            >
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
@@ -740,15 +796,18 @@ export default function POSPage() {
                       key={product.id}
                       onClick={() => currentShift && addToCart(product)}
                       disabled={!currentShift || isOutOfStock}
-                      className={`bg-card border rounded-lg p-3 text-left hover:border-primary hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${isOutOfStock ? 'opacity-60 bg-muted/50' : ''}`}
+                      className={`bg-card border rounded-lg p-3 text-left hover:border-primary hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${isOutOfStock ? "opacity-60 bg-muted/50" : ""}`}
                     >
                       {/* Stock Status Badge */}
                       {(isLowStock || isOutOfStock) && (
-                        <div className={`absolute top-2 right-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm z-10 ${isOutOfStock
-                          ? 'bg-red-600 text-white'
-                          : 'bg-yellow-500 text-white'
-                          }`}>
-                          {isOutOfStock ? 'Out of Stock' : 'Low Stock'}
+                        <div
+                          className={`absolute top-2 right-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm z-10 ${
+                            isOutOfStock
+                              ? "bg-red-600 text-white"
+                              : "bg-yellow-500 text-white"
+                          }`}
+                        >
+                          {isOutOfStock ? "Out of Stock" : "Low Stock"}
                         </div>
                       )}
 
@@ -757,22 +816,37 @@ export default function POSPage() {
                           <img
                             src={getImageUrl(product.image_url)}
                             alt={product.name}
-                            className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
+                            className={`w-full h-full object-cover ${isOutOfStock ? "grayscale" : ""}`}
                             onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
+                              (
+                                (e.target as HTMLImageElement)
+                                  .nextSibling as HTMLElement
+                              ).style.display = "flex";
                             }}
                           />
                         ) : null}
-                        <ShoppingCart className="h-8 w-8 text-muted-foreground" style={{ display: product.image_url ? 'none' : 'block' }} />
+                        <ShoppingCart
+                          className="h-8 w-8 text-muted-foreground"
+                          style={{
+                            display: product.image_url ? "none" : "block",
+                          }}
+                        />
                       </div>
-                      <p className="font-medium text-sm truncate">{product.name}</p>
-                      <p className="text-xs text-muted-foreground">{product.category_name}</p>
+                      <p className="font-medium text-sm truncate">
+                        {product.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {product.category_name}
+                      </p>
                       <div className="flex flex-col gap-1 mt-2">
                         <span className="font-bold text-primary">
                           {formatCurrency(price)}
                         </span>
-                        <span className={`text-xs font-medium ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-yellow-600' : 'text-muted-foreground'}`}>
+                        <span
+                          className={`text-xs font-medium ${isOutOfStock ? "text-red-600" : isLowStock ? "text-yellow-600" : "text-muted-foreground"}`}
+                        >
                           Stock: {quantity}
                         </span>
                       </div>
@@ -802,7 +876,10 @@ export default function POSPage() {
               <span className="font-bold">{formatCurrency(total)}</span>
             </Button>
           </SheetTrigger>
-          <SheetContent className="w-full sm:max-w-md p-0 bg-card gap-0" side="right">
+          <SheetContent
+            className="w-full sm:max-w-md p-0 bg-card gap-0"
+            side="right"
+          >
             <SheetHeader>
               <SheetTitle className="sr-only">Current Order</SheetTitle>
             </SheetHeader>
@@ -844,20 +921,27 @@ export default function POSPage() {
       </Dialog>
 
       {/* Cash Drawer Operation Dialog */}
-      <Dialog open={cashDrawerDialogOpen} onOpenChange={setCashDrawerDialogOpen}>
+      <Dialog
+        open={cashDrawerDialogOpen}
+        onOpenChange={setCashDrawerDialogOpen}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {cashDrawerOpType === 'pay_in' ? (
-                <><ArrowDownCircle className="h-5 w-5 text-green-600" /> Pay In</>
+              {cashDrawerOpType === "pay_in" ? (
+                <>
+                  <ArrowDownCircle className="h-5 w-5 text-green-600" /> Pay In
+                </>
               ) : (
-                <><ArrowUpCircle className="h-5 w-5 text-red-600" /> Pay Out</>
+                <>
+                  <ArrowUpCircle className="h-5 w-5 text-red-600" /> Pay Out
+                </>
               )}
             </DialogTitle>
             <DialogDescription>
-              {cashDrawerOpType === 'pay_in'
-                ? 'Add cash to the drawer (e.g., change float, deposit).'
-                : 'Remove cash from the drawer (e.g., petty cash, withdrawal).'}
+              {cashDrawerOpType === "pay_in"
+                ? "Add cash to the drawer (e.g., change float, deposit)."
+                : "Remove cash from the drawer (e.g., petty cash, withdrawal)."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -882,27 +966,45 @@ export default function POSPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCashDrawerDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={() => setCashDrawerDialogOpen(false)}
+            >
+              Cancel
+            </Button>
             <Button
               onClick={handleCashDrawerOp}
-              disabled={!cashDrawerAmount || !cashDrawerReason || isSubmittingOp}
-              className={cashDrawerOpType === 'pay_in' ? '' : 'bg-red-600 hover:bg-red-700'}
+              disabled={
+                !cashDrawerAmount || !cashDrawerReason || isSubmittingOp
+              }
+              className={
+                cashDrawerOpType === "pay_in"
+                  ? ""
+                  : "bg-red-600 hover:bg-red-700"
+              }
             >
-              {isSubmittingOp ? 'Processing...' : (cashDrawerOpType === 'pay_in' ? 'Confirm Pay In' : 'Confirm Pay Out')}
+              {isSubmittingOp
+                ? "Processing..."
+                : cashDrawerOpType === "pay_in"
+                  ? "Confirm Pay In"
+                  : "Confirm Pay Out"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Shift Details / End Shift Dialog */}
-      <Dialog open={shiftDetailsOpen} onOpenChange={(open) => {
-        if (!open) {
-          setShiftDetailsOpen(false);
-          if (shiftClosed) {
-            router.refresh();
+      <Dialog
+        open={shiftDetailsOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShiftDetailsOpen(false);
+            if (shiftClosed) {
+              router.refresh();
+            }
           }
-        }
-      }}>
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           {shiftClosed && closedShiftData ? (
             <>
@@ -918,42 +1020,90 @@ export default function POSPage() {
               <div className="space-y-3 py-4">
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-muted-foreground block text-xs">Opening Cash</span>
-                    <span className="font-medium">{formatCurrency(parseFloat(closedShiftData.opening_cash) || 0)}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Opening Cash
+                    </span>
+                    <span className="font-medium">
+                      {formatCurrency(
+                        parseFloat(closedShiftData.opening_cash) || 0,
+                      )}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-xs">Closing Cash</span>
-                    <span className="font-medium">{formatCurrency(parseFloat(closedShiftData.closing_cash || '0'))}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Closing Cash
+                    </span>
+                    <span className="font-medium">
+                      {formatCurrency(
+                        parseFloat(closedShiftData.closing_cash || "0"),
+                      )}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-xs">Total Sales ({closedShiftData.transaction_count} txn)</span>
-                    <span className="font-medium text-green-600">+{formatCurrency(parseFloat(closedShiftData.total_sales) || 0)}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Total Sales ({closedShiftData.transaction_count} txn)
+                    </span>
+                    <span className="font-medium text-green-600">
+                      +
+                      {formatCurrency(
+                        parseFloat(closedShiftData.total_sales) || 0,
+                      )}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-xs">Total Cash Sales</span>
-                    <span className="font-medium text-blue-600">+{formatCurrency(parseFloat(closedShiftData.total_cash_sales) || 0)}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Total Cash Sales
+                    </span>
+                    <span className="font-medium text-blue-600">
+                      +
+                      {formatCurrency(
+                        parseFloat(closedShiftData.total_cash_sales) || 0,
+                      )}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-xs">Total Refunds ({closedShiftData.refund_count})</span>
-                    <span className="font-medium text-red-600">-{formatCurrency(parseFloat(closedShiftData.total_refunds) || 0)}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Total Refunds ({closedShiftData.refund_count})
+                    </span>
+                    <span className="font-medium text-red-600">
+                      -
+                      {formatCurrency(
+                        parseFloat(closedShiftData.total_refunds) || 0,
+                      )}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-xs">Expected Cash</span>
-                    <span className="font-bold">{formatCurrency(parseFloat(closedShiftData.expected_cash || '0'))}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Expected Cash
+                    </span>
+                    <span className="font-bold">
+                      {formatCurrency(
+                        parseFloat(closedShiftData.expected_cash || "0"),
+                      )}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-xs">Difference</span>
-                    <span className={`font-bold ${parseFloat(closedShiftData.cash_difference || '0') >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(parseFloat(closedShiftData.cash_difference || '0'))}
+                    <span className="text-muted-foreground block text-xs">
+                      Difference
+                    </span>
+                    <span
+                      className={`font-bold ${parseFloat(closedShiftData.cash_difference || "0") >= 0 ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {formatCurrency(
+                        parseFloat(closedShiftData.cash_difference || "0"),
+                      )}
                     </span>
                   </div>
                 </div>
               </div>
               <DialogFooter>
-                <Button className="w-full" onClick={() => {
-                  setShiftDetailsOpen(false);
-                  router.refresh();
-                }}>
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    setShiftDetailsOpen(false);
+                    router.refresh();
+                  }}
+                >
                   Done
                 </Button>
               </DialogFooter>
@@ -963,19 +1113,30 @@ export default function POSPage() {
               <DialogHeader>
                 <DialogTitle>End Shift</DialogTitle>
                 <DialogDescription>
-                  Count your cash and enter the total below. Shift details will be shown after closing.
+                  Count your cash and enter the total below. Shift details will
+                  be shown after closing.
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-4 py-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground block text-xs">Started At</span>
-                    <span className="font-medium">{new Date(currentShift.started_at).toLocaleString()}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Started At
+                    </span>
+                    <span className="font-medium">
+                      {new Date(currentShift.started_at).toLocaleString()}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-xs">Opening Cash</span>
-                    <span className="font-medium">{formatCurrency(parseFloat(currentShift.opening_cash) || 0)}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Opening Cash
+                    </span>
+                    <span className="font-medium">
+                      {formatCurrency(
+                        parseFloat(currentShift.opening_cash) || 0,
+                      )}
+                    </span>
                   </div>
                 </div>
 
@@ -984,27 +1145,51 @@ export default function POSPage() {
                   <>
                     <Separator />
                     <div>
-                      <h4 className="text-sm font-medium mb-2">Cash Drawer Activity</h4>
+                      <h4 className="text-sm font-medium mb-2">
+                        Cash Drawer Activity
+                      </h4>
                       <div className="space-y-1.5 max-h-32 overflow-y-auto">
                         {cashDrawerOps.map((op) => (
-                          <div key={op.id} className="flex items-center justify-between text-xs">
+                          <div
+                            key={op.id}
+                            className="flex items-center justify-between text-xs"
+                          >
                             <div className="flex items-center gap-1.5">
-                              {op.type === 'pay_in' ? (
+                              {op.type === "pay_in" ? (
                                 <ArrowDownCircle className="h-3.5 w-3.5 text-green-600" />
                               ) : (
                                 <ArrowUpCircle className="h-3.5 w-3.5 text-red-600" />
                               )}
-                              <span className="text-muted-foreground">{op.reason}</span>
+                              <span className="text-muted-foreground">
+                                {op.reason}
+                              </span>
                             </div>
-                            <span className={op.type === 'pay_in' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                              {op.type === 'pay_in' ? '+' : '-'}{formatCurrency(parseFloat(op.amount))}
+                            <span
+                              className={
+                                op.type === "pay_in"
+                                  ? "text-green-600 font-medium"
+                                  : "text-red-600 font-medium"
+                              }
+                            >
+                              {op.type === "pay_in" ? "+" : "-"}
+                              {formatCurrency(parseFloat(op.amount))}
                             </span>
                           </div>
                         ))}
                       </div>
                       <div className="flex justify-between text-xs mt-2 pt-2 border-t">
-                        <span className="text-green-600">Pay-In: +{formatCurrency(parseFloat(cashDrawerTotals.pay_in_total))}</span>
-                        <span className="text-red-600">Pay-Out: -{formatCurrency(parseFloat(cashDrawerTotals.pay_out_total))}</span>
+                        <span className="text-green-600">
+                          Pay-In: +
+                          {formatCurrency(
+                            parseFloat(cashDrawerTotals.pay_in_total),
+                          )}
+                        </span>
+                        <span className="text-red-600">
+                          Pay-Out: -
+                          {formatCurrency(
+                            parseFloat(cashDrawerTotals.pay_out_total),
+                          )}
+                        </span>
                       </div>
                     </div>
                   </>
@@ -1013,7 +1198,9 @@ export default function POSPage() {
                 <Separator />
 
                 <div>
-                  <label className="text-sm font-medium">Ending Cash (Counted)</label>
+                  <label className="text-sm font-medium">
+                    Ending Cash (Counted)
+                  </label>
                   <Input
                     type="number"
                     value={endingCash}
@@ -1027,7 +1214,9 @@ export default function POSPage() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Notes (Optional)</label>
+                  <label className="text-sm font-medium">
+                    Notes (Optional)
+                  </label>
                   <Input
                     value={closingNotes}
                     onChange={(e) => setClosingNotes(e.target.value)}
@@ -1038,7 +1227,10 @@ export default function POSPage() {
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShiftDetailsOpen(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShiftDetailsOpen(false)}
+                >
                   Cancel
                 </Button>
                 <Button
@@ -1046,7 +1238,7 @@ export default function POSPage() {
                   onClick={handleEndShift}
                   disabled={!endingCash || isProcessing}
                 >
-                  {isProcessing ? 'Ending Shift...' : 'End Shift'}
+                  {isProcessing ? "Ending Shift..." : "End Shift"}
                 </Button>
               </DialogFooter>
             </>
@@ -1054,10 +1246,14 @@ export default function POSPage() {
             <>
               <DialogHeader>
                 <DialogTitle>No Active Shift</DialogTitle>
-                <DialogDescription>There is no active shift to end.</DialogDescription>
+                <DialogDescription>
+                  There is no active shift to end.
+                </DialogDescription>
               </DialogHeader>
               <DialogFooter>
-                <Button onClick={() => setShiftDetailsOpen(false)}>Close</Button>
+                <Button onClick={() => setShiftDetailsOpen(false)}>
+                  Close
+                </Button>
               </DialogFooter>
             </>
           )}
@@ -1094,42 +1290,49 @@ export default function POSPage() {
               <DialogHeader>
                 <DialogTitle>Checkout</DialogTitle>
                 <DialogDescription>
-                  Total: <span className="font-bold text-primary">{formatCurrency(total)}</span>
+                  Total:{" "}
+                  <span className="font-bold text-primary">
+                    {formatCurrency(total)}
+                  </span>
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-4 py-4">
                 {/* Payment method */}
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Payment Method</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    Payment Method
+                  </label>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
-                      variant={paymentMethod === 'cash' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('cash')}
+                      variant={paymentMethod === "cash" ? "default" : "outline"}
+                      onClick={() => setPaymentMethod("cash")}
                       className="flex items-center gap-2"
                     >
                       <Banknote className="h-4 w-4" />
                       Cash
                     </Button>
                     <Button
-                      variant={paymentMethod === 'card' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('card')}
+                      variant={paymentMethod === "card" ? "default" : "outline"}
+                      onClick={() => setPaymentMethod("card")}
                       className="flex items-center gap-2"
                     >
                       <CreditCard className="h-4 w-4" />
                       Card
                     </Button>
                     <Button
-                      variant={paymentMethod === 'qris' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('qris')}
+                      variant={paymentMethod === "qris" ? "default" : "outline"}
+                      onClick={() => setPaymentMethod("qris")}
                       className="flex items-center gap-2"
                     >
                       <QrCode className="h-4 w-4" />
                       QRIS
                     </Button>
                     <Button
-                      variant={paymentMethod === 'transfer' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('transfer')}
+                      variant={
+                        paymentMethod === "transfer" ? "default" : "outline"
+                      }
+                      onClick={() => setPaymentMethod("transfer")}
                       className="flex items-center gap-2"
                     >
                       <Building2 className="h-4 w-4" />
@@ -1139,9 +1342,11 @@ export default function POSPage() {
                 </div>
 
                 {/* Amount paid (for cash) */}
-                {paymentMethod === 'cash' && (
+                {paymentMethod === "cash" && (
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Amount Received</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      Amount Received
+                    </label>
                     <Input
                       type="number"
                       value={amountPaid}
@@ -1169,9 +1374,12 @@ export default function POSPage() {
                         Exact
                       </Button>
                     </div>
-                    {parseFloat(amountPaid || '0') >= total && (
+                    {parseFloat(amountPaid || "0") >= total && (
                       <p className="mt-2 text-sm">
-                        Change: <span className="font-bold text-primary">{formatCurrency(change)}</span>
+                        Change:{" "}
+                        <span className="font-bold text-primary">
+                          {formatCurrency(change)}
+                        </span>
                       </p>
                     )}
                   </div>
@@ -1186,7 +1394,8 @@ export default function POSPage() {
                   onClick={handleCheckout}
                   disabled={
                     isProcessing ||
-                    (paymentMethod === 'cash' && parseFloat(amountPaid || '0') < total)
+                    (paymentMethod === "cash" &&
+                      parseFloat(amountPaid || "0") < total)
                   }
                 >
                   {isProcessing ? (
@@ -1195,7 +1404,7 @@ export default function POSPage() {
                       Processing...
                     </>
                   ) : (
-                    'Complete Sale'
+                    "Complete Sale"
                   )}
                 </Button>
               </DialogFooter>
