@@ -116,6 +116,7 @@ interface CartViewProps {
   setDiscount: (val: number) => void;
   total: number;
   canApplyDiscount: boolean;
+  canCreateSale: boolean;
   currentShift: Shift | null;
   onCheckout: () => void;
 }
@@ -133,6 +134,7 @@ function CartView({
   setDiscount,
   total,
   canApplyDiscount,
+  canCreateSale,
   currentShift,
   onCheckout,
 }: CartViewProps) {
@@ -260,7 +262,7 @@ function CartView({
         <Button
           size="lg"
           className="w-full mt-4"
-          disabled={!currentShift || cartItems.length === 0}
+          disabled={!currentShift || cartItems.length === 0 || !canCreateSale}
           onClick={onCheckout}
         >
           <CreditCard className="h-5 w-5 mr-2" />
@@ -275,6 +277,7 @@ export default function POSPage() {
   const router = useRouter();
   const { hasPermission, user } = useAuth();
   const canApplyDiscount = hasPermission(PERMISSIONS.SALES_CREATE);
+  const canCreateSale = hasPermission(PERMISSIONS.SALES_CREATE);
 
   // Redirect if no permission
   useEffect(() => {
@@ -661,6 +664,7 @@ export default function POSPage() {
     setDiscount,
     total,
     canApplyDiscount,
+    canCreateSale,
     currentShift,
     onCheckout: async () => {
       // Final check for active shift before opening checkout
