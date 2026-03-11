@@ -449,8 +449,6 @@ export default function UsersPage() {
           // This is the view permission for this category - disable all non-view children
           for (const childPerm of permissions) {
             if (childPerm.id !== permission.id) {
-              // Special case: can_create_sale is independent
-              if (childPerm.key === "can_create_sale") continue;
               // Special case: can_void_sale depends on can_view_sales
               if (category === "sales" && childPerm.key !== "can_void_sale")
                 continue;
@@ -568,10 +566,6 @@ export default function UsersPage() {
       if (viewPerm && !isPermissionEnabled(viewPerm)) {
         return true;
       }
-    }
-    // can_create_sale is independent - never disabled by parent
-    if (permission.key === "can_create_sale") {
-      return false;
     }
     // For other categories, use the standard view permission check
     if (category !== "sales") {
