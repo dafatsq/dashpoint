@@ -48,7 +48,7 @@ interface SidebarProps {
 export function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, hasPermission, logout, pinLogin } = useAuth();
+  const { user, hasPermission, hasAnyPermission, logout, pinLogin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(AccountManager.getSavedAccounts());
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
@@ -72,7 +72,12 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   }, []);
 
   const filteredNavItems = navItems.filter(
-    (item) => !item.permission || hasPermission(item.permission)
+    (item) => {
+      if (item.permissions) {
+        return hasAnyPermission(item.permissions);
+      }
+      return !item.permission || hasPermission(item.permission);
+    }
   );
 
   const handleLogout = async () => {

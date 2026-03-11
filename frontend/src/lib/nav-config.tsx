@@ -19,6 +19,7 @@ export interface NavItem {
   label: string;
   icon: React.ReactNode;
   permission?: string;
+  permissions?: string[];
   description?: string;
   color?: string;
 }
@@ -43,7 +44,7 @@ export const navItems: NavItem[] = [
     href: '/shifts',
     label: 'Shifts',
     icon: <Clock className="h-5 w-5" />,
-    permission: PERMISSIONS.POS_VIEW,
+    permissions: [PERMISSIONS.POS_VIEW, PERMISSIONS.SALES_VIEW, PERMISSIONS.REPORTS_VIEW],
     description: 'View register shifts and cash drawer',
     color: 'text-amber-500',
   },
