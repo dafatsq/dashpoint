@@ -72,6 +72,9 @@ temp/
 *.tmp
 *.bak
 *.pid
+*.sql
+*.dump
+local_db_dump.sql
 
 # Secrets (never commit these)
 *.pem
