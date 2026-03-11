@@ -890,6 +890,24 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 
 	grantedBy := middleware.GetUserID(c)
 
+	// Fetch current user's effective permissions to enforce grant restrictions.
+	// A user can only grant permissions they themselves have (owners are exempt).
+	var currentUserPermSet map[string]bool
+	if strings.ToLower(currentRoleName) != "owner" {
+		currentUserPerms, err := h.userRepo.GetUserPermissions(c.Context(), currentUserID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to fetch current user permissions")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to validate permissions",
+			})
+		}
+		currentUserPermSet = make(map[string]bool, len(currentUserPerms))
+		for _, p := range currentUserPerms {
+			currentUserPermSet[p] = true
+		}
+	}
+
 	// Get old permission overrides for audit trail (indexed by permission_id)
 	oldOverrides, _ := h.userRepo.GetUserPermissionOverrides(c.Context(), id)
 	oldOverrideMap := make(map[string]string) // permission_id -> "granted"/"denied"
@@ -921,6 +939,15 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"code":    "INVALID_PERMISSION",
 				"message": "Permission not found: " + perm.PermissionID,
+			})
+		}
+
+		// Non-owners can only grant permissions they themselves have.
+		// Denying a permission is always allowed (it only restricts access).
+		if perm.Allowed && currentUserPermSet != nil && !currentUserPermSet[permission.Key] {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"code":    "CANNOT_GRANT_UNOWNED_PERMISSION",
+				"message": "You cannot grant the '" + permission.Name + "' permission because you do not have it yourself",
 			})
 		}
 
