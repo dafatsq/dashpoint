@@ -39,10 +39,10 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return path;
     }
-    // Use window.location for dynamic base URL, fallback to localhost:8080
-    const baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-      ? `${window.location.protocol}//${window.location.hostname}:8080`
-      : 'http://localhost:8080';
+    // Derive the backend base URL from the API URL env var
+    // e.g. "http://localhost:8080/api/v1" -> "http://localhost:8080"
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+    const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
     return `${baseUrl}${path}`;
   };
 
@@ -135,7 +135,8 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
       const formData = new FormData();
       formData.append('image', blob, 'cropped-image.jpg');
 
-      const response = await fetch('http://localhost:8080/api/v1/upload/image', {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+      const response = await fetch(`${apiUrl}/upload/image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getSessionItem('access_token')}`,
