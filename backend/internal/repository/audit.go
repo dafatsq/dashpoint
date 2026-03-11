@@ -130,55 +130,55 @@ func (r *AuditRepository) List(ctx context.Context, filter AuditFilter) ([]model
 	whereClause := "WHERE 1=1"
 
 	if filter.UserID != nil {
-		whereClause += fmt.Sprintf(" AND user_id = $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND audit_logs.user_id = $%d", argIndex)
 		args = append(args, *filter.UserID)
 		argIndex++
 	}
 
 	if filter.Action != nil {
-		whereClause += fmt.Sprintf(" AND action = $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND audit_logs.action = $%d", argIndex)
 		args = append(args, *filter.Action)
 		argIndex++
 	}
 
 	if filter.EntityType != nil {
-		whereClause += fmt.Sprintf(" AND entity_type = $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND audit_logs.entity_type = $%d", argIndex)
 		args = append(args, *filter.EntityType)
 		argIndex++
 	}
 
 	if filter.EntityID != nil {
-		whereClause += fmt.Sprintf(" AND entity_id = $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND audit_logs.entity_id = $%d", argIndex)
 		args = append(args, *filter.EntityID)
 		argIndex++
 	}
 
 	if filter.Status != nil {
-		whereClause += fmt.Sprintf(" AND status = $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND audit_logs.status = $%d", argIndex)
 		args = append(args, *filter.Status)
 		argIndex++
 	}
 
 	if filter.StartDate != nil {
-		whereClause += fmt.Sprintf(" AND created_at >= $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND audit_logs.created_at >= $%d", argIndex)
 		args = append(args, *filter.StartDate)
 		argIndex++
 	}
 
 	if filter.EndDate != nil {
-		whereClause += fmt.Sprintf(" AND created_at <= $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND audit_logs.created_at <= $%d", argIndex)
 		args = append(args, *filter.EndDate)
 		argIndex++
 	}
 
 	if filter.Search != nil && *filter.Search != "" {
-		whereClause += fmt.Sprintf(" AND (description ILIKE $%d OR user_email ILIKE $%d OR user_name ILIKE $%d)", argIndex, argIndex, argIndex)
+		whereClause += fmt.Sprintf(" AND (audit_logs.description ILIKE $%d OR audit_logs.user_email ILIKE $%d OR audit_logs.user_name ILIKE $%d OR u.name ILIKE $%d)", argIndex, argIndex, argIndex, argIndex)
 		args = append(args, "%"+*filter.Search+"%")
 		argIndex++
 	}
 
 	// Count total
-	countQuery := "SELECT COUNT(*) FROM audit_logs " + whereClause
+	countQuery := "SELECT COUNT(*) FROM audit_logs LEFT JOIN users u ON audit_logs.user_id = u.id " + whereClause
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
@@ -188,13 +188,15 @@ func (r *AuditRepository) List(ctx context.Context, filter AuditFilter) ([]model
 	// Get logs
 	query := fmt.Sprintf(`
 		SELECT 
-			id, created_at, user_id, user_email, user_name, user_role,
-			action, entity_type, entity_id, description,
-			old_values, new_values, metadata,
-			ip_address, user_agent, request_id, status
+			audit_logs.id, audit_logs.created_at, audit_logs.user_id, audit_logs.user_email, 
+			COALESCE(u.name, audit_logs.user_name) as user_name, audit_logs.user_role,
+			audit_logs.action, audit_logs.entity_type, audit_logs.entity_id, audit_logs.description,
+			audit_logs.old_values, audit_logs.new_values, audit_logs.metadata,
+			audit_logs.ip_address, audit_logs.user_agent, audit_logs.request_id, audit_logs.status
 		FROM audit_logs
+		LEFT JOIN users u ON audit_logs.user_id = u.id
 		%s
-		ORDER BY created_at DESC
+		ORDER BY audit_logs.created_at DESC
 		LIMIT $%d OFFSET $%d
 	`, whereClause, argIndex, argIndex+1)
 
@@ -242,12 +244,14 @@ func (r *AuditRepository) List(ctx context.Context, filter AuditFilter) ([]model
 func (r *AuditRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.AuditLog, error) {
 	query := `
 		SELECT 
-			id, created_at, user_id, user_email, user_name, user_role,
-			action, entity_type, entity_id, description,
-			old_values, new_values, metadata,
-			ip_address, user_agent, request_id, status
+			audit_logs.id, audit_logs.created_at, audit_logs.user_id, audit_logs.user_email, 
+			COALESCE(u.name, audit_logs.user_name) as user_name, audit_logs.user_role,
+			audit_logs.action, audit_logs.entity_type, audit_logs.entity_id, audit_logs.description,
+			audit_logs.old_values, audit_logs.new_values, audit_logs.metadata,
+			audit_logs.ip_address, audit_logs.user_agent, audit_logs.request_id, audit_logs.status
 		FROM audit_logs
-		WHERE id = $1
+		LEFT JOIN users u ON audit_logs.user_id = u.id
+		WHERE audit_logs.id = $1
 	`
 
 	var log models.AuditLog
@@ -285,13 +289,15 @@ func (r *AuditRepository) GetEntityHistory(ctx context.Context, entityType strin
 
 	query := `
 		SELECT 
-			id, created_at, user_id, user_email, user_name, user_role,
-			action, entity_type, entity_id, description,
-			old_values, new_values, metadata,
-			ip_address, user_agent, request_id, status
+			audit_logs.id, audit_logs.created_at, audit_logs.user_id, audit_logs.user_email, 
+			COALESCE(u.name, audit_logs.user_name) as user_name, audit_logs.user_role,
+			audit_logs.action, audit_logs.entity_type, audit_logs.entity_id, audit_logs.description,
+			audit_logs.old_values, audit_logs.new_values, audit_logs.metadata,
+			audit_logs.ip_address, audit_logs.user_agent, audit_logs.request_id, audit_logs.status
 		FROM audit_logs
-		WHERE entity_type = $1 AND entity_id = $2
-		ORDER BY created_at DESC
+		LEFT JOIN users u ON audit_logs.user_id = u.id
+		WHERE audit_logs.entity_type = $1 AND audit_logs.entity_id = $2
+		ORDER BY audit_logs.created_at DESC
 		LIMIT $3
 	`
 
@@ -340,13 +346,15 @@ func (r *AuditRepository) GetUserActivity(ctx context.Context, userID uuid.UUID,
 
 	query := `
 		SELECT 
-			id, created_at, user_id, user_email, user_name, user_role,
-			action, entity_type, entity_id, description,
-			old_values, new_values, metadata,
-			ip_address, user_agent, request_id, status
+			audit_logs.id, audit_logs.created_at, audit_logs.user_id, audit_logs.user_email, 
+			COALESCE(u.name, audit_logs.user_name) as user_name, audit_logs.user_role,
+			audit_logs.action, audit_logs.entity_type, audit_logs.entity_id, audit_logs.description,
+			audit_logs.old_values, audit_logs.new_values, audit_logs.metadata,
+			audit_logs.ip_address, audit_logs.user_agent, audit_logs.request_id, audit_logs.status
 		FROM audit_logs
-		WHERE user_id = $1
-		ORDER BY created_at DESC
+		LEFT JOIN users u ON audit_logs.user_id = u.id
+		WHERE audit_logs.user_id = $1
+		ORDER BY audit_logs.created_at DESC
 		LIMIT $2
 	`
 
