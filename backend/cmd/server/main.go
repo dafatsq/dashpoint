@@ -340,6 +340,11 @@ func setupRoutes(
 	logs.Get("/user/:id", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.GetUserActivity)
 	logs.Get("/:id", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.Get)
 
+	// Alias /audit to /logs for frontend2 compatibility
+	auditGroup := protected.Group("/audit")
+	auditGroup.Get("/", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.List)
+	auditGroup.Get("/:id", middleware.RequirePermission(permissionChecker, "can_view_audit_logs"), auditHandler.Get)
+
 	// Upload endpoints (authenticated users only)
 	upload := protected.Group("/upload")
 	upload.Post("/image", uploadHandler.UploadImage)
