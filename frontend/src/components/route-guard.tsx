@@ -17,6 +17,7 @@ const routePermissions: Record<string, string | string[] | undefined> = {
   "/users": PERMISSIONS.USERS_VIEW,
   "/audit": PERMISSIONS.AUDIT_VIEW,
   "/shifts": [PERMISSIONS.POS_VIEW, PERMISSIONS.SALES_VIEW, PERMISSIONS.REPORTS_VIEW],
+  "/categories": PERMISSIONS.CATEGORIES_VIEW,
   // '/changes' has no permission requirement so everyone can access it
   // '/settings' explicitly has no permission requirement so everyone can access it
 };

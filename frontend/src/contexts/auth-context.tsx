@@ -115,61 +115,59 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     isProcessingEventRef.current = true;
     console.log('[Auth] Processing event:', event.type);
-    const previousRole = currentUser.role_name;
-
-    switch (event.type) {
-      case 'role_changed':
-        // Role changed - refresh tokens to get new JWT with updated role
-        console.log('[Auth] Role changed, refreshing tokens to get new permissions');
-        const tokenRefreshed = await api.refreshTokens();
-        if (tokenRefreshed) {
-          console.log('[Auth] Tokens refreshed successfully, forcing full page reload');
-          // Force a full page reload to ensure all components fetch fresh data with new token
-          // This is necessary because the old token is cached in memory by various components
-          if (typeof window !== 'undefined') {
-            window.location.href = '/?role_updated=true';
+    
+    try {
+      switch (event.type) {
+        case 'role_changed':
+          // Role changed - refresh tokens to get new JWT with updated role
+          console.log('[Auth] Role changed, refreshing tokens to get new permissions');
+          const tokenRefreshed = await api.refreshTokens();
+          if (tokenRefreshed) {
+            console.log('[Auth] Tokens refreshed successfully, forcing full page reload');
+            if (typeof window !== 'undefined') {
+              window.location.href = '/?role_updated=true';
+            }
+          } else {
+            console.error('[Auth] Failed to refresh tokens after role change, forcing re-login');
+            api.clearTokens();
+            removeSessionItem('user');
+            setUser(null);
+            if (typeof window !== 'undefined') {
+              window.location.href = '/login?message=role_changed_relogin';
+            }
           }
-        } else {
-          console.error('[Auth] Failed to refresh tokens after role change, forcing re-login');
-          // Force re-login if token refresh fails
+          break;
+
+        case 'user_updated':
+        case 'permissions_changed':
+        case 'user_activated':
+          // Refresh user data to get the latest changes
+          console.log('[Auth] Refreshing user data due to:', event.type);
+          await refreshUser();
+          break;
+
+        case 'user_deactivated':
+        case 'user_deleted':
+        case 'force_logout':
+          // Force logout the user
           api.clearTokens();
           removeSessionItem('user');
           setUser(null);
           if (typeof window !== 'undefined') {
-            window.location.href = '/login?message=role_changed_relogin';
+            const message = event.type === 'user_deactivated'
+              ? 'account_deactivated'
+              : event.type === 'user_deleted'
+                ? 'account_deleted'
+                : 'force_logout';
+            window.location.href = `/login?message=${message}`;
           }
-        }
-        break;
-
-      case 'user_updated':
-      case 'permissions_changed':
-      case 'user_activated':
-        // Refresh user data to get the latest changes
-        console.log('[Auth] Refreshing user data due to:', event.type);
-        await refreshUser();
-        isProcessingEventRef.current = false;
-        break;
-
-      case 'user_deactivated':
-      case 'user_deleted':
-      case 'force_logout':
-        // Force logout the user
-        api.clearTokens();
-        removeSessionItem('user');
-        setUser(null);
-        // Redirect to login with a message
-        if (typeof window !== 'undefined') {
-          const message = event.type === 'user_deactivated'
-            ? 'account_deactivated'
-            : event.type === 'user_deleted'
-              ? 'account_deleted'
-              : 'force_logout';
-          window.location.href = `/login?message=${message}`;
-        }
-        break;
-
-      default:
-        isProcessingEventRef.current = false;
+          break;
+      }
+    } catch (error) {
+      console.error('[Auth] Error processing background event:', error);
+    } finally {
+      isProcessingEventRef.current = false;
+      console.log('[Auth] Event processing finished:', event.type);
     }
   }, [refreshUser]);
 
@@ -400,4 +398,8 @@ export const PERMISSIONS = {
   POS_VIEW: 'can_view_pos',
   POS_SHIFT_START: 'can_start_shift',
   POS_SHIFT_END: 'can_end_shift',
+
+  // Categories
+  CATEGORIES_VIEW: "can_view_categories",
+  CATEGORIES_MANAGE: 'can_manage_categories',
 } as const;

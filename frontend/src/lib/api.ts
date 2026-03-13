@@ -388,8 +388,8 @@ class ApiClient {
   }
 
   // Category endpoints
-  async getCategories(): Promise<ApiResponse<import('@/types').Category[]>> {
-    const result = await this.request<CategoriesResponse>('/categories');
+  async getCategories(status: string = 'active'): Promise<ApiResponse<import('@/types').Category[]>> {
+    const result = await this.request<CategoriesResponse>(`/categories?status=${status}`);
     if (result.error) return { error: result.error };
     return { data: result.data?.categories || [] };
   }
@@ -408,6 +408,10 @@ class ApiClient {
 
   async deleteCategory(id: string) {
     return this.request(`/categories/${id}`, { method: 'DELETE' });
+  }
+
+  async permanentDeleteCategory(id: string) {
+    return this.request(`/categories/${id}/permanent`, { method: 'DELETE' });
   }
 
   // Inventory endpoints
@@ -697,8 +701,8 @@ class ApiClient {
   }
 
   // Expense endpoints
-  async getExpenseCategories(): Promise<ApiResponse<import('@/types').ExpenseCategory[]>> {
-    const result = await this.request<{ data: import('@/types').ExpenseCategory[] }>('/expenses/categories');
+  async getExpenseCategories(status: string = 'active'): Promise<ApiResponse<import('@/types').ExpenseCategory[]>> {
+    const result = await this.request<{ data: import('@/types').ExpenseCategory[] }>(`/expenses/categories?status=${status}`);
     if (result.error) return { error: result.error };
     return { data: result.data?.data || [] };
   }
@@ -710,6 +714,23 @@ class ApiClient {
     });
     if (result.error) return { error: result.error };
     return { data: result.data?.data };
+  }
+
+  async updateExpenseCategory(id: string, category: { name?: string; description?: string; is_active?: boolean }): Promise<ApiResponse<import('@/types').ExpenseCategory>> {
+    const result = await this.request<{ data: import('@/types').ExpenseCategory }>(`/expenses/categories/${id}`, {
+      method: 'PATCH',
+      body: category,
+    });
+    if (result.error) return { error: result.error };
+    return { data: result.data?.data };
+  }
+
+  async deleteExpenseCategory(id: string): Promise<ApiResponse<void>> {
+    return this.request(`/expenses/categories/${id}`, { method: 'DELETE' });
+  }
+
+  async permanentDeleteExpenseCategory(id: string): Promise<ApiResponse<void>> {
+    return this.request(`/expenses/categories/${id}/permanent`, { method: 'DELETE' });
   }
 
   async getExpenses(params?: {
