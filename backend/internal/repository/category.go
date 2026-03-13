@@ -82,15 +82,20 @@ func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 	return category, nil
 }
 
-// List retrieves all categories
-func (r *CategoryRepository) List(ctx context.Context, activeOnly bool) ([]*models.Category, error) {
+// List retrieves categories based on status
+func (r *CategoryRepository) List(ctx context.Context, status string) ([]*models.Category, error) {
 	query := `
 		SELECT id, name, description, parent_id, sort_order, is_active, created_at, updated_at
 		FROM categories
 	`
-	if activeOnly {
+	
+	switch status {
+	case "active":
 		query += ` WHERE is_active = true`
+	case "archived":
+		query += ` WHERE is_active = false`
 	}
+	
 	query += ` ORDER BY sort_order ASC, name ASC`
 
 	rows, err := r.pool.Query(ctx, query)
@@ -158,6 +163,19 @@ func (r *CategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result, err := r.pool.Exec(ctx, query, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to delete category: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("category not found")
+	}
+	return nil
+}
+
+// PermanentDelete permanently deletes a category
+func (r *CategoryRepository) PermanentDelete(ctx context.Context, id uuid.UUID) error {
+	query := `DELETE FROM categories WHERE id = $1`
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to permanently delete category: %w", err)
 	}
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("category not found")

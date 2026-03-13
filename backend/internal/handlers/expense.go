@@ -110,7 +110,16 @@ func expenseToResponse(e *models.Expense) ExpenseResponse {
 
 // ListCategories handles GET /api/v1/expenses/categories
 func (h *ExpenseHandler) ListCategories(c *fiber.Ctx) error {
-	categories, err := h.repo.ListCategories(c.Context(), true)
+	status := c.Query("status", "")
+	if status == "" {
+		if c.Query("active_only", "true") == "true" {
+			status = "active"
+		} else {
+			status = "all"
+		}
+	}
+
+	categories, err := h.repo.ListCategories(c.Context(), status)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list expense categories")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -150,8 +159,194 @@ func (h *ExpenseHandler) CreateCategory(c *fiber.Ctx) error {
 		})
 	}
 
+	// Audit log
+	newValues := map[string]interface{}{
+		"affected_category": category.Name,
+		"name":              category.Name,
+	}
+	if category.Description != nil {
+		newValues["description"] = *category.Description
+	}
+	audit.LogWithValues(c, models.AuditActionCategoryCreate, models.AuditEntityCategory, category.ID.String(), "Created expense category: "+category.Name, nil, newValues)
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"data": category,
+	})
+}
+
+// GetCategory handles GET /api/v1/expenses/categories/:id
+func (h *ExpenseHandler) GetCategory(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Invalid category ID",
+		})
+	}
+
+	category, err := h.repo.GetCategoryByID(c.Context(), id)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get expense category")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to get expense category",
+		})
+	}
+
+	if category == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"message": "Expense category not found",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"data": category,
+	})
+}
+
+// UpdateCategory handles PATCH /api/v1/expenses/categories/:id
+func (h *ExpenseHandler) UpdateCategory(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Invalid category ID",
+		})
+	}
+
+	var req struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+		IsActive    *bool   `json:"is_active"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Invalid request body",
+		})
+	}
+
+	category, err := h.repo.GetCategoryByID(c.Context(), id)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get expense category")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to get expense category",
+		})
+	}
+
+	if category == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"message": "Expense category not found",
+		})
+	}
+
+	// Capture old values for audit
+	oldValues := map[string]interface{}{
+		"affected_category": category.Name,
+		"name":              category.Name,
+		"is_active":         category.IsActive,
+	}
+	if category.Description != nil {
+		oldValues["description"] = *category.Description
+	}
+
+	// Update fields
+	if req.Name != nil {
+		category.Name = *req.Name
+	}
+	if req.Description != nil {
+		category.Description = req.Description
+	}
+	if req.IsActive != nil {
+		category.IsActive = *req.IsActive
+	}
+
+	updated, err := h.repo.UpdateCategory(c.Context(), category)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update expense category")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to update expense category",
+		})
+	}
+
+	// Audit log
+	newValues := map[string]interface{}{
+		"affected_category": updated.Name,
+		"name":              updated.Name,
+		"is_active":         updated.IsActive,
+	}
+	if updated.Description != nil {
+		newValues["description"] = *updated.Description
+	}
+	audit.LogWithValues(c, models.AuditActionCategoryUpdate, models.AuditEntityCategory, updated.ID.String(), "Updated expense category: "+updated.Name, oldValues, newValues)
+
+	return c.JSON(fiber.Map{
+		"data": updated,
+	})
+}
+
+// DeleteCategory handles DELETE /api/v1/expenses/categories/:id
+func (h *ExpenseHandler) DeleteCategory(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Invalid category ID",
+		})
+	}
+
+	// Fetch category for audit
+	category, _ := h.repo.GetCategoryByID(c.Context(), id)
+	categoryName := "Unknown"
+	if category != nil {
+		categoryName = category.Name
+	}
+
+	err = h.repo.DeleteCategory(c.Context(), id)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to delete expense category")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to delete expense category",
+		})
+	}
+
+	// Audit log
+	audit.LogWithValues(c, models.AuditActionCategoryArchive, models.AuditEntityCategory, id.String(), "Archived expense category: "+categoryName, map[string]interface{}{
+		"affected_category": categoryName,
+	}, nil)
+
+	return c.JSON(fiber.Map{
+		"message": "Expense category archived successfully",
+	})
+}
+
+// PermanentDeleteCategory handles DELETE /api/v1/expenses/categories/:id/permanent
+func (h *ExpenseHandler) PermanentDeleteCategory(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Invalid category ID",
+		})
+	}
+
+	// Fetch category for audit
+	category, _ := h.repo.GetCategoryByID(c.Context(), id)
+	categoryName := "Unknown"
+	if category != nil {
+		categoryName = category.Name
+	}
+
+	err = h.repo.PermanentDeleteCategory(c.Context(), id)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to permanently delete expense category")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
+	// Audit log
+	audit.LogWithValues(c, models.AuditActionCategoryDelete, models.AuditEntityCategory, id.String(), "Permanently deleted expense category: "+categoryName, map[string]interface{}{
+		"affected_category": categoryName,
+	}, nil)
+
+	return c.JSON(fiber.Map{
+		"message": "Expense category permanently deleted successfully",
 	})
 }
 
@@ -360,7 +555,7 @@ func (h *ExpenseHandler) Create(c *fiber.Ctx) error {
 	if created.CategoryID != nil {
 		newValues["category_id"] = created.CategoryID.String()
 		// Also find and log category name
-		categories, err := h.repo.ListCategories(c.Context(), false)
+		categories, err := h.repo.ListCategories(c.Context(), "all")
 		if err == nil {
 			for _, cat := range categories {
 				if cat.ID == *created.CategoryID {
@@ -501,7 +696,7 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 		newCatID, err := uuid.Parse(*req.CategoryID)
 		if err == nil {
 			// Get the new category name to check if it's Inventory Purchase
-			categories, _ := h.repo.ListCategories(c.Context(), false)
+			categories, _ := h.repo.ListCategories(c.Context(), "all")
 			for _, cat := range categories {
 				if cat.ID == newCatID && cat.Name != "Inventory Purchase" {
 					isChangingToNonInventoryCategory = true

@@ -26,13 +26,16 @@ func NewExpenseRepository(pool *pgxpool.Pool) *ExpenseRepository {
 // --- Expense Categories ---
 
 // ListCategories retrieves all expense categories
-func (r *ExpenseRepository) ListCategories(ctx context.Context, activeOnly bool) ([]models.ExpenseCategory, error) {
+func (r *ExpenseRepository) ListCategories(ctx context.Context, status string) ([]models.ExpenseCategory, error) {
 	query := `
 		SELECT id, name, description, is_active, created_at, updated_at
 		FROM expense_categories
 	`
-	if activeOnly {
+	switch status {
+	case "active":
 		query += ` WHERE is_active = true`
+	case "archived":
+		query += ` WHERE is_active = false`
 	}
 	query += ` ORDER BY name`
 
@@ -87,6 +90,98 @@ func (r *ExpenseRepository) CreateCategory(ctx context.Context, name string, des
 	}
 
 	return &cat, nil
+}
+
+// GetCategoryByID retrieves an expense category by ID
+func (r *ExpenseRepository) GetCategoryByID(ctx context.Context, id uuid.UUID) (*models.ExpenseCategory, error) {
+	query := `
+		SELECT id, name, description, is_active, created_at, updated_at
+		FROM expense_categories
+		WHERE id = $1
+	`
+
+	var cat models.ExpenseCategory
+	err := r.pool.QueryRow(ctx, query, id).Scan(
+		&cat.ID,
+		&cat.Name,
+		&cat.Description,
+		&cat.IsActive,
+		&cat.CreatedAt,
+		&cat.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get expense category: %w", err)
+	}
+
+	return &cat, nil
+}
+
+// UpdateCategory updates an expense category
+func (r *ExpenseRepository) UpdateCategory(ctx context.Context, cat *models.ExpenseCategory) (*models.ExpenseCategory, error) {
+	cat.UpdatedAt = time.Now()
+
+	query := `
+		UPDATE expense_categories
+		SET name = $2, description = $3, is_active = $4, updated_at = $5
+		WHERE id = $1
+		RETURNING id, name, description, is_active, created_at, updated_at
+	`
+
+	var updated models.ExpenseCategory
+	err := r.pool.QueryRow(ctx, query, cat.ID, cat.Name, cat.Description, cat.IsActive, cat.UpdatedAt).Scan(
+		&updated.ID,
+		&updated.Name,
+		&updated.Description,
+		&updated.IsActive,
+		&updated.CreatedAt,
+		&updated.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update expense category: %w", err)
+	}
+
+	return &updated, nil
+}
+
+// DeleteCategory soft-deletes an expense category
+func (r *ExpenseRepository) DeleteCategory(ctx context.Context, id uuid.UUID) error {
+	query := `UPDATE expense_categories SET is_active = false, updated_at = $1 WHERE id = $2`
+	result, err := r.pool.Exec(ctx, query, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to delete expense category: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("expense category not found")
+	}
+	return nil
+}
+
+// PermanentDeleteCategory permanently deletes an expense category
+func (r *ExpenseRepository) PermanentDeleteCategory(ctx context.Context, id uuid.UUID) error {
+	// First check if category is in use
+	var count int
+	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM expenses WHERE category_id = $1", id).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check category usage: %w", err)
+	}
+
+	if count > 0 {
+		return fmt.Errorf("cannot delete category as it is currently in use by %d expenses", count)
+	}
+
+	result, err := r.pool.Exec(ctx, "DELETE FROM expense_categories WHERE id = $1", id)
+	if err != nil {
+		return fmt.Errorf("failed to permanently delete expense category: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("expense category not found")
+	}
+
+	return nil
 }
 
 // --- Expenses ---

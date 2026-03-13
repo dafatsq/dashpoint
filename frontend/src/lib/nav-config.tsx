@@ -11,6 +11,7 @@ import {
   History,
   Settings,
   Wallet,
+  Layers,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/contexts/auth-context';
 
@@ -86,6 +87,14 @@ export const navItems: NavItem[] = [
     permission: PERMISSIONS.REPORTS_VIEW,
     description: 'Analyze sales data',
     color: 'text-pink-500',
+  },
+  {
+    href: '/categories',
+    label: 'Categories',
+    icon: <Layers className="h-4 w-4" />,
+    permission: PERMISSIONS.CATEGORIES_VIEW,
+    description: 'Manage product and expense categories',
+    color: 'text-violet-500',
   },
   {
     href: '/expenses',

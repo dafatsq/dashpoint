@@ -160,3 +160,35 @@ func RequirePermission(checker PermissionChecker, permissions ...string) fiber.H
 		return c.Next()
 	}
 }
+// RequireAnyPermission creates a middleware factory that checks if any of the specified permissions match
+func RequireAnyPermission(checker PermissionChecker, permissions ...string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		userID := GetUserID(c)
+		if userID == uuid.Nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"code":    "UNAUTHORIZED",
+				"message": "Authentication required",
+			})
+		}
+
+		// Check if any of the permissions are granted
+		for _, perm := range permissions {
+			hasPermission, err := checker(c, userID, perm)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"code":    "INTERNAL_ERROR",
+					"message": "Failed to check permissions",
+				})
+			}
+
+			if hasPermission {
+				return c.Next()
+			}
+		}
+
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "You do not have any of the required permissions",
+		})
+	}
+}

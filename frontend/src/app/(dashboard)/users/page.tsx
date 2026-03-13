@@ -41,6 +41,7 @@ import {
   Lock,
   LayoutDashboard,
   Wallet,
+  Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
@@ -67,6 +68,7 @@ const roleHierarchy: Record<string, number> = {
 const CATEGORY_ORDER = [
   "pos",
   "sales",
+  "categories",
   "inventory",
   "reports",
   "expenses",
@@ -1319,6 +1321,8 @@ export default function UsersPage() {
                             return <ShoppingCart className="h-4 w-4" />;
                           case "sales":
                             return <Receipt className="h-4 w-4" />;
+                          case "categories":
+                            return <Layers className="h-4 w-4" />;
                           case "inventory":
                             return <Package className="h-4 w-4" />;
                           case "reports":

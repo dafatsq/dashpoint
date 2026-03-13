@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -29,8 +31,9 @@ type CategoryResponse struct {
 	Description  *string `json:"description,omitempty"`
 	ParentID     *string `json:"parent_id,omitempty"`
 	SortOrder    int     `json:"sort_order"`
-	IsActive     bool    `json:"is_active"`
-	ProductCount *int    `json:"product_count,omitempty"`
+	IsActive     bool      `json:"is_active"`
+	ProductCount *int      `json:"product_count,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // CreateCategoryRequest represents the request to create a category
@@ -52,9 +55,16 @@ type UpdateCategoryRequest struct {
 
 // List handles GET /api/v1/categories
 func (h *CategoryHandler) List(c *fiber.Ctx) error {
-	activeOnly := c.Query("active_only", "true") == "true"
+	status := c.Query("status", "")
+	if status == "" {
+		if c.Query("active_only", "true") == "true" {
+			status = "active"
+		} else {
+			status = "all"
+		}
+	}
 
-	categories, err := h.categoryRepo.List(c.Context(), activeOnly)
+	categories, err := h.categoryRepo.List(c.Context(), status)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list categories")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -157,7 +167,8 @@ func (h *CategoryHandler) Create(c *fiber.Ctx) error {
 
 	// Audit log with new values
 	newValues := map[string]interface{}{
-		"name": category.Name,
+		"affected_category": category.Name,
+		"name":              category.Name,
 	}
 	audit.LogWithValues(c, models.AuditActionCategoryCreate, models.AuditEntityCategory, category.ID.String(), "Created category: "+category.Name, nil, newValues)
 
@@ -195,8 +206,9 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 
 	// Capture old values for audit
 	oldValues := map[string]interface{}{
-		"name":      category.Name,
-		"is_active": category.IsActive,
+		"affected_category": category.Name,
+		"name":              category.Name,
+		"is_active":         category.IsActive,
 	}
 
 	var req UpdateCategoryRequest
@@ -244,8 +256,9 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 
 	// Audit log with old/new values
 	newValues := map[string]interface{}{
-		"name":      category.Name,
-		"is_active": category.IsActive,
+		"affected_category": category.Name,
+		"name":              category.Name,
+		"is_active":         category.IsActive,
 	}
 	audit.LogWithValues(c, models.AuditActionCategoryUpdate, models.AuditEntityCategory, id.String(), "Updated category: "+category.Name, oldValues, newValues)
 
@@ -265,14 +278,12 @@ func (h *CategoryHandler) Delete(c *fiber.Ctx) error {
 			"message": "Invalid category ID format",
 		})
 	}
-
-	// Check if category has products
-	count, _ := h.categoryRepo.GetProductCount(c.Context(), id)
-	if count > 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "HAS_PRODUCTS",
-			"message": "Cannot delete category with products. Move or delete products first.",
-		})
+	// Category can be archived even if it has products (soft-delete)
+	// Fetch category for audit
+	category, _ := h.categoryRepo.GetByID(c.Context(), id)
+	categoryName := "Unknown"
+	if category != nil {
+		categoryName = category.Name
 	}
 
 	if err := h.categoryRepo.Delete(c.Context(), id); err != nil {
@@ -284,10 +295,57 @@ func (h *CategoryHandler) Delete(c *fiber.Ctx) error {
 	}
 
 	// Audit log
-	audit.LogFromFiber(c, models.AuditActionCategoryDelete, models.AuditEntityCategory, id.String(), "Deleted category")
+	audit.LogWithValues(c, models.AuditActionCategoryArchive, models.AuditEntityCategory, id.String(), "Archived category: "+categoryName, map[string]interface{}{
+		"affected_category": categoryName,
+	}, nil)
 
 	return c.JSON(fiber.Map{
 		"message": "Category deleted successfully",
+	})
+}
+
+// PermanentDelete handles DELETE /api/v1/categories/:id/permanent
+func (h *CategoryHandler) PermanentDelete(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "INVALID_ID",
+			"message": "Invalid category ID format",
+		})
+	}
+
+	// Check if category has products
+	count, _ := h.categoryRepo.GetProductCount(c.Context(), id)
+	if count > 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "HAS_PRODUCTS",
+			"message": "Cannot delete category with products. Move or delete products first.",
+		})
+	}
+
+	// Fetch category for audit
+	category, _ := h.categoryRepo.GetByID(c.Context(), id)
+	categoryName := "Unknown"
+	if category != nil {
+		categoryName = category.Name
+	}
+
+	if err := h.categoryRepo.PermanentDelete(c.Context(), id); err != nil {
+		log.Error().Err(err).Msg("Failed to permanently delete category")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"code":    "INTERNAL_ERROR",
+			"message": "Failed to permanently delete category",
+		})
+	}
+
+	// Audit log
+	audit.LogWithValues(c, models.AuditActionCategoryDelete, models.AuditEntityCategory, id.String(), "Permanently deleted category: "+categoryName, map[string]interface{}{
+		"affected_category": categoryName,
+	}, nil)
+
+	return c.JSON(fiber.Map{
+		"message": "Category permanently deleted successfully",
 	})
 }
 
@@ -298,6 +356,7 @@ func (h *CategoryHandler) toCategoryResponse(cat *models.Category) CategoryRespo
 		Description: cat.Description,
 		SortOrder:   cat.SortOrder,
 		IsActive:    cat.IsActive,
+		UpdatedAt:   cat.UpdatedAt,
 	}
 
 	if cat.ParentID != nil {

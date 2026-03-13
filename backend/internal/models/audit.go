@@ -39,8 +39,10 @@ const (
 
 	// Category actions
 	AuditActionCategoryCreate AuditAction = "category.create"
-	AuditActionCategoryUpdate AuditAction = "category.update"
-	AuditActionCategoryDelete AuditAction = "category.delete"
+	AuditActionCategoryUpdate  AuditAction = "category.update"
+	AuditActionCategoryDelete  AuditAction = "category.delete"
+	AuditActionCategoryArchive AuditAction = "category.archive"
+	AuditActionCategoryRestore AuditAction = "category.restore"
 
 	// Sale actions
 	AuditActionSaleCreate AuditAction = "sale.create"
@@ -57,6 +59,8 @@ const (
 	AuditActionExpenseCreate AuditAction = "expense.create"
 	AuditActionExpenseUpdate AuditAction = "expense.update"
 	AuditActionExpenseDelete AuditAction = "expense.delete"
+	AuditActionExpenseArchive AuditAction = "expense.archive"
+	AuditActionExpenseRestore AuditAction = "expense.restore"
 
 	// Report actions
 	AuditActionReportExport AuditAction = "report.export"
