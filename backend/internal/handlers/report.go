@@ -725,10 +725,7 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 		if item.CategoryName != nil {
 			category = *item.CategoryName
 		}
-		margin := decimal.Zero
-		if !item.TotalRevenue.IsZero() {
-			margin = item.TotalProfit.Div(item.TotalRevenue).Mul(decimal.NewFromInt(100))
-		}
+		
 		writer.Write([]string{
 			fmt.Sprintf("%d", i+1),
 			item.ProductName,
