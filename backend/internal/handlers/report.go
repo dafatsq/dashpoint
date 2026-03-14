@@ -486,7 +486,7 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 	// Header
 	writer.Write([]string{
 		"Product ID", "Product Name", "SKU", "Category",
-		"Quantity", "Cost Price", "Sell Price", "Cost Value", "Retail Value",
+		"Quantity", "Sell Price", "Retail Value",
 	})
 
 	// Data
@@ -505,9 +505,7 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 			sku,
 			category,
 			item.Quantity.String(),
-			item.CostPrice.String(),
-			item.SellPrice.String(),
-			item.CostValue.String(),
+					item.SellPrice.String(),
 			item.RetailValue.String(),
 		})
 	}
@@ -517,9 +515,8 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 	writer.Write([]string{
 		"TOTAL", "", "", "",
 		valuation.TotalQuantity.String(),
-		"", "",
-		valuation.TotalCostValue.String(),
-		valuation.TotalRetailValue.String(),
+			"",
+			valuation.TotalRetailValue.String(),
 	})
 
 	writer.Flush()
@@ -566,7 +563,7 @@ func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
 	// Header
 	writer.Write([]string{
 		"Rank", "Product ID", "Product Name", "SKU", "Category",
-		"Quantity Sold", "Total Revenue", "Total Profit",
+		"Quantity Sold", "Total Revenue",
 	})
 
 	// Data
@@ -586,8 +583,7 @@ func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
 			sku,
 			category,
 			item.QuantitySold.String(),
-			item.TotalRevenue.String(),
-			item.TotalProfit.String(),
+					item.TotalRevenue.String(),
 		})
 	}
 
@@ -719,7 +715,7 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 
 	// TOP SELLERS SECTION
 	writer.Write([]string{"=== TOP 20 SELLING PRODUCTS ==="})
-	writer.Write([]string{"Rank", "Product Name", "SKU", "Category", "Qty Sold", "Revenue", "Profit", "Margin %"})
+	writer.Write([]string{"Rank", "Product Name", "SKU", "Category", "Qty Sold", "Revenue", })
 	for i, item := range topSellers {
 		sku := ""
 		if item.ProductSKU != nil {
@@ -739,9 +735,7 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 			sku,
 			category,
 			item.QuantitySold.String(),
-			item.TotalRevenue.String(),
-			item.TotalProfit.String(),
-			margin.StringFixed(2),
+					item.TotalRevenue.String(),
 		})
 	}
 	writer.Write([]string{""})
