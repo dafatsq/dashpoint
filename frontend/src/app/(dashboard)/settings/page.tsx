@@ -51,7 +51,7 @@ export default function SettingsPage() {
     // Manage quick access
     if (user) {
       const shouldSaveQuickAccess = rememberMe || quickAccess;
-      if (shouldSaveQuickAccess && user.has_pin) {
+      if (shouldSaveQuickAccess) {
         AccountManager.saveAccount({
           id: user.id,
           name: user.name,
