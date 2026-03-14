@@ -1091,7 +1091,7 @@ export default function UsersPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="pin">PIN (4-6 digits, for quick login)</Label>
+              <Label htmlFor="pin">PIN (4-6 digits, for quick login) {!editingUser && "*"}</Label>
               <Input
                 id="pin"
                 type="password"
