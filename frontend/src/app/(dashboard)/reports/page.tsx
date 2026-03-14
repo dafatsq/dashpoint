@@ -43,6 +43,7 @@ import {
   EmployeeSales,
   CategorySales,
   SalesRangeReport,
+  ExpenseSummary,
 } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
 
@@ -118,6 +119,7 @@ export default function ReportsPage() {
   const [cashReport, setCashReport] = useState<CashReport | null>(null);
   const [employeeSales, setEmployeeSales] = useState<EmployeeSales[]>([]);
   const [categorySales, setCategorySales] = useState<CategorySales[]>([]);
+  const [expenseSummary, setExpenseSummary] = useState<ExpenseSummary | null>(null);
 
   const formatCurrency = (amount: number | string) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -143,16 +145,18 @@ export default function ReportsPage() {
   const fetchOverviewData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [salesRes, topRes] = await Promise.all([
+      const [salesRes, topRes, expenseRes] = await Promise.all([
         api.getSalesRangeReport({
           start_date: dateRange.start,
           end_date: dateRange.end,
         }),
         api.getTopSellers({ from: dateRange.start, to: dateRange.end, limit: 5 }),
+        api.getExpenseSummary({ start_date: dateRange.start, end_date: dateRange.end }),
       ]);
 
       if (salesRes.data) setSalesRangeReport(salesRes.data);
       if (topRes.data) setTopSellers(topRes.data);
+      if (expenseRes.data) setExpenseSummary(expenseRes.data);
     } catch (error) {
       console.error('Failed to fetch overview data:', error);
     } finally {
@@ -284,10 +288,71 @@ export default function ReportsPage() {
   // Export handlers
   const handleExportComprehensive = async () => {
     try {
-      const url = await api.exportComprehensiveReportCSV({
-        start_date: dateRange.start,
-        end_date: dateRange.end,
-      });
+      if (!salesRangeReport) {
+        console.error('No report data available to export');
+        return;
+      }
+
+      const totalAmount = parseFloat(salesRangeReport.summary.total_amount) || 0;
+      const totalTax = parseFloat(salesRangeReport.summary.total_tax) || 0;
+      const totalExpenses = expenseSummary ? parseFloat(expenseSummary.total_amount) || 0 : 0;
+      const netRevenue = totalAmount - totalTax;
+      const netProfit = netRevenue - totalExpenses;
+
+      const escapeCsv = (value: string | number) => {
+        const str = String(value ?? '');
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const rows: string[] = [];
+
+      rows.push('Metric,Value');
+      rows.push([
+        'Period',
+        `${dateRange.start} to ${dateRange.end}`,
+      ].map(escapeCsv).join(','));
+      rows.push(['Total Revenue', totalAmount.toFixed(2)].map(escapeCsv).join(','));
+      rows.push(['Tax Collected', totalTax.toFixed(2)].map(escapeCsv).join(','));
+      rows.push(['Net Revenue', netRevenue.toFixed(2)].map(escapeCsv).join(','));
+      rows.push(['Total Expenses', totalExpenses.toFixed(2)].map(escapeCsv).join(','));
+      rows.push(['Net Profit', netProfit.toFixed(2)].map(escapeCsv).join(','));
+      rows.push(['Total Transactions', salesRangeReport.summary.total_transactions].map(escapeCsv).join(','));
+      rows.push(['Total Items', salesRangeReport.summary.total_items].map(escapeCsv).join(','));
+
+      if (salesRangeReport.daily_reports && salesRangeReport.daily_reports.length > 0) {
+        rows.push('');
+        rows.push('Date,Revenue,Tax,Transactions,Items');
+        salesRangeReport.daily_reports.forEach((day) => {
+          rows.push([
+            day.date,
+            parseFloat(day.total_amount || '0').toFixed(2),
+            parseFloat(day.total_tax || '0').toFixed(2),
+            day.transaction_count,
+            day.item_count,
+          ].map(escapeCsv).join(','));
+        });
+      }
+
+      if (topSellers.length > 0) {
+        rows.push('');
+        rows.push('Product,Quantity Sold,Revenue');
+        topSellers.forEach((item) => {
+          const totalRevenue = parseFloat(item.total_revenue || '0') || 0;
+
+          rows.push([
+            item.product_name,
+            item.quantity_sold,
+            totalRevenue.toFixed(2),
+          ].map(escapeCsv).join(','));
+        });
+      }
+
+      const csvContent = rows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `comprehensive_report_${dateRange.start}_to_${dateRange.end}.csv`;
@@ -393,28 +458,41 @@ export default function ReportsPage() {
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                <CardTitle className="text-sm font-medium">Net Revenue</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(salesRangeReport.summary.total_amount)}</div>
+                <div className="text-2xl font-bold">{formatCurrency(parseFloat(salesRangeReport.summary.total_amount) - parseFloat(salesRangeReport.summary.total_tax))}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {salesRangeReport.summary.total_transactions} transactions
+                  Sales after discount
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Items Sold</CardTitle>
-                <Package className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+                <TrendingDown className="h-4 w-4 text-red-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(salesRangeReport.summary.total_items)}</div>
+                <div className="text-2xl font-bold text-red-600">{expenseSummary ? formatCurrency(expenseSummary.total_amount) : formatCurrency(0)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Avg {salesRangeReport.summary.total_transactions > 0
-                    ? (salesRangeReport.summary.total_items / salesRangeReport.summary.total_transactions).toFixed(1)
-                    : 0} per sale
+                  {expenseSummary ? expenseSummary.expense_count : 0} records
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className={parseFloat(salesRangeReport.summary.total_amount) - (expenseSummary ? parseFloat(expenseSummary.total_amount) : 0) - parseFloat(salesRangeReport.summary.total_tax) >= 0 ? "border-2 border-green-500" : "border-2 border-red-500"}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+                {parseFloat(salesRangeReport.summary.total_amount) - (expenseSummary ? parseFloat(expenseSummary.total_amount) : 0) - parseFloat(salesRangeReport.summary.total_tax) >= 0 ? <ArrowUpRight className="h-5 w-5 text-green-500" /> : <ArrowDownRight className="h-5 w-5 text-red-500" />}
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${parseFloat(salesRangeReport.summary.total_amount) - (expenseSummary ? parseFloat(expenseSummary.total_amount) : 0) - parseFloat(salesRangeReport.summary.total_tax) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {formatCurrency((parseFloat(salesRangeReport.summary.total_amount) - parseFloat(salesRangeReport.summary.total_tax)) - (expenseSummary ? parseFloat(expenseSummary.total_amount) : 0))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Revenue - Expenses
                 </p>
               </CardContent>
             </Card>
@@ -426,18 +504,9 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(salesRangeReport.summary.total_tax)}</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Discounts</CardTitle>
-                <TrendingDown className="h-4 w-4 text-orange-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
-                  {formatCurrency(salesRangeReport.summary.total_discount)}
-                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Not included in net revenue
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -766,15 +835,10 @@ export default function ReportsPage() {
                       <th className="pb-3 font-medium">Category</th>
                       <th className="pb-3 font-medium text-right">Qty Sold</th>
                       <th className="pb-3 font-medium text-right">Revenue</th>
-                      <th className="pb-3 font-medium text-right">Profit</th>
-                      <th className="pb-3 font-medium text-right">Margin</th>
                     </tr>
                   </thead>
                   <tbody>
                     {topSellers.map((item, index) => {
-                      const margin = parseFloat(item.total_revenue) > 0
-                        ? (parseFloat(item.total_profit) / parseFloat(item.total_revenue)) * 100
-                        : 0;
                       return (
                         <tr key={`${item.product_id}-${index}`} className="border-b last:border-0 hover:bg-muted/50">
                           <td className="py-3">
@@ -794,17 +858,6 @@ export default function ReportsPage() {
                           <td className="py-3 text-muted-foreground">{item.category_name || '-'}</td>
                           <td className="py-3 text-right font-medium">{formatNumber(item.quantity_sold)}</td>
                           <td className="py-3 text-right font-bold">{formatCurrency(item.total_revenue)}</td>
-                          <td className="py-3 text-right text-green-600">{formatCurrency(item.total_profit)}</td>
-                          <td className="py-3 text-right">
-                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${margin > 30
-                              ? 'bg-primary text-primary-foreground ring-primary/20'
-                              : margin > 15
-                                ? 'bg-muted text-muted-foreground ring-muted-foreground/20'
-                                : 'bg-transparent text-muted-foreground ring-muted-foreground/30'
-                              }`}>
-                              {margin.toFixed(1)}%
-                            </span>
-                          </td>
                         </tr>
                       );
                     })}
@@ -818,10 +871,6 @@ export default function ReportsPage() {
           <div className="lg:hidden space-y-4">
             <h3 className="font-semibold text-lg">Top Selling Products</h3>
             {topSellers.map((item, index) => {
-              const margin = parseFloat(item.total_revenue) > 0
-                ? (parseFloat(item.total_profit) / parseFloat(item.total_revenue)) * 100
-                : 0;
-
               return (
                 <Card key={`${item.product_id}-mobile-${index}`}>
                   <CardContent className="p-4 space-y-3">
@@ -848,21 +897,6 @@ export default function ReportsPage() {
                       <div className="text-right">
                         <span className="text-xs text-muted-foreground block">Qty Sold</span>
                         <span className="font-medium">{formatNumber(item.quantity_sold)}</span>
-                      </div>
-                      <div>
-                        <span className="text-xs text-muted-foreground block">Profit</span>
-                        <span className="font-medium text-green-600">{formatCurrency(item.total_profit)}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs text-muted-foreground block">Margin</span>
-                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${margin > 30
-                          ? 'bg-primary/10 text-primary ring-primary/20'
-                          : margin > 15
-                            ? 'bg-muted text-muted-foreground ring-muted-foreground/20'
-                            : 'bg-transparent text-muted-foreground ring-muted-foreground/30'
-                          }`}>
-                          {margin.toFixed(1)}%
-                        </span>
                       </div>
                     </div>
                   </CardContent>
@@ -929,14 +963,6 @@ export default function ReportsPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Cost Value</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(inventoryReport.total_cost_value)}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Retail Value</CardTitle>
               </CardHeader>
               <CardContent>
@@ -944,22 +970,6 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Potential profit */}
-          <Card className="border-l-4 border-l-green-500 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base">Potential Profit</CardTitle>
-              <CardDescription>If all inventory is sold at retail price</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-green-600">
-                {formatCurrency(inventoryReport.potential_profit)}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Margin: {parseFloat(inventoryReport.total_retail_value) > 0 ? ((parseFloat(inventoryReport.potential_profit) / parseFloat(inventoryReport.total_retail_value)) * 100).toFixed(1) : 0}%
-              </p>
-            </CardContent>
-          </Card>
 
           {/* Inventory items table - Desktop */}
           {inventoryReport.items && inventoryReport.items.length > 0 && (
@@ -976,7 +986,6 @@ export default function ReportsPage() {
                         <th className="pb-3 font-medium">Product</th>
                         <th className="pb-3 font-medium">Category</th>
                         <th className="pb-3 font-medium text-right">Qty</th>
-                        <th className="pb-3 font-medium text-right">Cost</th>
                         <th className="pb-3 font-medium text-right">Price</th>
                         <th className="pb-3 font-medium text-right">Value</th>
                       </tr>
@@ -994,7 +1003,6 @@ export default function ReportsPage() {
                           </td>
                           <td className="py-3 text-muted-foreground">{item.category_name || '-'}</td>
                           <td className="py-3 text-right">{formatNumber(item.quantity)}</td>
-                          <td className="py-3 text-right">{formatCurrency(item.cost_price)}</td>
                           <td className="py-3 text-right">{formatCurrency(item.sell_price)}</td>
                           <td className="py-3 text-right font-bold">{formatCurrency(item.retail_value)}</td>
                         </tr>
@@ -1031,11 +1039,7 @@ export default function ReportsPage() {
                         <span className="text-xs text-muted-foreground block">Retail Value</span>
                         <span className="font-bold">{formatCurrency(item.retail_value)}</span>
                       </div>
-                      <div>
-                        <span className="text-xs text-muted-foreground block">Cost</span>
-                        <span className="font-medium">{formatCurrency(item.cost_price)}</span>
-                      </div>
-                      <div className="text-right">
+                      <div className="col-span-2 text-right">
                         <span className="text-xs text-muted-foreground block">Price</span>
                         <span className="font-medium">{formatCurrency(item.sell_price)}</span>
                       </div>
