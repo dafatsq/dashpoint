@@ -113,7 +113,7 @@ export default function SettingsPage() {
                 <Switch
                   checked={rememberMe ? true : quickAccess}
                   onCheckedChange={setQuickAccess}
-                  disabled={rememberMe || !user?.has_pin}
+                  disabled={rememberMe}
                 />
               </div>
             </CardContent>
