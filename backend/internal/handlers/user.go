@@ -9,11 +9,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"AL-Zauk/backend/internal/audit"
-	"AL-Zauk/backend/internal/auth"
-	"AL-Zauk/backend/internal/middleware"
-	"AL-Zauk/backend/internal/models"
-	"AL-Zauk/backend/internal/repository"
+	"dashpoint/backend/internal/audit"
+	"dashpoint/backend/internal/auth"
+	"dashpoint/backend/internal/middleware"
+	"dashpoint/backend/internal/models"
+	"dashpoint/backend/internal/repository"
 )
 
 // normalizeEmail converts email to lowercase for case-insensitive storage
