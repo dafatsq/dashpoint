@@ -242,7 +242,7 @@ export default function UsersPage() {
   const handleSubmit = async () => {
     if (
       !formData.name ||
-      (!editingUser && (!formData.email || !formData.password))
+      (!editingUser && (!formData.email || !formData.password || !formData.pin))
     )
       return;
 

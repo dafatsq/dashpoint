@@ -265,6 +265,27 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
+	if req.Email == nil || *req.Email == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "VALIDATION_ERROR",
+			"message": "Email is required",
+		})
+	}
+
+	if req.Password == nil || *req.Password == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "VALIDATION_ERROR",
+			"message": "Password is required",
+		})
+	}
+
+	if req.PIN == nil || *req.PIN == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"code":    "VALIDATION_ERROR",
+			"message": "PIN is required",
+		})
+	}
+
 	// Parse role ID
 	roleID, err := uuid.Parse(req.RoleID)
 	if err != nil {
