@@ -9,11 +9,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"dashpoint/backend/internal/audit"
-	"dashpoint/backend/internal/auth"
-	"dashpoint/backend/internal/middleware"
-	"dashpoint/backend/internal/models"
-	"dashpoint/backend/internal/repository"
+	"AL-Zauk/backend/internal/audit"
+	"AL-Zauk/backend/internal/auth"
+	"AL-Zauk/backend/internal/middleware"
+	"AL-Zauk/backend/internal/models"
+	"AL-Zauk/backend/internal/repository"
 )
 
 // normalizeEmail converts email to lowercase for case-insensitive storage
@@ -503,14 +503,6 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 	}
 
 	if req.RoleID != nil {
-		// Prevent self-role change
-		if middleware.GetUserID(c) == id {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"code":    "CANNOT_CHANGE_OWN_ROLE",
-				"message": "You cannot change your own role",
-			})
-		}
-
 		roleID, err := uuid.Parse(*req.RoleID)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -519,34 +511,40 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 			})
 		}
 
-		// Verify role exists
-		role, err := h.roleRepo.GetByID(c.Context(), roleID)
-		if err != nil || role == nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"code":    "INVALID_ROLE",
-				"message": "Role not found",
-			})
-		}
+		if roleID != user.RoleID {
+			// Prevent self-role change
+			if middleware.GetUserID(c) == id {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"code":    "CANNOT_CHANGE_OWN_ROLE",
+					"message": "You cannot change your own role",
+				})
+			}
 
-		// Check if current user can assign this role
-		currentRoleName := middleware.GetRoleName(c)
-		if !canAssignRole(currentRoleName, role.Name) {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"code":    "FORBIDDEN",
-				"message": "You cannot assign the " + role.Name + " role",
-			})
-		}
+			// Verify role exists
+			role, err := h.roleRepo.GetByID(c.Context(), roleID)
+			if err != nil || role == nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"code":    "INVALID_ROLE",
+					"message": "Role not found",
+				})
+			}
 
-		// Check if role is actually changing
-		if user.RoleID != roleID {
+			// Check if current user can assign this role
+			currentRoleName := middleware.GetRoleName(c)
+			if !canAssignRole(currentRoleName, role.Name) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"code":    "FORBIDDEN",
+					"message": "You cannot assign the " + role.Name + " role",
+				})
+			}
+
 			// Clear all permission overrides when role changes
 			if err := h.userRepo.ClearUserPermissionOverrides(c.Context(), id); err != nil {
 				log.Error().Err(err).Msg("Failed to clear permission overrides")
 				// Don't fail the role change if clearing overrides fails
 			}
+			user.RoleID = roleID
 		}
-
-		user.RoleID = roleID
 	}
 
 	if req.IsActive != nil {
