@@ -263,7 +263,7 @@ func (r *ReportRepository) GetTopSellers(ctx context.Context, startDate, endDate
 			c.name as category_name,
 			SUM(si.quantity) as quantity_sold,
 			SUM(si.total) as total_revenue,
-			SUM(si.total) - SUM(si.cost_price * si.quantity) as total_profit
+			SUM(si.total) as total_profit
 		FROM sale_items si
 		JOIN sales s ON si.sale_id = s.id
 		LEFT JOIN products p ON si.product_id = p.id
@@ -320,7 +320,7 @@ func (r *ReportRepository) GetInventoryValuation(ctx context.Context, categoryID
 		SELECT 
 			COUNT(DISTINCT p.id),
 			COALESCE(SUM(i.quantity), 0),
-			COALESCE(SUM(i.quantity * p.cost), 0),
+			COALESCE(SUM(0), 0) as total_cost_value,
 			COALESCE(SUM(i.quantity * p.price), 0)
 		FROM products p
 		LEFT JOIN inventory_items i ON p.id = i.product_id
@@ -347,9 +347,9 @@ func (r *ReportRepository) GetInventoryValuation(ctx context.Context, categoryID
 				p.sku,
 				c.name as category_name,
 				COALESCE(i.quantity, 0),
-				p.cost,
+				0 as cost,
 				p.price,
-				COALESCE(i.quantity * p.cost, 0),
+				0 as cost_value,
 				COALESCE(i.quantity * p.price, 0)
 			FROM products p
 			LEFT JOIN inventory_items i ON p.id = i.product_id
