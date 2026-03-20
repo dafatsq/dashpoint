@@ -203,11 +203,36 @@ function LoginPageContent() {
                 </Button>
               </form>
 
-              <div className="mt-6 text-center text-sm text-muted-foreground">
-                <p>Demo Credentials:</p>
-                <p className="mt-1 font-mono text-xs">
-                  owner@dashpoint.local / owner123
+              <div className="mt-8 pt-6 border-t">
+                <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+                  Quick Demo Access
                 </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { role: 'Owner', email: 'owner@dashpoint.local', pass: 'owner123' },
+                    { role: 'Manager', email: 'manager@dashpoint.local', pass: 'manager123' },
+                    { role: 'Cashier', email: 'cashier@dashpoint.local', pass: 'cashier123' }
+                  ].map((demo) => (
+                    <Button
+                      key={demo.role}
+                      variant="outline"
+                      size="sm"
+                      className="group flex flex-col items-start h-auto py-2 px-3 hover:border-primary/50 hover:bg-primary/5"
+                      onClick={() => {
+                        setEmail(demo.email);
+                        setPassword(demo.pass);
+                      }}
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase text-primary/70">{demo.role}</span>
+                        <span className="text-[10px] text-muted-foreground group-hover:text-primary transition-colors">Click to fill</span>
+                      </div>
+                      <div className="text-xs font-mono mt-0.5">
+                        {demo.email} <span className="text-muted-foreground mx-1">/</span> {demo.pass}
+                      </div>
+                    </Button>
+                  ))}
+                </div>
               </div>
             </TabsContent>
           </Tabs>
