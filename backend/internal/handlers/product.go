@@ -744,7 +744,7 @@ func (h *ProductHandler) Delete(c *fiber.Ctx) error {
 	// Capture old values for audit
 	oldValues := map[string]interface{}{
 		"affected_product": productToDelete.Name,
-		"name": productToDelete.Name,
+		"name":             productToDelete.Name,
 	}
 	if productToDelete.SKU != nil {
 		oldValues["sku"] = *productToDelete.SKU
@@ -818,7 +818,7 @@ func (h *ProductHandler) PermanentDelete(c *fiber.Ctx) error {
 	// Capture old values for audit
 	oldValues := map[string]interface{}{
 		"affected_product": productToDelete.Name,
-		"name": productToDelete.Name,
+		"name":             productToDelete.Name,
 	}
 	if productToDelete.SKU != nil {
 		oldValues["sku"] = *productToDelete.SKU
@@ -986,9 +986,9 @@ func (h *ProductHandler) AdjustStock(c *fiber.Ctx) error {
 	}
 	auditValues := map[string]interface{}{
 		"affected_product": productName,
-		"product_name":    productName,
-		"adjustment_type": string(adjType),
-		"quantity":        quantity.String(),
+		"product_name":     productName,
+		"adjustment_type":  string(adjType),
+		"quantity":         quantity.String(),
 	}
 	if req.Reason != "" {
 		auditValues["reason"] = req.Reason

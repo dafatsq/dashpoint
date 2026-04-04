@@ -26,11 +26,11 @@ func NewCategoryHandler(categoryRepo *repository.CategoryRepository) *CategoryHa
 
 // CategoryResponse represents a category in API responses
 type CategoryResponse struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Description  *string `json:"description,omitempty"`
-	ParentID     *string `json:"parent_id,omitempty"`
-	SortOrder    int     `json:"sort_order"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Description  *string   `json:"description,omitempty"`
+	ParentID     *string   `json:"parent_id,omitempty"`
+	SortOrder    int       `json:"sort_order"`
 	IsActive     bool      `json:"is_active"`
 	ProductCount *int      `json:"product_count,omitempty"`
 	UpdatedAt    time.Time `json:"updated_at"`
