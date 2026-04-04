@@ -1,3 +1,4 @@
-pos.example.com {
+pos.example.com:8443 {
+    tls internal
     reverse_proxy backend:8080
 }
