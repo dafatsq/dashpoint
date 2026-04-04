@@ -505,7 +505,7 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 			sku,
 			category,
 			item.Quantity.String(),
-					item.SellPrice.String(),
+			item.SellPrice.String(),
 			item.RetailValue.String(),
 		})
 	}
@@ -515,8 +515,8 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 	writer.Write([]string{
 		"TOTAL", "", "", "",
 		valuation.TotalQuantity.String(),
-			"",
-			valuation.TotalRetailValue.String(),
+		"",
+		valuation.TotalRetailValue.String(),
 	})
 
 	writer.Flush()
@@ -583,7 +583,7 @@ func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
 			sku,
 			category,
 			item.QuantitySold.String(),
-					item.TotalRevenue.String(),
+			item.TotalRevenue.String(),
 		})
 	}
 
@@ -715,7 +715,7 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 
 	// TOP SELLERS SECTION
 	writer.Write([]string{"=== TOP 20 SELLING PRODUCTS ==="})
-	writer.Write([]string{"Rank", "Product Name", "SKU", "Category", "Qty Sold", "Revenue", })
+	writer.Write([]string{"Rank", "Product Name", "SKU", "Category", "Qty Sold", "Revenue"})
 	for i, item := range topSellers {
 		sku := ""
 		if item.ProductSKU != nil {
@@ -725,14 +725,14 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 		if item.CategoryName != nil {
 			category = *item.CategoryName
 		}
-		
+
 		writer.Write([]string{
 			fmt.Sprintf("%d", i+1),
 			item.ProductName,
 			sku,
 			category,
 			item.QuantitySold.String(),
-					item.TotalRevenue.String(),
+			item.TotalRevenue.String(),
 		})
 	}
 	writer.Write([]string{""})

@@ -88,14 +88,14 @@ func (r *CategoryRepository) List(ctx context.Context, status string) ([]*models
 		SELECT id, name, description, parent_id, sort_order, is_active, created_at, updated_at
 		FROM categories
 	`
-	
+
 	switch status {
 	case "active":
 		query += ` WHERE is_active = true`
 	case "archived":
 		query += ` WHERE is_active = false`
 	}
-	
+
 	query += ` ORDER BY sort_order ASC, name ASC`
 
 	rows, err := r.pool.Query(ctx, query)

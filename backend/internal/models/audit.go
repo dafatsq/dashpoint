@@ -38,7 +38,7 @@ const (
 	AuditActionStockCount  AuditAction = "inventory.count"
 
 	// Category actions
-	AuditActionCategoryCreate AuditAction = "category.create"
+	AuditActionCategoryCreate  AuditAction = "category.create"
 	AuditActionCategoryUpdate  AuditAction = "category.update"
 	AuditActionCategoryDelete  AuditAction = "category.delete"
 	AuditActionCategoryArchive AuditAction = "category.archive"
@@ -56,9 +56,9 @@ const (
 	AuditActionCashPayOut AuditAction = "shift.pay_out"
 
 	// Expense actions
-	AuditActionExpenseCreate AuditAction = "expense.create"
-	AuditActionExpenseUpdate AuditAction = "expense.update"
-	AuditActionExpenseDelete AuditAction = "expense.delete"
+	AuditActionExpenseCreate  AuditAction = "expense.create"
+	AuditActionExpenseUpdate  AuditAction = "expense.update"
+	AuditActionExpenseDelete  AuditAction = "expense.delete"
 	AuditActionExpenseArchive AuditAction = "expense.archive"
 	AuditActionExpenseRestore AuditAction = "expense.restore"
 

@@ -160,6 +160,7 @@ func RequirePermission(checker PermissionChecker, permissions ...string) fiber.H
 		return c.Next()
 	}
 }
+
 // RequireAnyPermission creates a middleware factory that checks if any of the specified permissions match
 func RequireAnyPermission(checker PermissionChecker, permissions ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
