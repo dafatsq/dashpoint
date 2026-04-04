@@ -3,7 +3,7 @@ version: "3.8"
 services:
   db:
     image: postgres:15-alpine
-    container_name: dashpoint-db-prod
+    container_name: ${PROJECT_NAME:-dashpoint}-db-prod
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dashpoint}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dashpoint_prod_secret}
@@ -21,7 +21,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: dashpoint-backend-prod
+    container_name: ${PROJECT_NAME:-dashpoint}-backend-prod
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-dashpoint}:${POSTGRES_PASSWORD:-dashpoint_prod_secret}@db:5432/${POSTGRES_DB:-dashpoint_prod}?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-production_secret_key_change_me_to_something_secure}
