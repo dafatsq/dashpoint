@@ -5,7 +5,7 @@ import { User } from '@/types';
 import api from '@/lib/api';
 import { AccountManager } from '@/lib/account-manager';
 import { useUserEvents, UserEvent } from '@/hooks/useUserEvents';
-import { getSessionItem, setSessionItem, removeSessionItem, clearSession } from '@/lib/session';
+import { getSessionItem, setSessionItem, removeSessionItem, clearSession, getRememberMeKey, migrateSession } from '@/lib/session';
 
 interface AuthContextType {
   user: User | null;
@@ -61,6 +61,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
         setSessionItem('user', JSON.stringify(userData));
         setUser(userData);
+
+        if (typeof window !== 'undefined') {
+            const pref = window.localStorage.getItem(getRememberMeKey(userData.id));
+            if (pref === 'false') {
+                migrateSession(false);
+            }
+        }
 
         // Update saved account info if has PIN
         if (userData.has_pin) {
@@ -238,7 +245,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       };
       setSessionItem('user', JSON.stringify(userData));
       setUser(userData);
-
+        if (typeof window !== 'undefined') {
+            const pref = window.localStorage.getItem(getRememberMeKey(userData.id));
+            if (pref === 'false') {
+                migrateSession(false);
+            }
+        }
       // Save account for quick switching (if enabled and user has PIN)
       if (saveAccount && userData.has_pin) {
         AccountManager.saveAccount({

@@ -11,7 +11,7 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import { REMEMBER_ME_KEY, migrateSession } from '@/lib/session';
+import { getRememberMeKey, migrateSession } from '@/lib/session';
 import { useAuth } from '@/contexts/auth-context';
 import { AccountManager } from '@/lib/account-manager';
 
@@ -20,49 +20,56 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [quickAccess, setQuickAccess] = useState(false);
+  const [initialRememberMe, setInitialRememberMe] = useState(true);
+  const [initialQuickAccess, setInitialQuickAccess] = useState(false);
 
   // Load saved preference on mount
   useEffect(() => {
-    const savedPref = localStorage.getItem(REMEMBER_ME_KEY);
+    if (!user) return;
+    
+    const prefKey = getRememberMeKey(user.id);
+    const savedPref = localStorage.getItem(prefKey);
+    
     // Default is true if not explicitly set to false
-    if (savedPref === 'false') {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      setRememberMe(false);
-    } else {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      setRememberMe(true);
-    }
+    const isRememberMe = savedPref !== 'false';
+    setRememberMe(isRememberMe);
+    setInitialRememberMe(isRememberMe);
 
-    if (user) {
-      const isSaved = AccountManager.getAccount(user.id) !== null;
-      setQuickAccess(isSaved);
-    }
+    const isSaved = AccountManager.getAccount(user.id) !== null;
+    setQuickAccess(isSaved);
+    setInitialQuickAccess(isSaved);
   }, [user]);
 
+  const hasChanges = rememberMe !== initialRememberMe || quickAccess !== initialQuickAccess;
+
   const handleSave = async () => {
+    if (!user) return;
+    
     setIsSaving(true);
 
-    // Save the auth preference globally
-    localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? 'true' : 'false');
+    const prefKey = getRememberMeKey(user.id);
+    // Save the auth preference per user
+    localStorage.setItem(prefKey, rememberMe ? 'true' : 'false');
 
     // Migrate existing tokens to the correct storage backend
     migrateSession(rememberMe);
 
     // Manage quick access
-    if (user) {
-      const shouldSaveQuickAccess = rememberMe || quickAccess;
-      if (shouldSaveQuickAccess) {
-        AccountManager.saveAccount({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role_name: user.role_name,
-          has_pin: user.has_pin
-        });
-      } else {
-        AccountManager.removeAccount(user.id);
-      }
+    const shouldSaveQuickAccess = rememberMe || quickAccess;
+    if (shouldSaveQuickAccess) {
+      AccountManager.saveAccount({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role_name: user.role_name,
+        has_pin: user.has_pin
+      });
+    } else {
+      AccountManager.removeAccount(user.id);
     }
+    
+    setInitialRememberMe(rememberMe);
+    setInitialQuickAccess(quickAccess);
 
     await new Promise((resolve) => setTimeout(resolve, 500));
     setIsSaving(false);
@@ -91,7 +98,7 @@ export default function SettingsPage() {
                 <div className="flex-1 space-y-0.5">
                   <Label>Automatic Sign-In (Remember Me)</Label>
                   <p className="text-sm text-muted-foreground">
-                    Keep me signed in across browser restarts. Turning this off is recommended for shared devices.
+                    Keep this account signed in across browser restarts. Turning this off means this specific account logs out when the browser closes.
                   </p>
                 </div>
                 <Switch
@@ -105,9 +112,9 @@ export default function SettingsPage() {
 
               <div className="flex items-center justify-between gap-4 pt-4 border-t">
                 <div className="flex-1 space-y-0.5">
-                  <Label>Quick Access (Stay Signed In)</Label>
+                  <Label>Quick Access (Save Login)</Label>
                   <p className="text-sm text-muted-foreground">
-                    Save this account for quick PIN login. (Account must have a PIN set)
+                    Save this account in the browser so you can log back in instantly using only your Quick PIN.
                   </p>
                 </div>
                 <Switch
@@ -120,8 +127,12 @@ export default function SettingsPage() {
           </Card>
 
           {/* Save Button */}
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving} size="lg">
+          <div className="flex justify-end pt-2">
+            <Button 
+              onClick={handleSave} 
+              disabled={isSaving || !hasChanges} 
+              className="w-full sm:w-auto"
+            >
               {isSaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

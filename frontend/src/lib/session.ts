@@ -1,20 +1,33 @@
 // session.ts
 // Utility to abstract whether tokens are stored permanently (localStorage) or temporarily (sessionStorage).
 
-export const REMEMBER_ME_KEY = 'settings_remember_me';
+export const getRememberMeKey = (userId: string) => `settings_remember_me_${userId}`;
 
 /**
- * Gets the current store based on the "Remember Me" preference.
+ * Gets the current store based on the active user's "Remember Me" preference.
  * Defaults to localStorage if the preference isn't explicitly false.
  */
 export const getStorage = (): Storage | null => {
     if (typeof window === 'undefined') return null;
-    // Read preference from localStorage so it persists across sessions.
-    // We want to default to true (Automatic Sign-in on) to maintain original behavior unless explicitly turned off.
-    const rememberPrefs = localStorage.getItem(REMEMBER_ME_KEY);
-    const shouldRemember = rememberPrefs === null || rememberPrefs !== 'false';
+    
+    // First, if there's an active session in sessionStorage, keep using it
+    if (window.sessionStorage.getItem('access_token')) {
+        return window.sessionStorage;
+    }
+    
+    // Then check if we had a stored user's preference
+    const u = window.sessionStorage.getItem('user') || window.localStorage.getItem('user');
+    if (u) {
+        try {
+            const user = JSON.parse(u);
+            const pref = window.localStorage.getItem(getRememberMeKey(user.id));
+            if (pref === 'false') {
+                return window.sessionStorage;
+            }
+        } catch(e) {}
+    }
 
-    return shouldRemember ? window.localStorage : window.sessionStorage;
+    return window.localStorage;
 };
 
 export const setSessionItem = (key: string, value: string): void => {
@@ -24,9 +37,7 @@ export const setSessionItem = (key: string, value: string): void => {
 
 export const getSessionItem = (key: string): string | null => {
     if (typeof window === 'undefined') return null;
-    const store = getStorage();
-    if (store) return store.getItem(key);
-    return null;
+    return window.sessionStorage.getItem(key) || window.localStorage.getItem(key) || null;
 };
 
 export const removeSessionItem = (key: string): void => {
