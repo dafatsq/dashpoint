@@ -121,7 +121,7 @@ export default function UsersPage() {
     
     if (currentLevel < targetLevel) return false;
     
-    if (!isOwner) {
+    if (!isOwner && (currentUser?.role_name || "").toLowerCase() === "manager") {
       if (targetUser.role_name.toLowerCase() === "manager" && !hasPermission("can_manage_manager_permissions")) return false;
       if (targetUser.role_name.toLowerCase() === "cashier" && !hasPermission("can_manage_cashier_permissions")) return false;
     }
@@ -1495,7 +1495,7 @@ export default function UsersPage() {
                                     </div>
 
                                     {/* Sub-permissions dropdown */}
-                                    {permission.key === "can_manage_permissions" && (
+                                    {permission.key === "can_manage_permissions" && permissionsUser?.role_name.toLowerCase() === "manager" && (
                                       <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
                                         <div className="space-y-3">
                                         {permissions
