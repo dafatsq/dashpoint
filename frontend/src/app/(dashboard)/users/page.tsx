@@ -1508,7 +1508,7 @@ export default function UsersPage() {
 
 
                                     {/* Sub-permissions dropdown for Create */}
-                                    {permission.key === "can_create_users" && permissionsUser?.role_name.toLowerCase() === "manager" && (
+                                    {permission.key === "can_create_user" && permissionsUser?.role_name.toLowerCase() === "manager" && (
                                       <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
                                         <div className="space-y-3">
                                         {permissions
@@ -1542,7 +1542,7 @@ export default function UsersPage() {
                                       </div>
                                     )}
                                     {/* Sub-permissions dropdown for Edit */}
-                                    {permission.key === "can_edit_users" && permissionsUser?.role_name.toLowerCase() === "manager" && (
+                                    {permission.key === "can_edit_user" && permissionsUser?.role_name.toLowerCase() === "manager" && (
                                       <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
                                         <div className="space-y-3">
                                         {permissions
@@ -1576,7 +1576,7 @@ export default function UsersPage() {
                                       </div>
                                     )}
                                     {/* Sub-permissions dropdown for Delete */}
-                                    {permission.key === "can_delete_users" && permissionsUser?.role_name.toLowerCase() === "manager" && (
+                                    {permission.key === "can_delete_user" && permissionsUser?.role_name.toLowerCase() === "manager" && (
                                       <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
                                         <div className="space-y-3">
                                         {permissions
