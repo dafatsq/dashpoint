@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Store, Loader2, AlertCircle, Mail, Info } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Store, Loader2, AlertCircle, Mail, Info, Settings, ShieldCheck } from 'lucide-react';
 
 // Message mapping for different logout reasons
 const LOGOUT_MESSAGES: Record<string, string> = {
@@ -33,7 +34,10 @@ function LoginPageContent() {
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [staySignedIn, setStaySignedIn] = useState(false);
+  const [isDeviceTrusted, setIsDeviceTrusted] = useState(false);
+  const [showDemoAccess, setShowDemoAccess] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const [hasSavedAccounts, setHasSavedAccounts] = useState(false);
   const [activeTab, setActiveTab] = useState<'saved' | 'email'>('saved');
 
@@ -49,6 +53,10 @@ function LoginPageContent() {
 
   // Check for saved accounts on mount and when page becomes visible
   useEffect(() => {
+    setIsClient(true);
+    setIsDeviceTrusted(localStorage.getItem('dashpoint_device_trusted') === 'true');
+    setShowDemoAccess(localStorage.getItem('dashpoint_demo_access') === 'true');
+    
     const checkSavedAccounts = () => {
       const accounts = AccountManager.getSavedAccounts();
       const hasAccounts = accounts.length > 0;
@@ -80,7 +88,7 @@ function LoginPageContent() {
     setIsSubmitting(true);
 
     try {
-      const result = await login(email, password, staySignedIn);
+      const result = await login(email, password, isDeviceTrusted);
 
       if (result.success) {
         router.push('/');
@@ -105,7 +113,16 @@ function LoginPageContent() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+        <CardHeader className="text-center relative">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-4 right-4 text-muted-foreground hover:text-primary"
+            onClick={() => setShowSettings(!showSettings)}
+            type="button"
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary">
             <Store className="h-8 w-8 text-primary-foreground" />
           </div>
@@ -115,6 +132,141 @@ function LoginPageContent() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
+          {showSettings && isClient && (
+            <div className="mb-6 rounded-lg border bg-card p-4 text-card-foreground shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-semibold flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" /> Auto Login (Quick Access)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Save accounts on this browser</p>
+                </div>
+                <Switch
+                  checked={isDeviceTrusted}
+                  onCheckedChange={(checked) => {
+                    setIsDeviceTrusted(checked);
+                    if (checked) {
+                      localStorage.setItem('dashpoint_device_trusted', 'true');
+                    } else {
+                      localStorage.removeItem('dashpoint_device_trusted');
+                      AccountManager.clearAll();
+                      setHasSavedAccounts(false);
+                      setActiveTab('email');
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-semibold">Quick Demo Login</Label>
+                  <p className="text-xs text-muted-foreground">Show demo auto-fill buttons</p>
+                </div>
+                <Switch
+                  checked={showDemoAccess}
+                  onCheckedChange={(checked) => {
+                    setShowDemoAccess(checked);
+                    if (checked) {
+                      localStorage.setItem('dashpoint_demo_access', 'true');
+                    } else {
+                      localStorage.removeItem('dashpoint_demo_access');
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {showSettings && isClient && (
+            <div className="mb-6 rounded-lg border bg-card p-4 text-card-foreground shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-semibold flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" /> Auto Login (Quick Access)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Save accounts on this browser</p>
+                </div>
+                <Switch
+                  checked={isDeviceTrusted}
+                  onCheckedChange={(checked) => {
+                    setIsDeviceTrusted(checked);
+                    if (checked) {
+                      localStorage.setItem('dashpoint_device_trusted', 'true');
+                    } else {
+                      localStorage.removeItem('dashpoint_device_trusted');
+                      AccountManager.clearAll();
+                      setHasSavedAccounts(false);
+                      setActiveTab('email');
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-semibold">Quick Demo Login</Label>
+                  <p className="text-xs text-muted-foreground">Show demo auto-fill buttons</p>
+                </div>
+                <Switch
+                  checked={showDemoAccess}
+                  onCheckedChange={(checked) => {
+                    setShowDemoAccess(checked);
+                    if (checked) {
+                      localStorage.setItem('dashpoint_demo_access', 'true');
+                    } else {
+                      localStorage.removeItem('dashpoint_demo_access');
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {showSettings && isClient && (
+            <div className="mb-6 rounded-lg border bg-card p-4 text-card-foreground shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-semibold flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" /> Auto Login (Quick Access)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Save accounts on this browser</p>
+                </div>
+                <Switch
+                  checked={isDeviceTrusted}
+                  onCheckedChange={(checked) => {
+                    setIsDeviceTrusted(checked);
+                    if (checked) {
+                      localStorage.setItem('dashpoint_device_trusted', 'true');
+                    } else {
+                      localStorage.removeItem('dashpoint_device_trusted');
+                      AccountManager.clearAll();
+                      setHasSavedAccounts(false);
+                      setActiveTab('email');
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-semibold">Quick Demo Login</Label>
+                  <p className="text-xs text-muted-foreground">Show demo auto-fill buttons</p>
+                </div>
+                <Switch
+                  checked={showDemoAccess}
+                  onCheckedChange={(checked) => {
+                    setShowDemoAccess(checked);
+                    if (checked) {
+                      localStorage.setItem('dashpoint_demo_access', 'true');
+                    } else {
+                      localStorage.removeItem('dashpoint_demo_access');
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {infoMessage && (
             <div className="flex items-center gap-2 rounded-md bg-blue-50 dark:bg-blue-950 p-3 text-sm text-blue-800 dark:text-blue-200 mb-4">
               <Info className="h-4 w-4 flex-shrink-0" />
@@ -172,20 +324,7 @@ function LoginPageContent() {
                   />
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="staySignedIn"
-                    checked={staySignedIn}
-                    onCheckedChange={(checked) => setStaySignedIn(checked as boolean)}
-                    disabled={isSubmitting}
-                  />
-                  <Label
-                    htmlFor="staySignedIn"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Stay signed in for quick access
-                  </Label>
-                </div>
+
 
                 <Button
                   type="submit"
@@ -203,7 +342,7 @@ function LoginPageContent() {
                 </Button>
               </form>
 
-              {process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS === 'true' && (
+              {showDemoAccess && isClient && (
                 <div className="mt-8 pt-6 border-t">
                   <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                     Quick Demo Access
