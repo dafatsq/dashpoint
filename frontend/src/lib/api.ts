@@ -323,7 +323,8 @@ class ApiClient {
 
   // Permission endpoints
   async getPermissions(grouped?: boolean): Promise<ApiResponse<Permission[] | Record<string, Permission[]>>> {
-    const result = await this.request<{ permissions: Permission[] | Record<string, Permission[]> }>(`/permissions${grouped ? '?grouped=true' : ''}`);
+    const ts = new Date().getTime();
+    const result = await this.request<{ permissions: Permission[] | Record<string, Permission[]> }>(`/permissions${grouped ? '?grouped=true&' : '?'}t=${ts}`);
     if (result.error) return { error: result.error };
     return { data: result.data?.permissions };
   }
