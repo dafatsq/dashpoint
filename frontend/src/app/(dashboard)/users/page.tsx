@@ -90,20 +90,24 @@ export default function UsersPage() {
     const currentLevel =
       roleHierarchy[(currentUser?.role_name || "").toLowerCase()] || 0;
     const targetLevel = roleHierarchy[targetUser.role_name.toLowerCase()] || 0;
-    return currentLevel >= targetLevel;
+    
+    if (currentLevel < targetLevel) return false;
+    
+    return true;
   };
 
   // Helper to check if current user can delete/archive a specific user
   const canDeleteUser = (targetUser: User) => {
     if (!canDeleteUserAny) return false;
-    // Cannot delete yourself
+    // Cannot delete/archive yourself
     if (targetUser.id === currentUser?.id) return false;
-    // Cannot delete owners from UI
-    if (targetUser.role_name.toLowerCase() === "owner") return false;
     const currentLevel =
       roleHierarchy[(currentUser?.role_name || "").toLowerCase()] || 0;
     const targetLevel = roleHierarchy[targetUser.role_name.toLowerCase()] || 0;
-    return currentLevel >= targetLevel;
+    
+    if (currentLevel < targetLevel) return false;
+    
+    return true;
   };
 
   // Helper to check if current user can manage permissions of a specific user
@@ -114,8 +118,15 @@ export default function UsersPage() {
     const currentLevel =
       roleHierarchy[(currentUser?.role_name || "").toLowerCase()] || 0;
     const targetLevel = roleHierarchy[targetUser.role_name.toLowerCase()] || 0;
-    // Can only manage permissions of users with same or lower role level
-    return currentLevel >= targetLevel;
+    
+    if (currentLevel < targetLevel) return false;
+    
+    if (!isOwner) {
+      if (targetUser.role_name.toLowerCase() === "manager" && !hasPermission("can_manage_manager_permissions")) return false;
+      if (targetUser.role_name.toLowerCase() === "cashier" && !hasPermission("can_manage_cashier_permissions")) return false;
+    }
+    
+    return true;
   };
 
   const [users, setUsers] = useState<User[]>([]);
@@ -1353,7 +1364,10 @@ export default function UsersPage() {
                           <CardContent className="p-0">
                             <div className="divide-y divide-border/50">
                               {sortedPermissions.map((permission) => {
-                                const isViewPerm = isViewPermission(permission);
+                                  // Skip rendering sub-permissions individually
+                                  if (permission.key === "can_manage_manager_permissions" || permission.key === "can_manage_cashier_permissions") return null;
+                                  
+                                  const isViewPerm = isViewPermission(permission);
                                 const isEnabled =
                                   isPermissionEnabled(permission);
                                 const status = getPermissionStatus(permission);
@@ -1413,9 +1427,9 @@ export default function UsersPage() {
                                 };
 
                                 return (
-                                  <div
-                                    key={permission.id}
-                                    className={`flex items-start justify-between p-4 transition-colors ${
+                                    <div key={permission.id} className="flex flex-col">
+                                      <div
+                                        className={`flex items-start justify-between p-4 transition-colors ${
                                       isDisabled
                                         ? "opacity-50 bg-muted/10"
                                         : cannotGrant
@@ -1476,11 +1490,47 @@ export default function UsersPage() {
                                           )
                                         }
                                         disabled={isSwitchDisabled}
-                                      />
+                                        />
+                                      </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
+
+                                    {/* Sub-permissions dropdown */}
+                                    {permission.key === "can_manage_permissions" && (
+                                      <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
+                                        <div className="space-y-3">
+                                        {permissions
+                                          .filter(p => p.key === "can_manage_manager_permissions" || p.key === "can_manage_cashier_permissions")
+                                          .map(subPerm => {
+                                            const subEnabled = isPermissionEnabled(subPerm);
+                                            const subCannotGrant = !currentUserCanGrant(subPerm);
+                                            const parentDisabled = !isEnabled; // "Disabled State when 'Manage Permissions' toggle itself is toggled to disabled"
+
+                                            return (
+                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled ? "opacity-60" : ""}`}>
+                                                <div className="flex-1 mr-4">
+                                                  <div className="text-sm font-medium text-foreground/90">
+                                                    {getPermissionDisplayName(subPerm, category)}
+                                                  </div>
+                                                  {subPerm.description && (
+                                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                                      {subPerm.description}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                <Switch
+                                                  checked={parentDisabled ? false : subEnabled}
+                                                  onCheckedChange={(c) => handlePermissionToggle(subPerm, c)}
+                                                  disabled={parentDisabled || subCannotGrant || isSwitchDisabled}
+                                                />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    </div>
+                                  );
+                                })}
                             </div>
                           </CardContent>
                         </Card>
