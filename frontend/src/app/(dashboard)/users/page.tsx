@@ -78,11 +78,11 @@ const CATEGORY_ORDER = [
 
 export default function UsersPage() {
   const { user: currentUser, hasPermission } = useAuth();
-  const canCreateUser = hasPermission(PERMISSIONS.USERS_CREATE);
-  const canEditUserAny = hasPermission(PERMISSIONS.USERS_EDIT);
-  const canDeleteUserAny = hasPermission(PERMISSIONS.USERS_DELETE);
-  const canManagePermissions = hasPermission(PERMISSIONS.USERS_PERMISSIONS);
-  const isOwner = currentUser?.role_name === "owner";
+    const canCreateUser = hasPermission(PERMISSIONS.USERS_CREATE) || hasPermission("can_create_manager_users") || hasPermission("can_create_cashier_users");
+    const canEditUserAny = hasPermission(PERMISSIONS.USERS_EDIT) || hasPermission("can_edit_manager_users") || hasPermission("can_edit_cashier_users");
+    const canDeleteUserAny = hasPermission(PERMISSIONS.USERS_DELETE) || hasPermission("can_delete_manager_users") || hasPermission("can_delete_cashier_users");
+    const canManagePermissions = hasPermission(PERMISSIONS.USERS_PERMISSIONS) || hasPermission("can_manage_manager_permissions") || hasPermission("can_manage_cashier_permissions");
+    const isOwner = currentUser?.role_name === "owner";
 
   // Helper to check if current user can edit a specific user
   const canEditUser = (targetUser: User) => {
@@ -435,17 +435,40 @@ export default function UsersPage() {
 
   // Check if the current user is allowed to grant a specific permission
   // Owners can grant anything; others can only grant permissions they themselves have
-  const currentUserCanGrant = (permission: Permission): boolean => {
-    if (isOwner) return true;
-    return currentUser?.permissions?.includes(permission.key) ?? false;
-  };
+    const currentUserCanGrant = (permission: Permission): boolean => {
+      if (isOwner) return true;
+      const perms = currentUser?.permissions || [];
+      const targetRole = permissionsUser?.role_name?.toLowerCase();
+
+      // For these user-management permissions, we MUST check the role-specific permissions
+      // instead of the generic parent permission when managing a Cashier or Manager.
+      const isUserPermission = ["can_create_user", "can_edit_user", "can_delete_user", "can_manage_permissions"].includes(permission.key);
+
+      if (isUserPermission) {
+        if (targetRole === "cashier") {
+          if (permission.key === "can_create_user") return perms.includes("can_create_cashier_users");
+          if (permission.key === "can_edit_user") return perms.includes("can_edit_cashier_users");
+          if (permission.key === "can_delete_user") return perms.includes("can_delete_cashier_users");
+          if (permission.key === "can_manage_permissions") return perms.includes("can_manage_cashier_permissions");
+        } else if (targetRole === "manager") {
+          if (permission.key === "can_create_user") return perms.includes("can_create_manager_users");
+          if (permission.key === "can_edit_user") return perms.includes("can_edit_manager_users");
+          if (permission.key === "can_delete_user") return perms.includes("can_delete_manager_users");
+          if (permission.key === "can_manage_permissions") return perms.includes("can_manage_manager_permissions");
+        }
+        return false; // If targetRole is unknown (or owner), strictly deny if not owner
+      }
+
+      // For all other permissions (e.g. products, sales), fallback to standard check
+      return perms.includes(permission.key);
+    };
 
   // Handle permission toggle
   const handlePermissionToggle = (permission: Permission, enabled: boolean) => {
-    // Block granting a permission the current user doesn't have
-    if (enabled && !currentUserCanGrant(permission)) return;
+      // Block modifying a permission the current user doesn't have
+      if (!currentUserCanGrant(permission)) return;
+      const newChanges = { ...permissionChanges };
 
-    const newChanges = { ...permissionChanges };
 
     // Helper to set a single permission change
     const setChange = (perm: Permission, value: boolean) => {
@@ -463,25 +486,44 @@ export default function UsersPage() {
     // Set the toggled permission
     setChange(permission, enabled);
 
-    // If this is a view/access permission being disabled, also disable all child permissions in the same category
-    if (!enabled) {
-      // Find which category this permission belongs to
-      for (const [category, permissions] of Object.entries(allPermissions)) {
-        const viewPerm = getViewPermissionForCategory(category, permissions);
-        if (viewPerm && viewPerm.id === permission.id) {
-          // This is the view permission for this category - disable all non-view children
-          for (const childPerm of permissions) {
-            if (childPerm.id !== permission.id) {
-              // Special case: can_void_sale depends on can_view_sales
-              if (category === "sales" && childPerm.key !== "can_void_sale")
-                continue;
+      // If this is a view/access permission being disabled, also disable all child permissions in the same category
+      if (!enabled) {
+        // Find which category this permission belongs to
+        for (const [category, permissions] of Object.entries(allPermissions)) {
+          const viewPerm = getViewPermissionForCategory(category, permissions);
+          if (viewPerm && viewPerm.id === permission.id) {
+            // This is the view permission for this category - disable all non-view children
+            for (const childPerm of permissions) {
+              if (childPerm.id !== permission.id) {
+                // Special case: can_void_sale depends on can_view_sales
+                if (category === "sales" && childPerm.key !== "can_void_sale")
+                  continue;
+                setChange(childPerm, false);
+              }
+            }
+            break;
+          }
+        }
+
+        // NEW: Special cascade for User Management granular permissions!
+        // When a parent toggle like "Edit Users" is disabled, we MUST actually disable the granular child toggles in state/DB.
+        const userManagementCascade: Record<string, string[]> = {
+          "can_create_user": ["can_create_manager_users", "can_create_cashier_users"],
+          "can_edit_user": ["can_edit_manager_users", "can_edit_cashier_users"],
+          "can_delete_user": ["can_delete_manager_users", "can_delete_cashier_users"],
+          "can_manage_permissions": ["can_manage_manager_permissions", "can_manage_cashier_permissions"]
+        };
+
+        if (userManagementCascade[permission.key]) {
+          const childKeysToDisable = userManagementCascade[permission.key];
+          const usersCategoryPerms = allPermissions["users"] || [];
+          for (const childPerm of usersCategoryPerms) {
+            if (childKeysToDisable.includes(childPerm.key)) {
               setChange(childPerm, false);
             }
           }
-          break;
         }
       }
-    }
 
     setPermissionChanges(newChanges);
   };
@@ -1519,7 +1561,7 @@ export default function UsersPage() {
                                             const parentDisabled = !isEnabled;
 
                                             return (
-                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled ? "opacity-60" : ""}`}>
+                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled || isSwitchDisabled ? "opacity-50" : subCannotGrant ? "opacity-60" : ""}`}>
                                                 <div className="flex-1 mr-4">
                                                   <div className="text-sm font-medium text-foreground/90">
                                                     {getPermissionDisplayName(subPerm, category)}
@@ -1553,7 +1595,7 @@ export default function UsersPage() {
                                             const parentDisabled = !isEnabled;
 
                                             return (
-                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled ? "opacity-60" : ""}`}>
+                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled || isSwitchDisabled ? "opacity-50" : subCannotGrant ? "opacity-60" : ""}`}>
                                                 <div className="flex-1 mr-4">
                                                   <div className="text-sm font-medium text-foreground/90">
                                                     {getPermissionDisplayName(subPerm, category)}
@@ -1587,7 +1629,7 @@ export default function UsersPage() {
                                             const parentDisabled = !isEnabled;
 
                                             return (
-                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled ? "opacity-60" : ""}`}>
+                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled || isSwitchDisabled ? "opacity-50" : subCannotGrant ? "opacity-60" : ""}`}>
                                                 <div className="flex-1 mr-4">
                                                   <div className="text-sm font-medium text-foreground/90">
                                                     {getPermissionDisplayName(subPerm, category)}
@@ -1621,7 +1663,7 @@ export default function UsersPage() {
                                             const parentDisabled = !isEnabled; // "Disabled State when 'Manage Permissions' toggle itself is toggled to disabled"
 
                                             return (
-                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled ? "opacity-60" : ""}`}>
+                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled || isSwitchDisabled ? "opacity-50" : subCannotGrant ? "opacity-60" : ""}`}>
                                                 <div className="flex-1 mr-4">
                                                   <div className="text-sm font-medium text-foreground/90">
                                                     {getPermissionDisplayName(subPerm, category)}
