@@ -891,13 +891,79 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 	currentRoleLevel := getRoleLevel(currentRoleName)
 	targetRoleLevel := getRoleLevel(targetRoleName)
 
-	// Can only modify permissions of users with same or lower role level
-	if targetRoleLevel > currentRoleLevel {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    "FORBIDDEN",
-			"message": "You can only modify permissions of users with roles the same as or lower than yours",
-		})
-	}
+	                // Enforce role hierarchy and granular permissions
+        if targetRoleLevel > currentRoleLevel {
+                return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+                        "code":    "FORBIDDEN",
+                        "message": "You can only modify users with roles the same as or lower than yours",
+                })
+        }
+
+        // Enforce granular management permissions only for Managers managing specific roles
+        if strings.ToLower(currentRoleName) == "manager" {
+                currentUserPerms, err := h.userRepo.GetUserPermissions(c.Context(), middleware.GetUserID(c))
+                if err != nil {
+                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+                                "code":    "INTERNAL_ERROR",
+                                "message": "Failed to validate permissions",
+                        })
+                }
+                userPermSet := make(map[string]bool)
+                for _, p := range currentUserPerms {
+                        userPermSet[p] = true
+                }
+                
+                if strings.ToLower(targetRoleName) == "manager" && targetRoleLevel <= currentRoleLevel {
+                        if !userPermSet["can_manage_manager_permissions"] {
+                                return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+                                        "code":    "FORBIDDEN",
+                                        "message": "You do not have permission to manage Managers",
+                                })
+                        }
+                }
+                
+                if strings.ToLower(targetRoleName) == "cashier" && targetRoleLevel <= currentRoleLevel {
+                        if !userPermSet["can_manage_cashier_permissions"] {
+                                return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+                                        "code":    "FORBIDDEN",
+                                        "message": "You do not have permission to manage Cashiers",
+                                })
+                        }
+                }
+        }
+
+        // Enforce granular management permissions only for Managers managing specific roles
+        if strings.ToLower(currentRoleName) == "manager" {
+                currentUserPerms, err := h.userRepo.GetUserPermissions(c.Context(), middleware.GetUserID(c))
+                if err != nil {
+                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+                                "code":    "INTERNAL_ERROR",
+                                "message": "Failed to validate permissions",
+                        })
+                }
+                userPermSet := make(map[string]bool)
+                for _, p := range currentUserPerms {
+                        userPermSet[p] = true
+                }
+                
+                if strings.ToLower(targetRoleName) == "manager" && targetRoleLevel <= currentRoleLevel {
+                        if !userPermSet["can_manage_manager_permissions"] {
+                                return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+                                        "code":    "FORBIDDEN",
+                                        "message": "You do not have permission to manage Managers",
+                                })
+                        }
+                }
+                
+                if strings.ToLower(targetRoleName) == "cashier" && targetRoleLevel <= currentRoleLevel {
+                        if !userPermSet["can_manage_cashier_permissions"] {
+                                return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+                                        "code":    "FORBIDDEN",
+                                        "message": "You do not have permission to manage Cashiers",
+                                })
+                        }
+                }
+        }
 
 	var req SetPermissionsRequest
 	if err := c.BodyParser(&req); err != nil {
