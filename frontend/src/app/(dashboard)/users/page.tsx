@@ -93,6 +93,11 @@ export default function UsersPage() {
     
     if (currentLevel < targetLevel) return false;
     
+    if (!isOwner && (currentUser?.role_name || "").toLowerCase() === "manager") {
+      if (targetUser.role_name.toLowerCase() === "manager" && !hasPermission("can_edit_manager_users")) return false;
+      if (targetUser.role_name.toLowerCase() === "cashier" && !hasPermission("can_edit_cashier_users")) return false;
+    }
+    
     return true;
   };
 
@@ -106,6 +111,11 @@ export default function UsersPage() {
     const targetLevel = roleHierarchy[targetUser.role_name.toLowerCase()] || 0;
     
     if (currentLevel < targetLevel) return false;
+    
+    if (!isOwner && (currentUser?.role_name || "").toLowerCase() === "manager") {
+      if (targetUser.role_name.toLowerCase() === "manager" && !hasPermission("can_delete_manager_users")) return false;
+      if (targetUser.role_name.toLowerCase() === "cashier" && !hasPermission("can_delete_cashier_users")) return false;
+    }
     
     return true;
   };
@@ -1152,7 +1162,7 @@ export default function UsersPage() {
                   )}
                   {roleHierarchy[
                     (currentUser?.role_name || "").toLowerCase()
-                  ] >= 2 && (
+                  ] >= 2 && (isOwner || hasPermission(editingUser ? "can_edit_manager_users" : "can_create_manager_users")) && (
                     <SelectItem value="manager">
                       <div className="flex items-center gap-2">
                         <ShieldCheck className="h-4 w-4" />
@@ -1160,12 +1170,14 @@ export default function UsersPage() {
                       </div>
                     </SelectItem>
                   )}
+                  {(isOwner || (currentUser?.role_name || "").toLowerCase() === "cashier" || hasPermission(editingUser ? "can_edit_cashier_users" : "can_create_cashier_users")) && (
                   <SelectItem value="cashier">
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4" />
                       Cashier - Sales only
                     </div>
                   </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1365,7 +1377,7 @@ export default function UsersPage() {
                             <div className="divide-y divide-border/50">
                               {sortedPermissions.map((permission) => {
                                   // Skip rendering sub-permissions individually
-                                  if (permission.key === "can_manage_manager_permissions" || permission.key === "can_manage_cashier_permissions") return null;
+                                  if (permission.key === "can_manage_manager_permissions" || permission.key === "can_manage_cashier_permissions" || permission.key === "can_create_manager_users" || permission.key === "can_create_cashier_users" || permission.key === "can_edit_manager_users" || permission.key === "can_edit_cashier_users" || permission.key === "can_delete_manager_users" || permission.key === "can_delete_cashier_users") return null;
                                   
                                   const isViewPerm = isViewPermission(permission);
                                 const isEnabled =
@@ -1494,6 +1506,109 @@ export default function UsersPage() {
                                       </div>
                                     </div>
 
+
+                                    {/* Sub-permissions dropdown for Create */}
+                                    {permission.key === "can_create_users" && permissionsUser?.role_name.toLowerCase() === "manager" && (
+                                      <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
+                                        <div className="space-y-3">
+                                        {permissions
+                                          .filter(p => p.key === "can_create_manager_users" || p.key === "can_create_cashier_users")
+                                          .map(subPerm => {
+                                            const subEnabled = isPermissionEnabled(subPerm);
+                                            const subCannotGrant = !currentUserCanGrant(subPerm);
+                                            const parentDisabled = !isEnabled;
+
+                                            return (
+                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled ? "opacity-60" : ""}`}>
+                                                <div className="flex-1 mr-4">
+                                                  <div className="text-sm font-medium text-foreground/90">
+                                                    {getPermissionDisplayName(subPerm, category)}
+                                                  </div>
+                                                  {subPerm.description && (
+                                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                                      {subPerm.description}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                <Switch
+                                                  checked={parentDisabled ? false : subEnabled}
+                                                  onCheckedChange={(c) => handlePermissionToggle(subPerm, c)}
+                                                  disabled={parentDisabled || subCannotGrant || isSwitchDisabled}
+                                                />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {/* Sub-permissions dropdown for Edit */}
+                                    {permission.key === "can_edit_users" && permissionsUser?.role_name.toLowerCase() === "manager" && (
+                                      <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
+                                        <div className="space-y-3">
+                                        {permissions
+                                          .filter(p => p.key === "can_edit_manager_users" || p.key === "can_edit_cashier_users")
+                                          .map(subPerm => {
+                                            const subEnabled = isPermissionEnabled(subPerm);
+                                            const subCannotGrant = !currentUserCanGrant(subPerm);
+                                            const parentDisabled = !isEnabled;
+
+                                            return (
+                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled ? "opacity-60" : ""}`}>
+                                                <div className="flex-1 mr-4">
+                                                  <div className="text-sm font-medium text-foreground/90">
+                                                    {getPermissionDisplayName(subPerm, category)}
+                                                  </div>
+                                                  {subPerm.description && (
+                                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                                      {subPerm.description}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                <Switch
+                                                  checked={parentDisabled ? false : subEnabled}
+                                                  onCheckedChange={(c) => handlePermissionToggle(subPerm, c)}
+                                                  disabled={parentDisabled || subCannotGrant || isSwitchDisabled}
+                                                />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {/* Sub-permissions dropdown for Delete */}
+                                    {permission.key === "can_delete_users" && permissionsUser?.role_name.toLowerCase() === "manager" && (
+                                      <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
+                                        <div className="space-y-3">
+                                        {permissions
+                                          .filter(p => p.key === "can_delete_manager_users" || p.key === "can_delete_cashier_users")
+                                          .map(subPerm => {
+                                            const subEnabled = isPermissionEnabled(subPerm);
+                                            const subCannotGrant = !currentUserCanGrant(subPerm);
+                                            const parentDisabled = !isEnabled;
+
+                                            return (
+                                              <div key={subPerm.id} className={`flex items-center justify-between ${parentDisabled ? "opacity-60" : ""}`}>
+                                                <div className="flex-1 mr-4">
+                                                  <div className="text-sm font-medium text-foreground/90">
+                                                    {getPermissionDisplayName(subPerm, category)}
+                                                  </div>
+                                                  {subPerm.description && (
+                                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                                      {subPerm.description}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                <Switch
+                                                  checked={parentDisabled ? false : subEnabled}
+                                                  onCheckedChange={(c) => handlePermissionToggle(subPerm, c)}
+                                                  disabled={parentDisabled || subCannotGrant || isSwitchDisabled}
+                                                />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
                                     {/* Sub-permissions dropdown */}
                                     {permission.key === "can_manage_permissions" && permissionsUser?.role_name.toLowerCase() === "manager" && (
                                       <div className="pl-12 pr-4 pb-4 bg-muted/5 border-t border-border/50 pt-3">
