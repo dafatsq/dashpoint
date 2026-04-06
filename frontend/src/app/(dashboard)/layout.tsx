@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Sidebar } from '@/components/layout/sidebar';
 import { RouteGuard } from '@/components/route-guard';
+import { OfflineBanner } from '@/components/layout/offline-banner';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -34,7 +35,8 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden relative">
+      <OfflineBanner />
       <Sidebar />
       <main className="flex-1 overflow-y-auto bg-muted/30">
         <RouteGuard>{children}</RouteGuard>
