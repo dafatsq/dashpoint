@@ -31,6 +31,7 @@ import {
   Shield,
   ShieldCheck,
   ShieldAlert,
+  CheckCircle,
   RotateCcw,
   Archive,
   Settings2,
@@ -162,6 +163,7 @@ export default function UsersPage() {
   const [permissionSaveError, setPermissionSaveError] = useState<string | null>(
     null,
   );
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Permission management state
   const [allPermissions, setAllPermissions] = useState<
@@ -388,6 +390,7 @@ export default function UsersPage() {
     setIsLoadingPermissions(true);
     setPermissionChanges({});
     setPermissionSaveError(null);
+    setSaveSuccess(false);
 
     try {
       // Fetch all permissions grouped by category
@@ -560,6 +563,8 @@ export default function UsersPage() {
         setUserOverrides(userPermResult.data.overrides || []);
       }
       setPermissionChanges({});
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       setPermissionSaveError(
         error instanceof Error ? error.message : "An unexpected error occurred",
@@ -1704,6 +1709,11 @@ export default function UsersPage() {
                 <span className="text-red-600 flex items-center gap-1.5">
                   <ShieldAlert className="h-3.5 w-3.5 flex-shrink-0" />
                   {permissionSaveError}
+                </span>
+              ) : saveSuccess ? (
+                <span className="text-green-600 flex items-center gap-1.5 font-medium animate-in fade-in zoom-in duration-300">
+                  <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                  Permissions saved successfully!
                 </span>
               ) : Object.keys(permissionChanges).length > 0 ? (
                 <span className="text-yellow-600">
