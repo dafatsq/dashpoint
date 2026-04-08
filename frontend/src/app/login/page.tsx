@@ -55,7 +55,9 @@ function LoginPageContent() {
   useEffect(() => {
     setIsClient(true);
     setIsDeviceTrusted(localStorage.getItem('dashpoint_device_trusted') === 'true');
-    setShowDemoAccess(localStorage.getItem('dashpoint_demo_access') === 'true');
+    const envDemoAccess = process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS === 'true';
+      const localDemoAccess = localStorage.getItem('dashpoint_demo_access') === 'true';
+      setShowDemoAccess(envDemoAccess || localDemoAccess);
     
     const checkSavedAccounts = () => {
       const accounts = AccountManager.getSavedAccounts();
