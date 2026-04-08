@@ -1122,23 +1122,13 @@ export default function POSPage() {
               </DialogHeader>
 
               <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 gap-4 text-sm">
                   <div>
                     <span className="text-muted-foreground block text-xs">
                       Started At
                     </span>
                     <span className="font-medium">
                       {new Date(currentShift.started_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-xs">
-                      Opening Cash
-                    </span>
-                    <span className="font-medium">
-                      {formatCurrency(
-                        parseFloat(currentShift.opening_cash) || 0,
-                      )}
                     </span>
                   </div>
                 </div>
