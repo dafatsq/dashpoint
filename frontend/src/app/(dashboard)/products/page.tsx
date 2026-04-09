@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -197,6 +197,24 @@ export default function ProductsPage() {
     });
     setDialogOpen(true);
   };
+
+  // Calculate if there are any changes in the form
+  const hasChanges = useMemo(() => {
+    if (!editingProduct) return true; // Always allow create
+    
+    return (
+      formData.name !== editingProduct.name ||
+      formData.description !== (editingProduct.description || '') ||
+      formData.sku !== (editingProduct.sku || '') ||
+      formData.barcode !== (editingProduct.barcode || '') ||
+      formData.price !== editingProduct.price ||
+      formData.cost !== (editingProduct.cost || '') ||
+      formData.tax_rate !== (editingProduct.tax_rate?.toString() || '0') ||
+      formData.low_stock_threshold !== (editingProduct.inventory?.low_stock_threshold || '5') ||
+      formData.category_id !== (editingProduct.category_id || '') ||
+      formData.image_url !== (editingProduct.image_url || '')
+    );
+  }, [formData, editingProduct]);
 
   // Handle submit
   const handleSubmit = async () => {
@@ -932,7 +950,7 @@ export default function ProductsPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || (editingProduct ? !hasChanges : false)}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

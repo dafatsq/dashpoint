@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -203,6 +203,23 @@ export default function ExpensesPage() {
     setIsManualDescription(true); // Default to manual for edits to preserve existing description
     setDialogOpen(true);
   };
+
+  // Calculate if there are any changes in the form
+  const hasChanges = useMemo(() => {
+    if (!editingExpense) return true; // Always allow create
+    
+    return (
+      formData.category_id !== (editingExpense.category_id || '') ||
+      formData.product_id !== (editingExpense.product_id || '') ||
+      formData.quantity !== (editingExpense.quantity || '') ||
+      formData.amount !== editingExpense.amount ||
+      formData.description !== editingExpense.description ||
+      formData.expense_date !== editingExpense.expense_date ||
+      formData.vendor !== (editingExpense.vendor || '') ||
+      formData.reference_number !== (editingExpense.reference_number || '') ||
+      formData.notes !== (editingExpense.notes || '')
+    );
+  }, [formData, editingExpense]);
 
   // Handle submit
   const handleSubmit = async () => {
@@ -877,7 +894,7 @@ export default function ExpensesPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting || !formData.category_id}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || !formData.category_id || !hasChanges}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
