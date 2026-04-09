@@ -664,9 +664,11 @@ export default function ExpensesPage() {
                       type="number"
                       min="1"
                       value={formData.quantity}
-                      onChange={(e) =>
-                        setFormData({ ...formData, quantity: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setFormData({ ...formData, quantity: e.target.value });
+                        setIsManualAmount(false);
+                        setIsManualDescription(false);
+                      }}
                       placeholder="Enter quantity"
                       disabled={!formData.category_id}
                     />
@@ -694,9 +696,11 @@ export default function ExpensesPage() {
                   <Label htmlFor="product" className={!formData.category_id ? 'opacity-50' : ''}>Product *</Label>
                   <Select
                     value={formData.product_id || 'none'}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, product_id: value === 'none' ? '' : value })
-                    }
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, product_id: value === 'none' ? '' : value });
+                      setIsManualAmount(false);
+                      setIsManualDescription(false);
+                    }}
                     disabled={!formData.category_id}
                   >
                     <SelectTrigger>
