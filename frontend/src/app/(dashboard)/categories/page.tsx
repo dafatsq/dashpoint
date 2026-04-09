@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -138,6 +138,26 @@ export default function CategoriesPage() {
     });
     setDialogOpen(true);
   };
+
+  // Calculate if there are any changes in the form
+  const hasChanges = useMemo(() => {
+    if (!editingCategory) return true; // Always allow create
+    
+    // Find the original category
+    let originalCat: Category | ExpenseCategory | undefined;
+    if (editingCategory.type === 'product') {
+      originalCat = productCategories.find(c => c.id === editingCategory.id);
+    } else {
+      originalCat = expenseCategories.find(c => c.id === editingCategory.id);
+    }
+    
+    if (!originalCat) return true;
+    
+    return (
+      formData.name !== originalCat.name ||
+      formData.description !== (originalCat.description || '')
+    );
+  }, [formData, editingCategory, productCategories, expenseCategories]);
 
   // Handle submit
   const handleSubmit = async () => {
@@ -396,7 +416,7 @@ export default function CategoriesPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || !hasChanges}>
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingCategory ? 'Update' : 'Create'} Category
             </Button>

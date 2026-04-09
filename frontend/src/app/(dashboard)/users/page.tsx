@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -260,6 +260,19 @@ export default function UsersPage() {
     });
     setDialogOpen(true);
   };
+
+  // Calculate if there are any changes in the form
+  const hasChanges = useMemo(() => {
+    if (!editingUser) return true; // Always allow create
+    
+    return (
+      formData.email !== (editingUser.email || '') ||
+      formData.name !== editingUser.name ||
+      formData.role !== editingUser.role_name ||
+      formData.password !== "" ||
+      formData.pin !== ""
+    );
+  }, [formData, editingUser]);
 
   // Handle submit
   const handleSubmit = async () => {
@@ -1234,7 +1247,7 @@ export default function UsersPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || !hasChanges}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
