@@ -505,7 +505,7 @@ class ApiClient {
     const searchParams = new URLSearchParams();
     if (params?.from) searchParams.set('from', params.from);
     if (params?.to) searchParams.set('to', params.to);
-    if (params?.user_id) searchParams.set('user_id', params.user_id);
+    if (params?.user_id) searchParams.set('employee_id', params.user_id);
     if (params?.status) searchParams.set('status', params.status);
     const query = searchParams.toString();
     const result = await this.request<SalesResponse>(`/sales${query ? `?${query}` : ''}`);
