@@ -37,7 +37,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { Sale, PaymentMethod } from '@/types';
+import { Sale, PaymentMethod, User } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
 
 const PAYMENT_ICONS: Record<PaymentMethod, React.ReactNode> = {
@@ -54,7 +54,9 @@ export default function SalesHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [employeeFilter, setEmployeeFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [employees, setEmployees] = useState<User[]>([]);
 
   // View dialog
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -64,6 +66,22 @@ export default function SalesHistoryPage() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
+
+  // Fetch employees for filter
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const result = await api.getUsers({ active: true });
+        if (result.data) {
+          // Sort by name
+          setEmployees([...result.data].sort((a, b) => a.name.localeCompare(b.name)));
+        }
+      } catch (error) {
+        console.error('Failed to fetch employees:', error);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
   // Redirect if no permission
   useEffect(() => {
@@ -77,10 +95,11 @@ export default function SalesHistoryPage() {
     const fetchSales = async () => {
       setIsLoading(true);
       try {
-        const params: { from?: string; to?: string; status?: string } = {};
+        const params: { from?: string; to?: string; status?: string; user_id?: string } = {};
         if (dateRange.start) params.from = dateRange.start;
         if (dateRange.end) params.to = dateRange.end;
         if (statusFilter !== 'all') params.status = statusFilter;
+        if (employeeFilter !== 'all') params.user_id = employeeFilter;
 
         const result = await api.getSales(params);
         if (result.data) setSales(result.data);
@@ -92,7 +111,7 @@ export default function SalesHistoryPage() {
     };
 
     fetchSales();
-  }, [dateRange, statusFilter]);
+  }, [dateRange, statusFilter, employeeFilter]);
 
   // Filter sales
   const filteredSales = sales.filter((sale) =>
@@ -190,7 +209,7 @@ export default function SalesHistoryPage() {
             <CardTitle className="text-base">Filters</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:grid md:grid-cols-3 gap-4">
+            <div className="flex flex-col md:grid md:grid-cols-4 gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -214,6 +233,19 @@ export default function SalesHistoryPage() {
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="voided">Voided</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All Cashiers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cashiers</SelectItem>
+                  {employees.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.role_name})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
