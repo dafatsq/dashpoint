@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -84,6 +84,7 @@ interface FormData {
 }
 
 export default function ProductsPage() {
+  const PAGE_SIZE = 24;
   const { hasPermission } = useAuth();
   const canCreate = hasPermission(PERMISSIONS.PRODUCTS_CREATE);
   const canEdit = hasPermission(PERMISSIONS.PRODUCTS_EDIT);
@@ -93,8 +94,14 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
+  const [page, setPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -121,38 +128,94 @@ export default function ProductsPage() {
   });
   const [formErrors, setFormErrors] = useState<{ name?: string; price?: string; sku?: string; barcode?: string; general?: string }>({});
 
-  // Fetch data
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [productsResult, categoriesResult] = await Promise.all([
-          api.getProducts({ active: viewMode === 'active' }),
-          api.getCategories(),
-        ]);
+    const timeout = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
 
-        if (productsResult.data) setProducts(productsResult.data);
-        if (categoriesResult.data) setCategories(categoriesResult.data);
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const result = await api.getCategories();
+        if (result.data) setCategories(result.data);
       } catch (error) {
-        console.error('Failed to fetch data:', error);
-      } finally {
-        setIsLoading(false);
+        console.error('Failed to fetch categories:', error);
       }
     };
 
-    fetchData();
-  }, [viewMode]);
+    fetchCategories();
+  }, []);
 
-  // Filter products
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.barcode?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory =
-      selectedCategory === 'all' || product.category_id === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const fetchProductsPage = useCallback(
+    async (pageToLoad: number, replace: boolean) => {
+      if (replace) {
+        setIsLoading(true);
+      } else {
+        setIsFetchingMore(true);
+      }
+
+      try {
+        const result = await api.getProductsPage({
+          active: viewMode === 'active',
+          category_id: selectedCategory !== 'all' ? selectedCategory : undefined,
+          search: debouncedSearch || undefined,
+          page: pageToLoad,
+          per_page: PAGE_SIZE,
+        });
+
+        if (result.data) {
+          setProducts((prev) => (replace ? result.data! : [...prev, ...result.data!]));
+          setTotalProducts(result.total || 0);
+
+          if (result.total_pages !== undefined) {
+            setHasMore(pageToLoad < result.total_pages);
+          } else {
+            setHasMore(result.data.length === PAGE_SIZE);
+          }
+          setPage(pageToLoad);
+        }
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+      } finally {
+        if (replace) {
+          setIsLoading(false);
+        } else {
+          setIsFetchingMore(false);
+        }
+      }
+    },
+    [viewMode, selectedCategory, debouncedSearch],
+  );
+
+  useEffect(() => {
+    setProducts([]);
+    setPage(1);
+    setHasMore(true);
+    void fetchProductsPage(1, true);
+  }, [fetchProductsPage]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || !hasMore || isLoading || isFetchingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (firstEntry.isIntersecting) {
+          void fetchProductsPage(page + 1, false);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fetchProductsPage, hasMore, isLoading, isFetchingMore, page]);
+
+  const filteredProducts = products;
 
   // Reset form
   const resetForm = () => {
@@ -292,11 +355,13 @@ export default function ProductsPage() {
           return;
         }
         if (result.data) {
-          setProducts((prev) => [...prev, result.data!]);
+          setProducts((prev) => [result.data!, ...prev]);
+          setTotalProducts((prev) => prev + 1);
         }
       }
       setDialogOpen(false);
       resetForm();
+      void fetchProductsPage(1, true);
     } catch (error) {
       console.error('Failed to save product:', error);
       setFormErrors({ general: 'Failed to save product. Please try again.' });
@@ -314,8 +379,10 @@ export default function ProductsPage() {
     try {
       await api.deleteProduct(deletingProduct.id);
       setProducts((prev) => prev.filter((p) => p.id !== deletingProduct.id));
+      setTotalProducts((prev) => Math.max(0, prev - 1));
       setDeleteDialogOpen(false);
       setDeletingProduct(null);
+      void fetchProductsPage(1, true);
     } catch (error) {
       console.error('Failed to delete product:', error);
     } finally {
@@ -330,6 +397,8 @@ export default function ProductsPage() {
       const result = await api.updateProduct(product.id, { is_active: true });
       if (result.data) {
         setProducts((prev) => prev.filter((p) => p.id !== product.id));
+        setTotalProducts((prev) => Math.max(0, prev - 1));
+        void fetchProductsPage(1, true);
       }
     } catch (error) {
       console.error('Failed to restore product:', error);
@@ -350,8 +419,10 @@ export default function ProductsPage() {
         setDeleteError(result.error);
       } else {
         setProducts((prev) => prev.filter((p) => p.id !== deletingProduct.id));
+        setTotalProducts((prev) => Math.max(0, prev - 1));
         setPermanentDeleteDialogOpen(false);
         setDeletingProduct(null);
+        void fetchProductsPage(1, true);
       }
     } catch (error) {
       console.error('Failed to permanently delete product:', error);
@@ -598,7 +669,7 @@ export default function ProductsPage() {
             <Card className="hidden md:block">
               <CardHeader>
                 <CardTitle>
-                  {viewMode === 'active' ? 'Products' : 'Archived Products'} ({filteredProducts.length})
+                  {viewMode === 'active' ? 'Products' : 'Archived Products'} ({totalProducts || filteredProducts.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -755,6 +826,18 @@ export default function ProductsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <div ref={loadMoreRef} className="h-1 w-full" />
+            <div className="py-4 flex items-center justify-center">
+              {isFetchingMore ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading more products...
+                </div>
+              ) : !hasMore && filteredProducts.length > 0 ? (
+                <p className="text-xs text-muted-foreground">End of products list</p>
+              ) : null}
+            </div>
           </>
         )}
       </div>

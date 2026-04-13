@@ -14,6 +14,11 @@ export interface ApiResponse<T> {
   error?: string;
   message?: string;
   total?: number;
+  page?: number;
+  per_page?: number;
+  total_pages?: number;
+  limit?: number;
+  offset?: number;
 }
 
 // Response wrapper types matching backend
@@ -37,11 +42,16 @@ interface LowStockResponse {
 interface UsersResponse {
   users: import('@/types').User[];
   total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
 }
 
 interface SalesResponse {
   sales: import('@/types').Sale[];
   total: number;
+  limit: number;
+  offset: number;
 }
 
 interface ShiftsResponse {
@@ -279,14 +289,37 @@ class ApiClient {
   }
 
   // User endpoints
-  async getUsers(params?: { role?: string; active?: boolean }): Promise<ApiResponse<import('@/types').User[]>> {
+  async getUsersPage(params?: {
+    role?: string;
+    active?: boolean;
+    page?: number;
+    per_page?: number;
+  }): Promise<ApiResponse<import('@/types').User[]>> {
     const searchParams = new URLSearchParams();
     if (params?.role) searchParams.set('role', params.role);
     if (params?.active !== undefined) searchParams.set('active_only', String(params.active));
+    if (params?.page !== undefined) searchParams.set('page', String(params.page));
+    if (params?.per_page !== undefined) searchParams.set('per_page', String(params.per_page));
     const query = searchParams.toString();
     const result = await this.request<UsersResponse>(`/users${query ? `?${query}` : ''}`);
     if (result.error) return { error: result.error };
-    return { data: result.data?.users || [] };
+    return {
+      data: result.data?.users || [],
+      total: result.data?.total || 0,
+      page: result.data?.page || 1,
+      per_page: result.data?.per_page || (params?.per_page ?? 20),
+      total_pages: result.data?.total_pages || 0,
+    };
+  }
+
+  async getUsers(params?: { role?: string; active?: boolean }): Promise<ApiResponse<import('@/types').User[]>> {
+    const result = await this.getUsersPage({
+      ...params,
+      page: 1,
+      per_page: 100,
+    });
+    if (result.error) return { error: result.error };
+    return { data: result.data || [] };
   }
 
   async getUser(id: string): Promise<ApiResponse<import('@/types').User>> {
@@ -345,15 +378,39 @@ class ApiClient {
   }
 
   // Product endpoints
-  async getProducts(params?: { category_id?: string; active?: boolean; search?: string }): Promise<ApiResponse<import('@/types').Product[]>> {
+  async getProductsPage(params?: {
+    category_id?: string;
+    active?: boolean;
+    search?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<ApiResponse<import('@/types').Product[]>> {
     const searchParams = new URLSearchParams();
     if (params?.category_id) searchParams.set('category_id', params.category_id);
     if (params?.active !== undefined) searchParams.set('active_only', String(params.active));
     if (params?.search) searchParams.set('search', params.search);
+    if (params?.page !== undefined) searchParams.set('page', String(params.page));
+    if (params?.per_page !== undefined) searchParams.set('per_page', String(params.per_page));
     const query = searchParams.toString();
     const result = await this.request<ProductsResponse>(`/products${query ? `?${query}` : ''}`);
     if (result.error) return { error: result.error };
-    return { data: result.data?.products || [] };
+    return {
+      data: result.data?.products || [],
+      total: result.data?.total || 0,
+      page: result.data?.page || 1,
+      per_page: result.data?.per_page || (params?.per_page ?? 20),
+      total_pages: result.data?.total_pages || 0,
+    };
+  }
+
+  async getProducts(params?: { category_id?: string; active?: boolean; search?: string }): Promise<ApiResponse<import('@/types').Product[]>> {
+    const result = await this.getProductsPage({
+      ...params,
+      page: 1,
+      per_page: 100,
+    });
+    if (result.error) return { error: result.error };
+    return { data: result.data || [] };
   }
 
   async getProduct(id: string): Promise<ApiResponse<import('@/types').Product>> {
@@ -501,16 +558,40 @@ class ApiClient {
     return { data: result.data?.sale };
   }
 
-  async getSales(params?: { from?: string; to?: string; user_id?: string; status?: string }): Promise<ApiResponse<import('@/types').Sale[]>> {
+  async getSalesPage(params?: {
+    from?: string;
+    to?: string;
+    user_id?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<import('@/types').Sale[]>> {
     const searchParams = new URLSearchParams();
     if (params?.from) searchParams.set('from', params.from);
     if (params?.to) searchParams.set('to', params.to);
     if (params?.user_id) searchParams.set('employee_id', params.user_id);
     if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit !== undefined) searchParams.set('limit', String(params.limit));
+    if (params?.offset !== undefined) searchParams.set('offset', String(params.offset));
     const query = searchParams.toString();
     const result = await this.request<SalesResponse>(`/sales${query ? `?${query}` : ''}`);
     if (result.error) return { error: result.error };
-    return { data: result.data?.sales || [] };
+    return {
+      data: result.data?.sales || [],
+      total: result.data?.total || 0,
+      limit: result.data?.limit || (params?.limit ?? 20),
+      offset: result.data?.offset || (params?.offset ?? 0),
+    };
+  }
+
+  async getSales(params?: { from?: string; to?: string; user_id?: string; status?: string }): Promise<ApiResponse<import('@/types').Sale[]>> {
+    const result = await this.getSalesPage({
+      ...params,
+      limit: 100,
+      offset: 0,
+    });
+    if (result.error) return { error: result.error };
+    return { data: result.data || [] };
   }
 
   async getSale(id: string): Promise<ApiResponse<import('@/types').Sale>> {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,6 +86,7 @@ function getImageUrl(path: string | null | undefined): string {
 }
 
 export default function InventoryPage() {
+  const PAGE_SIZE = 24;
   const { hasPermission } = useAuth();
   const canModifyStock = hasPermission(PERMISSIONS.INVENTORY_EDIT);
 
@@ -93,8 +94,14 @@ export default function InventoryPage() {
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'low-stock'>('all');
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+  const [page, setPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // Adjustment dialog
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
@@ -105,38 +112,100 @@ export default function InventoryPage() {
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch data
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [productsResult, lowStockResult] = await Promise.all([
-          api.getProducts(),
-          api.getLowStock(),
-        ]);
+    const timeout = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
 
-        if (productsResult.data) setProducts(productsResult.data);
-        if (lowStockResult.data) setLowStockItems(lowStockResult.data);
-        setLastRefreshed(new Date());
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      } finally {
-        setIsLoading(false);
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  const fetchLowStock = useCallback(async () => {
+    try {
+      const result = await api.getLowStock();
+      if (result.data) {
+        setLowStockItems(result.data);
       }
-    };
-
-    fetchData();
-
-    // Auto-refresh every 10 seconds
-    const interval = setInterval(fetchData, 10000);
-
-    return () => clearInterval(interval);
+      setLastRefreshed(new Date());
+    } catch (error) {
+      console.error('Failed to fetch low stock items:', error);
+    }
   }, []);
 
-  // Filter products
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.sku?.toLowerCase().includes(searchQuery.toLowerCase())
+  const fetchProductsPage = useCallback(
+    async (pageToLoad: number, replace: boolean) => {
+      if (replace) {
+        setIsLoading(true);
+      } else {
+        setIsFetchingMore(true);
+      }
+
+      try {
+        const result = await api.getProductsPage({
+          active: true,
+          search: debouncedSearch || undefined,
+          page: pageToLoad,
+          per_page: PAGE_SIZE,
+        });
+
+        if (result.data) {
+          setProducts((prev) => (replace ? result.data! : [...prev, ...result.data!]));
+          setTotalProducts(result.total || 0);
+          if (result.total_pages !== undefined) {
+            setHasMore(pageToLoad < result.total_pages);
+          } else {
+            setHasMore(result.data.length === PAGE_SIZE);
+          }
+          setPage(pageToLoad);
+        }
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+      } finally {
+        if (replace) {
+          setIsLoading(false);
+        } else {
+          setIsFetchingMore(false);
+        }
+      }
+    },
+    [debouncedSearch],
   );
+
+  useEffect(() => {
+    setProducts([]);
+    setPage(1);
+    setHasMore(true);
+    void fetchProductsPage(1, true);
+  }, [fetchProductsPage]);
+
+  useEffect(() => {
+    void fetchLowStock();
+    const interval = setInterval(() => {
+      void fetchLowStock();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [fetchLowStock]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || activeTab !== 'all' || !hasMore || isLoading || isFetchingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (firstEntry.isIntersecting) {
+          void fetchProductsPage(page + 1, false);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [activeTab, fetchProductsPage, hasMore, isLoading, isFetchingMore, page]);
+
+  const filteredProducts = products;
 
   // Open adjustment dialog
   const openAdjustDialog = (product: Product) => {
@@ -146,6 +215,23 @@ export default function InventoryPage() {
     setAdjustmentTypeValue('purchase');
     setAdjustmentNotes('');
     setAdjustDialogOpen(true);
+  };
+
+  const openAdjustDialogFromLowStock = async (productId: string) => {
+    const existing = products.find((p) => p.id === productId);
+    if (existing) {
+      openAdjustDialog(existing);
+      return;
+    }
+
+    try {
+      const result = await api.getProduct(productId);
+      if (result.data) {
+        openAdjustDialog(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to load product for adjustment:', error);
+    }
   };
 
   // Update selected product when products array changes (for real-time updates)
@@ -221,13 +307,12 @@ export default function InventoryPage() {
     try {
       const result = await api.adjustInventory(adjustment);
       if (!result.error) {
-        // Refresh products
-        const productsResult = await api.getProducts();
-        if (productsResult.data) setProducts(productsResult.data);
-
-        // Refresh low stock items
-        const lowStockResult = await api.getLowStock();
-        if (lowStockResult.data) setLowStockItems(lowStockResult.data);
+        // Refresh current view data
+        setProducts([]);
+        setPage(1);
+        setHasMore(true);
+        void fetchProductsPage(1, true);
+        void fetchLowStock();
 
         setAdjustDialogOpen(false);
       } else {
@@ -249,7 +334,7 @@ export default function InventoryPage() {
   };
 
   // Calculate stats
-  const totalProducts = products.length;
+  const loadedProductsCount = products.length;
   const totalStock = products.reduce((sum, p) => sum + getProductQuantity(p), 0);
   const totalValue = products.reduce((sum, p) => sum + getProductPrice(p) * getProductQuantity(p), 0);
   const lowStockCount = lowStockItems.length;
@@ -269,12 +354,13 @@ export default function InventoryPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalProducts}</div>
+              <p className="text-xs text-muted-foreground">Loaded {loadedProductsCount}</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Stock</CardTitle>
+              <CardTitle className="text-sm font-medium">Loaded Stock</CardTitle>
               <Boxes className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -284,7 +370,7 @@ export default function InventoryPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Inventory Value</CardTitle>
+              <CardTitle className="text-sm font-medium">Loaded Inventory Value</CardTitle>
               <TrendingDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -384,11 +470,34 @@ export default function InventoryPage() {
                         key={item.id}
                         className="flex items-center justify-between rounded-lg border p-4"
                       >
-                        <div>
-                          <p className="font-medium">{item.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            SKU: {item.sku || 'N/A'}
-                          </p>
+                        <div className="flex items-center gap-3 min-w-0">
+                          {product?.image_url ? (
+                            <div className="relative h-12 w-12 rounded border overflow-hidden flex-shrink-0 bg-muted">
+                              <img
+                                src={getImageUrl(product.image_url)}
+                                alt={item.name}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                                }}
+                              />
+                              <div className="absolute inset-0 hidden items-center justify-center bg-muted">
+                                <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="h-12 w-12 rounded border flex items-center justify-center bg-muted flex-shrink-0">
+                              <Package className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{item.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              SKU: {item.sku || 'N/A'}
+                            </p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
@@ -399,11 +508,11 @@ export default function InventoryPage() {
                               Available: {parseFloat(item.available_quantity)}
                             </p>
                           </div>
-                          {product && canModifyStock && (
+                          {canModifyStock && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => openAdjustDialog(product)}
+                              onClick={() => void openAdjustDialogFromLowStock(item.id)}
                             >
                               <Settings2 className="h-4 w-4 mr-1" />
                               Adjust
@@ -505,7 +614,7 @@ export default function InventoryPage() {
             {/* Desktop Table View */}
             <Card className="hidden lg:block">
               <CardHeader>
-                <CardTitle>Inventory ({filteredProducts.length})</CardTitle>
+                <CardTitle>Inventory ({totalProducts || filteredProducts.length})</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -531,10 +640,35 @@ export default function InventoryPage() {
                         return (
                           <tr key={product.id} className="border-b last:border-0">
                             <td className="py-3">
-                              <p className="font-medium">{product.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {product.category_name || 'No category'}
-                              </p>
+                              <div className="flex items-center gap-3">
+                                {product.image_url ? (
+                                  <div className="relative h-10 w-10 rounded border overflow-hidden flex-shrink-0 bg-muted">
+                                    <img
+                                      src={getImageUrl(product.image_url)}
+                                      alt={product.name}
+                                      className="h-full w-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 hidden items-center justify-center bg-muted">
+                                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="h-10 w-10 rounded border flex items-center justify-center bg-muted flex-shrink-0">
+                                    <Package className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                )}
+
+                                <div className="min-w-0">
+                                  <p className="font-medium truncate">{product.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {product.category_name || 'No category'}
+                                  </p>
+                                </div>
+                              </div>
                             </td>
                             <td className="py-3 text-sm text-muted-foreground hidden lg:table-cell">
                               {product.sku || '-'}
@@ -579,6 +713,18 @@ export default function InventoryPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <div ref={loadMoreRef} className="h-1 w-full" />
+            <div className="py-4 flex items-center justify-center">
+              {isFetchingMore ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading more inventory...
+                </div>
+              ) : !hasMore && filteredProducts.length > 0 ? (
+                <p className="text-xs text-muted-foreground">End of inventory list</p>
+              ) : null}
+            </div>
           </>
         )}
       </div>

@@ -35,6 +35,8 @@ import {
   QrCode,
   Building2,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Sale, PaymentMethod, User } from '@/types';
@@ -57,6 +59,10 @@ export default function SalesHistoryPage() {
   const [employeeFilter, setEmployeeFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [employees, setEmployees] = useState<User[]>([]);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
 
   // View dialog
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -95,14 +101,28 @@ export default function SalesHistoryPage() {
     const fetchSales = async () => {
       setIsLoading(true);
       try {
-        const params: { from?: string; to?: string; status?: string; user_id?: string } = {};
+        const params: {
+          from?: string;
+          to?: string;
+          status?: string;
+          user_id?: string;
+          limit?: number;
+          offset?: number;
+        } = {
+          limit,
+          offset: (page - 1) * limit,
+        };
         if (dateRange.start) params.from = dateRange.start;
         if (dateRange.end) params.to = dateRange.end;
         if (statusFilter !== 'all') params.status = statusFilter;
         if (employeeFilter !== 'all') params.user_id = employeeFilter;
 
-        const result = await api.getSales(params);
-        if (result.data) setSales(result.data);
+        const result = await api.getSalesPage(params);
+        if (result.data) {
+          setSales(result.data);
+          setTotal(result.total || 0);
+          setHasMore(result.data.length === limit);
+        }
       } catch (error) {
         console.error('Failed to fetch sales:', error);
       } finally {
@@ -111,7 +131,7 @@ export default function SalesHistoryPage() {
     };
 
     fetchSales();
-  }, [dateRange, statusFilter, employeeFilter]);
+  }, [dateRange, statusFilter, employeeFilter, page, limit]);
 
   // Filter sales
   const filteredSales = sales.filter((sale) =>
@@ -215,17 +235,29 @@ export default function SalesHistoryPage() {
                 <Input
                   placeholder="Search invoice..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
                   className="pl-9 w-full"
                 />
               </div>
               <DateRangePicker
                 value={dateRange}
-                onChange={setDateRange}
+                onChange={(range) => {
+                  setDateRange(range);
+                  setPage(1);
+                }}
                 placeholder="Select date range"
                 className="w-full"
               />
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
@@ -235,7 +267,13 @@ export default function SalesHistoryPage() {
                   <SelectItem value="voided">Voided</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+              <Select
+                value={employeeFilter}
+                onValueChange={(value) => {
+                  setEmployeeFilter(value);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Cashiers" />
                 </SelectTrigger>
@@ -378,6 +416,55 @@ export default function SalesHistoryPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Show</span>
+                <Select
+                  value={String(limit)}
+                  onValueChange={(value) => {
+                    setLimit(Number(value));
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[80px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">entries</span>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                Page {page} • {Math.min(sales.length, limit)} entries of {total}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => prev + 1)}
+                  disabled={!hasMore}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           </>
         )}

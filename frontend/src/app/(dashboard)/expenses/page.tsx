@@ -33,6 +33,8 @@ import {
   TrendingDown,
   Calendar,
   Info,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Expense, ExpenseCategory, CreateExpenseRequest, ExpenseSummary, Product } from '@/types';
@@ -55,6 +57,10 @@ export default function ExpensesPage() {
     start: '',
     end: '',
   });
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -98,6 +104,8 @@ export default function ExpensesPage() {
             category_id: selectedCategory !== 'all' ? selectedCategory : undefined,
             start_date: dateRange.start,
             end_date: dateRange.end,
+            limit,
+            offset: (page - 1) * limit,
           }),
           api.getExpenseCategories(),
           api.getProducts({ active: true }),
@@ -107,7 +115,11 @@ export default function ExpensesPage() {
           }),
         ]);
 
-        if (expensesResult.data) setExpenses(expensesResult.data.expenses);
+        if (expensesResult.data) {
+          setExpenses(expensesResult.data.expenses);
+          setTotal(expensesResult.data.total || 0);
+          setHasMore(expensesResult.data.expenses.length === limit);
+        }
         if (categoriesResult.data) setCategories(categoriesResult.data);
         if (productsResult.data) setProducts(productsResult.data);
         if (summaryResult.data) setSummary(summaryResult.data);
@@ -119,7 +131,7 @@ export default function ExpensesPage() {
     };
 
     fetchData();
-  }, [selectedCategory, dateRange]);
+  }, [selectedCategory, dateRange, page, limit]);
 
   // Filter expenses by search
   const filteredExpenses = expenses.filter((expense) => {
@@ -410,11 +422,20 @@ export default function ExpensesPage() {
                 <Input
                   placeholder="Search expenses..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
                   className="pl-9 w-full"
                 />
               </div>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select
+                value={selectedCategory}
+                onValueChange={(value) => {
+                  setSelectedCategory(value);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="w-full sm:w-48">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
@@ -429,7 +450,10 @@ export default function ExpensesPage() {
               </Select>
               <DateRangePicker
                 value={dateRange}
-                onChange={setDateRange}
+                onChange={(range) => {
+                  setDateRange(range);
+                  setPage(1);
+                }}
                 placeholder="Select date range"
                 className="w-full sm:w-[280px]"
               />
@@ -606,6 +630,55 @@ export default function ExpensesPage() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Show</span>
+                <Select
+                  value={String(limit)}
+                  onValueChange={(value) => {
+                    setLimit(Number(value));
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[80px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">entries</span>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                Page {page} • {Math.min(expenses.length, limit)} entries of {total}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => prev + 1)}
+                  disabled={!hasMore}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           </>
         )}

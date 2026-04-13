@@ -290,7 +290,11 @@ export default function POSPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
 
   // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -346,6 +350,15 @@ export default function POSPage() {
   };
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
 
   // Calculate totals
   const subtotal = cartItems.reduce(
@@ -365,66 +378,111 @@ export default function POSPage() {
   const total = subtotal + totalTax - discountAmount;
   const change = parseFloat(amountPaid || "0") - total;
 
-  // Fetch initial data
+  // Fetch initial non-product data
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchInitialData = async () => {
       try {
-        const [productsResult, categoriesResult, shiftResult] =
-          await Promise.all([
-            api.getProducts({ active: true }),
-            api.getCategories(),
-            api.getCurrentShift(),
-          ]);
+        const [categoriesResult, shiftResult] = await Promise.all([
+          api.getCategories(),
+          api.getCurrentShift(),
+        ]);
 
-        if (productsResult.data) setProducts(productsResult.data);
         if (categoriesResult.data) setCategories(categoriesResult.data);
         if (shiftResult.data && !shiftResult.error) {
           setCurrentShift(shiftResult.data);
         }
       } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setIsLoadingProducts(false);
+        console.error("Failed to fetch initial data:", error);
       }
     };
 
-    fetchData();
+    fetchInitialData();
   }, []);
 
-  // Poll for shift status AND products every 30 seconds
+  const fetchProductsPage = useCallback(
+    async (pageToLoad: number, replace: boolean, silent: boolean = false) => {
+      if (replace && !silent) {
+        setIsLoadingProducts(true);
+      } else if (!replace) {
+        setIsFetchingMore(true);
+      }
+
+      try {
+        const result = await api.getProductsPage({
+          active: true,
+          category_id: selectedCategory !== "all" ? selectedCategory : undefined,
+          search: debouncedSearchQuery || undefined,
+          page: pageToLoad,
+          per_page: 24,
+        });
+
+        if (result.data) {
+          setProducts((prev) => (replace ? result.data! : [...prev, ...result.data!]));
+          if (result.total_pages !== undefined) {
+            setHasMore(pageToLoad < result.total_pages);
+          } else {
+            setHasMore(result.data.length === 24);
+          }
+          setPage(pageToLoad);
+        }
+      } catch (error) {
+        console.error("Failed to fetch products:", error);
+      } finally {
+        if (replace && !silent) {
+          setIsLoadingProducts(false);
+        } else if (!replace) {
+          setIsFetchingMore(false);
+        }
+      }
+    },
+    [selectedCategory, debouncedSearchQuery],
+  );
+
+  useEffect(() => {
+    setProducts([]);
+    setPage(1);
+    setHasMore(true);
+    void fetchProductsPage(1, true);
+  }, [fetchProductsPage]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || !hasMore || isLoadingProducts || isFetchingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (firstEntry.isIntersecting) {
+          void fetchProductsPage(page + 1, false);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fetchProductsPage, hasMore, isLoadingProducts, isFetchingMore, page]);
+
+  const refreshProducts = useCallback(async () => {
+    try {
+      setHasMore(true);
+      await fetchProductsPage(1, true, true);
+    } catch (error) {
+      console.error("Failed to refresh products:", error);
+    }
+  }, [fetchProductsPage]);
+
+  // Poll for shift status and product freshness
   useEffect(() => {
     const pollData = async () => {
-      await Promise.all([
-        refreshShift(),
-        refreshProducts(), // Keep inventory in sync
-      ]);
+      await Promise.all([refreshShift(), refreshProducts()]);
     };
 
     const interval = setInterval(pollData, 30000);
     return () => clearInterval(interval);
-  }, [currentShift]);
+  }, [currentShift, refreshProducts]);
 
-  const refreshProducts = async () => {
-    try {
-      const result = await api.getProducts({ active: true });
-      if (result.data) {
-        setProducts(result.data);
-      }
-    } catch (error) {
-      console.error("Failed to refresh products:", error);
-    }
-  };
-
-  // Filter products
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.barcode?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory =
-      selectedCategory === "all" || product.category_id === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredProducts = products;
 
   // Cart functions
   const addToCart = useCallback((product: Product) => {
@@ -758,7 +816,9 @@ export default function POSPage() {
             </div>
             <Select
               value={selectedCategory}
-              onValueChange={setSelectedCategory}
+              onValueChange={(value) => {
+                setSelectedCategory(value);
+              }}
             >
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="All Categories" />
@@ -786,77 +846,91 @@ export default function POSPage() {
                 <p>No products found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-                {filteredProducts.map((product) => {
-                  const quantity = getProductQuantity(product);
-                  const minQuantity = getProductMinQuantity(product);
-                  const price = getProductPrice(product);
-                  const isLowStock = quantity <= minQuantity && quantity > 0;
-                  const isOutOfStock = quantity <= 0;
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+                  {filteredProducts.map((product) => {
+                    const quantity = getProductQuantity(product);
+                    const minQuantity = getProductMinQuantity(product);
+                    const price = getProductPrice(product);
+                    const isLowStock = quantity <= minQuantity && quantity > 0;
+                    const isOutOfStock = quantity <= 0;
 
-                  return (
-                    <button
-                      key={product.id}
-                      onClick={() => currentShift && addToCart(product)}
-                      disabled={!currentShift || isOutOfStock}
-                      className={`bg-card border rounded-lg p-3 text-left hover:border-primary hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${isOutOfStock ? "opacity-60 bg-muted/50" : ""}`}
-                    >
-                      {/* Stock Status Badge */}
-                      {(isLowStock || isOutOfStock) && (
-                        <div
-                          className={`absolute top-2 right-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm z-10 ${
-                            isOutOfStock
-                              ? "bg-red-600 text-white"
-                              : "bg-yellow-500 text-white"
-                          }`}
-                        >
-                          {isOutOfStock ? "Out of Stock" : "Low Stock"}
-                        </div>
-                      )}
+                    return (
+                      <button
+                        key={product.id}
+                        onClick={() => currentShift && addToCart(product)}
+                        disabled={!currentShift || isOutOfStock}
+                        className={`bg-card border rounded-lg p-3 text-left hover:border-primary hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${isOutOfStock ? "opacity-60 bg-muted/50" : ""}`}
+                      >
+                        {/* Stock Status Badge */}
+                        {(isLowStock || isOutOfStock) && (
+                          <div
+                            className={`absolute top-2 right-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm z-10 ${
+                              isOutOfStock
+                                ? "bg-red-600 text-white"
+                                : "bg-yellow-500 text-white"
+                            }`}
+                          >
+                            {isOutOfStock ? "Out of Stock" : "Low Stock"}
+                          </div>
+                        )}
 
-                      <div className="aspect-square bg-muted rounded-md mb-2 flex items-center justify-center overflow-hidden">
-                        {product.image_url ? (
-                          <img
-                            src={getImageUrl(product.image_url)}
-                            alt={product.name}
-                            className={`w-full h-full object-cover ${isOutOfStock ? "grayscale" : ""}`}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display =
-                                "none";
-                              (
-                                (e.target as HTMLImageElement)
-                                  .nextSibling as HTMLElement
-                              ).style.display = "flex";
+                        <div className="aspect-square bg-muted rounded-md mb-2 flex items-center justify-center overflow-hidden">
+                          {product.image_url ? (
+                            <img
+                              src={getImageUrl(product.image_url)}
+                              alt={product.name}
+                              className={`w-full h-full object-cover ${isOutOfStock ? "grayscale" : ""}`}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                                (
+                                  (e.target as HTMLImageElement)
+                                    .nextSibling as HTMLElement
+                                ).style.display = "flex";
+                              }}
+                            />
+                          ) : null}
+                          <ShoppingCart
+                            className="h-8 w-8 text-muted-foreground"
+                            style={{
+                              display: product.image_url ? "none" : "block",
                             }}
                           />
-                        ) : null}
-                        <ShoppingCart
-                          className="h-8 w-8 text-muted-foreground"
-                          style={{
-                            display: product.image_url ? "none" : "block",
-                          }}
-                        />
-                      </div>
-                      <p className="font-medium text-sm truncate">
-                        {product.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {product.category_name}
-                      </p>
-                      <div className="flex flex-col gap-1 mt-2">
-                        <span className="font-bold text-primary">
-                          {formatCurrency(price)}
-                        </span>
-                        <span
-                          className={`text-xs font-medium ${isOutOfStock ? "text-red-600" : isLowStock ? "text-yellow-600" : "text-muted-foreground"}`}
-                        >
-                          Stock: {quantity}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                        </div>
+                        <p className="font-medium text-sm truncate">
+                          {product.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {product.category_name}
+                        </p>
+                        <div className="flex flex-col gap-1 mt-2">
+                          <span className="font-bold text-primary">
+                            {formatCurrency(price)}
+                          </span>
+                          <span
+                            className={`text-xs font-medium ${isOutOfStock ? "text-red-600" : isLowStock ? "text-yellow-600" : "text-muted-foreground"}`}
+                          >
+                            Stock: {quantity}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div ref={loadMoreRef} className="h-1 w-full" />
+                <div className="py-4 flex items-center justify-center">
+                  {isFetchingMore ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading more products...
+                    </div>
+                  ) : !hasMore && filteredProducts.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">End of product list</p>
+                  ) : null}
+                </div>
+              </>
             )}
           </div>
         </div>
