@@ -43,6 +43,8 @@ import {
   LayoutDashboard,
   Wallet,
   Layers,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
@@ -148,6 +150,10 @@ export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"active" | "archived">("active");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -193,8 +199,20 @@ export default function UsersPage() {
     const fetchUsers = async () => {
       setIsLoading(true);
       try {
-        const result = await api.getUsers({ active: viewMode === "active" });
-        if (result.data) setUsers(result.data);
+        const result = await api.getUsersPage({
+          active: viewMode === "active",
+          page,
+          per_page: limit,
+        });
+        if (result.data) {
+          setUsers(result.data);
+          setTotal(result.total || 0);
+          if (result.total_pages !== undefined) {
+            setHasMore(page < result.total_pages);
+          } else {
+            setHasMore(result.data.length === limit);
+          }
+        }
       } catch (error) {
         console.error("Failed to fetch users:", error);
       } finally {
@@ -203,7 +221,7 @@ export default function UsersPage() {
     };
 
     fetchUsers();
-  }, [viewMode]);
+  }, [viewMode, page, limit]);
 
   // Fetch roles
   useEffect(() => {
@@ -740,7 +758,10 @@ export default function UsersPage() {
         {/* Tab Toggle */}
         <div className="flex gap-1 mb-4 p-1 bg-muted rounded-lg w-fit">
           <button
-            onClick={() => setViewMode("active")}
+            onClick={() => {
+              setViewMode("active");
+              setPage(1);
+            }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               viewMode === "active"
                 ? "bg-background text-foreground shadow-sm"
@@ -750,7 +771,10 @@ export default function UsersPage() {
             Active
           </button>
           <button
-            onClick={() => setViewMode("archived")}
+            onClick={() => {
+              setViewMode("archived");
+              setPage(1);
+            }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
               viewMode === "archived"
                 ? "bg-background text-foreground shadow-sm"
@@ -771,11 +795,20 @@ export default function UsersPage() {
                 <Input
                   placeholder="Search users..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
                   className="pl-9 w-full"
                 />
               </div>
-              <Select value={selectedRole} onValueChange={setSelectedRole}>
+              <Select
+                value={selectedRole}
+                onValueChange={(value) => {
+                  setSelectedRole(value);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="w-full sm:w-40">
                   <SelectValue placeholder="All Roles" />
                 </SelectTrigger>
@@ -1105,6 +1138,55 @@ export default function UsersPage() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Show</span>
+                <Select
+                  value={String(limit)}
+                  onValueChange={(value) => {
+                    setLimit(Number(value));
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[80px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">entries</span>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                Page {page} • {Math.min(users.length, limit)} entries of {total}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => prev + 1)}
+                  disabled={!hasMore}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           </>
         )}
