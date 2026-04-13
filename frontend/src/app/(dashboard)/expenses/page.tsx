@@ -44,7 +44,10 @@ import { useRouter } from 'next/navigation';
 export default function ExpensesPage() {
   const { hasPermission, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
-  const canManage = hasPermission(PERMISSIONS.EXPENSES_MANAGE);
+  const canCreateExpense = hasPermission(PERMISSIONS.EXPENSES_CREATE);
+  const canEditExpense = hasPermission(PERMISSIONS.EXPENSES_EDIT);
+  const canDeleteExpense = hasPermission(PERMISSIONS.EXPENSES_DELETE);
+  const canManageAnyExpense = canCreateExpense || canEditExpense || canDeleteExpense;
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
@@ -193,12 +196,14 @@ export default function ExpensesPage() {
 
   // Open create dialog
   const openCreateDialog = () => {
+    if (!canCreateExpense) return;
     resetForm();
     setDialogOpen(true);
   };
 
   // Open edit dialog
   const openEditDialog = (expense: Expense) => {
+    if (!canEditExpense) return;
     setEditingExpense(expense);
     setFormData({
       category_id: expense.category_id || '',
@@ -235,6 +240,15 @@ export default function ExpensesPage() {
 
   // Handle submit
   const handleSubmit = async () => {
+    if (editingExpense && !canEditExpense) {
+      setFormErrors({ general: 'You do not have permission to edit expenses' });
+      return;
+    }
+    if (!editingExpense && !canCreateExpense) {
+      setFormErrors({ general: 'You do not have permission to create expenses' });
+      return;
+    }
+
     // Validate form
     const errors: { amount?: string; description?: string; general?: string } = {};
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
@@ -307,7 +321,7 @@ export default function ExpensesPage() {
 
   // Handle delete
   const handleDelete = async () => {
-    if (!deletingExpense) return;
+    if (!deletingExpense || !canDeleteExpense) return;
 
     setIsSubmitting(true);
     setDeleteError(null);
@@ -457,7 +471,7 @@ export default function ExpensesPage() {
                 placeholder="Select date range"
                 className="w-full sm:w-[280px]"
               />
-              {canManage && (
+              {canCreateExpense && (
                 <Button onClick={openCreateDialog} className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Expense
@@ -477,9 +491,11 @@ export default function ExpensesPage() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Receipt className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">No expenses found</p>
-              <Button variant="link" onClick={openCreateDialog}>
-                Add your first expense
-              </Button>
+              {canCreateExpense && (
+                <Button variant="link" onClick={openCreateDialog}>
+                  Add your first expense
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -500,7 +516,9 @@ export default function ExpensesPage() {
                         <th className="pb-3 font-medium">User</th>
                         <th className="pb-3 font-medium">Vendor</th>
                         <th className="pb-3 font-medium text-right">Amount</th>
-                        <th className="pb-3 font-medium text-right">Actions</th>
+                        {canManageAnyExpense && (
+                          <th className="pb-3 font-medium text-right">Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -533,10 +551,10 @@ export default function ExpensesPage() {
                           <td className="py-3 text-right font-medium text-destructive">
                             {formatCurrency(expense.amount)}
                           </td>
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {canManage && (
-                                <>
+                          {canManageAnyExpense && (
+                            <td className="py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                {canEditExpense && (
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -544,6 +562,8 @@ export default function ExpensesPage() {
                                   >
                                     <Pencil className="h-4 w-4" />
                                   </Button>
+                                )}
+                                {canDeleteExpense && (
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -554,10 +574,10 @@ export default function ExpensesPage() {
                                   >
                                     <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>
-                                </>
-                              )}
-                            </div>
-                          </td>
+                                )}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -602,29 +622,33 @@ export default function ExpensesPage() {
                       </div>
                     </div>
 
-                    {canManage && (
+                    {canManageAnyExpense && (
                       <div className="flex justify-end gap-2 pt-2 border-t">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditDialog(expense)}
-                          className="h-8"
-                        >
-                          <Pencil className="h-3.5 w-3.5 mr-1" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setDeletingExpense(expense);
-                            setDeleteDialogOpen(true);
-                          }}
-                          className="h-8 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-1" />
-                          Delete
-                        </Button>
+                        {canEditExpense && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(expense)}
+                            className="h-8"
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" />
+                            Edit
+                          </Button>
+                        )}
+                        {canDeleteExpense && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setDeletingExpense(expense);
+                              setDeleteDialogOpen(true);
+                            }}
+                            className="h-8 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     )}
                   </CardContent>

@@ -37,6 +37,8 @@ import api from '@/lib/api';
 import { Product, LowStockItem, AdjustmentType } from '@/types';
 import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
 
+type InventoryAction = 'add' | 'remove' | 'count';
+
 // Map UI selections to backend adjustment types
 const ADJUSTMENT_TYPES = {
   add: [
@@ -88,7 +90,10 @@ function getImageUrl(path: string | null | undefined): string {
 export default function InventoryPage() {
   const PAGE_SIZE = 24;
   const { hasPermission } = useAuth();
-  const canModifyStock = hasPermission(PERMISSIONS.INVENTORY_EDIT);
+  const canAddStock = hasPermission(PERMISSIONS.INVENTORY_ADD_STOCK);
+  const canRemoveStock = hasPermission(PERMISSIONS.INVENTORY_REMOVE_STOCK);
+  const canAdjustStock = hasPermission(PERMISSIONS.INVENTORY_ADJUST_STOCK);
+  const canModifyStock = canAddStock || canRemoveStock || canAdjustStock;
 
   const [products, setProducts] = useState<Product[]>([]);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
@@ -106,11 +111,25 @@ export default function InventoryPage() {
   // Adjustment dialog
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [adjustmentType, setAdjustmentType] = useState<'add' | 'remove' | 'count'>('add');
+  const [adjustmentType, setAdjustmentType] = useState<InventoryAction>('add');
   const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
   const [adjustmentTypeValue, setAdjustmentTypeValue] = useState<AdjustmentType>('purchase');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getAllowedActions = useCallback((): InventoryAction[] => {
+    const actions: InventoryAction[] = [];
+    if (canAddStock) actions.push('add');
+    if (canRemoveStock) actions.push('remove');
+    if (canAdjustStock) actions.push('count');
+    return actions;
+  }, [canAddStock, canAdjustStock, canRemoveStock]);
+
+  const getDefaultAdjustmentType = (action: InventoryAction): AdjustmentType => {
+    if (action === 'add') return 'purchase';
+    if (action === 'remove') return 'damage';
+    return 'count';
+  };
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -209,10 +228,16 @@ export default function InventoryPage() {
 
   // Open adjustment dialog
   const openAdjustDialog = (product: Product) => {
+    if (!canModifyStock) return;
+
+    const allowedActions = getAllowedActions();
+    if (allowedActions.length === 0) return;
+
+    const defaultAction = allowedActions[0];
     setSelectedProduct(product);
-    setAdjustmentType('add');
+    setAdjustmentType(defaultAction);
     setAdjustmentQuantity('');
-    setAdjustmentTypeValue('purchase');
+    setAdjustmentTypeValue(getDefaultAdjustmentType(defaultAction));
     setAdjustmentNotes('');
     setAdjustDialogOpen(true);
   };
@@ -246,6 +271,21 @@ export default function InventoryPage() {
 
   // Handle adjustment
   const handleAdjustment = async () => {
+    if (!canModifyStock) return;
+
+    if (adjustmentType === 'add' && !canAddStock) {
+      alert('You do not have permission to add stock.');
+      return;
+    }
+    if (adjustmentType === 'remove' && !canRemoveStock) {
+      alert('You do not have permission to remove stock.');
+      return;
+    }
+    if (adjustmentType === 'count' && !canAdjustStock) {
+      alert('You do not have permission to adjust stock counts.');
+      return;
+    }
+
     if (!selectedProduct || !adjustmentQuantity) return;
 
     const inputQuantity = parseInt(adjustmentQuantity);
@@ -338,6 +378,7 @@ export default function InventoryPage() {
   const totalStock = products.reduce((sum, p) => sum + getProductQuantity(p), 0);
   const totalValue = products.reduce((sum, p) => sum + getProductPrice(p) * getProductQuantity(p), 0);
   const lowStockCount = lowStockItems.length;
+  const allowedActions = getAllowedActions();
 
   return (
     <div className="flex flex-col h-full">
@@ -763,20 +804,19 @@ export default function InventoryPage() {
               <Label htmlFor="actionType">Action</Label>
               <Select
                 value={adjustmentType}
-                onValueChange={(value: 'add' | 'remove' | 'count') => {
+                onValueChange={(value: InventoryAction) => {
+                  if (!allowedActions.includes(value)) return;
                   setAdjustmentType(value);
-                  setAdjustmentTypeValue(
-                    value === 'add' ? 'purchase' : value === 'remove' ? 'damage' : 'count'
-                  );
+                  setAdjustmentTypeValue(getDefaultAdjustmentType(value));
                 }}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="add">Add Stock</SelectItem>
-                  <SelectItem value="remove">Remove Stock</SelectItem>
-                  <SelectItem value="count">Stock Count</SelectItem>
+                  {allowedActions.includes('add') && <SelectItem value="add">Add Stock</SelectItem>}
+                  {allowedActions.includes('remove') && <SelectItem value="remove">Remove Stock</SelectItem>}
+                  {allowedActions.includes('count') && <SelectItem value="count">Stock Count</SelectItem>}
                 </SelectContent>
               </Select>
             </div>

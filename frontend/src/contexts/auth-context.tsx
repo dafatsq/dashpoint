@@ -385,7 +385,10 @@ export const PERMISSIONS = {
 
   // Inventory management
   INVENTORY_VIEW: 'can_view_inventory',
-  INVENTORY_EDIT: 'can_edit_inventory',
+  INVENTORY_EDIT: 'can_edit_inventory', // Legacy coarse permission
+  INVENTORY_ADD_STOCK: 'can_add_stock',
+  INVENTORY_REMOVE_STOCK: 'can_remove_stock',
+  INVENTORY_ADJUST_STOCK: 'can_adjust_stock',
 
   // Sales
   SALES_CREATE: 'can_create_sale',
@@ -398,7 +401,10 @@ export const PERMISSIONS = {
 
   // Expenses
   EXPENSES_VIEW: 'can_view_expenses',
-  EXPENSES_MANAGE: 'can_manage_expenses',
+  EXPENSES_MANAGE: 'can_manage_expenses', // Legacy coarse permission
+  EXPENSES_CREATE: 'can_create_expenses',
+  EXPENSES_EDIT: 'can_edit_expenses',
+  EXPENSES_DELETE: 'can_delete_expenses',
 
   // Audit logs
   AUDIT_VIEW: 'can_view_audit_logs',
@@ -413,5 +419,8 @@ export const PERMISSIONS = {
 
   // Categories
   CATEGORIES_VIEW: "can_view_categories",
-  CATEGORIES_MANAGE: 'can_manage_categories',
+  CATEGORIES_MANAGE: 'can_manage_categories', // Legacy coarse permission
+  CATEGORIES_CREATE: 'can_create_categories',
+  CATEGORIES_EDIT: 'can_edit_categories',
+  CATEGORIES_DELETE: 'can_delete_categories',
 } as const;

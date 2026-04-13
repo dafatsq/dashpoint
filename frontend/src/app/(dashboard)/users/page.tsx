@@ -79,6 +79,70 @@ const CATEGORY_ORDER = [
   "system",
 ];
 
+// Frontend-only replacement rows for coarse backend permissions.
+// These toggles are linked to one backend permission key.
+const REPLACEMENT_PARENT_TOGGLES: Record<
+  string,
+  Array<{ label: string; description: string }>
+> = {
+};
+
+const FEATURE_NAME_BY_RESOURCE: Record<string, string> = {
+  sale: "Sales",
+  sales: "Sales",
+  user: "Users",
+  users: "Users",
+  manager_users: "Manager Users",
+  cashier_users: "Cashier Users",
+  inventory: "Inventory",
+  categories: "Categories",
+  expenses: "Expenses",
+  reports: "Reports",
+  permissions: "Permissions",
+  audit_logs: "Audit Logs",
+};
+
+const FEATURE_NAME_BY_CATEGORY: Record<string, string> = {
+  pos: "Sales",
+  sales: "Sales",
+  system: "Audit",
+};
+
+const toTitleCase = (value: string): string =>
+  value
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const getPermissionFeatureName = (category: string, resource?: string): string => {
+  if (resource) {
+    const normalizedResource = resource.toLowerCase();
+    if (FEATURE_NAME_BY_RESOURCE[normalizedResource]) {
+      return FEATURE_NAME_BY_RESOURCE[normalizedResource];
+    }
+
+    return toTitleCase(normalizedResource.replace(/_/g, " "));
+  }
+
+  if (FEATURE_NAME_BY_CATEGORY[category]) {
+    return FEATURE_NAME_BY_CATEGORY[category];
+  }
+
+  return toTitleCase(category.replace(/_/g, " "));
+};
+
+const normalizeDeleteArchiveWording = (text: string): string => {
+  return text
+    .replace(/Delete\/Archive/g, "Delete/archive")
+    .replace(/delete\/archive/g, "delete/archive")
+    .replace(/archive\/delete/g, "delete/archive")
+    .replace(/archive or delete/gi, "delete/archive")
+    .replace(/delete or archive/gi, "delete/archive")
+    .replace(/archive and delete/gi, "delete/archive")
+    .replace(/delete and archive/gi, "delete/archive");
+};
+
 export default function UsersPage() {
   const { user: currentUser, hasPermission } = useAuth();
     const canCreateUser = hasPermission(PERMISSIONS.USERS_CREATE) || hasPermission("can_create_manager_users") || hasPermission("can_create_cashier_users");
@@ -709,23 +773,34 @@ export default function UsersPage() {
     permission: Permission,
     category: string,
   ): string => {
-    // Sales permissions - special naming
-    if (permission.key === "can_view_sales") {
-      return "Sales History Access";
-    }
-    if (permission.key === "can_create_sale") {
-      return "Create Sales (POS)";
-    }
-    if (isViewPermission(permission)) {
-      // Special case: system category shows as "Audit"
-      if (category === "system") {
-        return "Access to Audit";
+    const crudMatch = permission.key.match(/^can_(create|view|edit|delete)_(.+)$/);
+    if (crudMatch) {
+      const [, action, resource] = crudMatch;
+      const feature = getPermissionFeatureName(category, resource);
+
+      if (action === "create") {
+        return `Create ${feature}`;
       }
-      // Capitalize category name
-      const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-      return `Access to ${categoryName}`;
+      if (action === "view") {
+        return `Access to ${feature}`;
+      }
+      if (action === "edit") {
+        return `Edit ${feature}`;
+      }
+
+      if (category === "expenses") {
+        return "Delete Expense";
+      }
+
+      return `Delete/archive ${feature}`;
     }
-    return permission.name;
+
+    if (isViewPermission(permission)) {
+      const feature = getPermissionFeatureName(category);
+      return `Access to ${feature}`;
+    }
+
+    return normalizeDeleteArchiveWording(permission.name);
   };
 
   const getRoleIcon = (role: UserRole) => {
@@ -1519,16 +1594,19 @@ export default function UsersPage() {
                             <div className="divide-y divide-border/50">
                               {sortedPermissions.map((permission) => {
                                   // Skip rendering sub-permissions individually
-                                  if (permission.key === "can_manage_manager_permissions" || permission.key === "can_manage_cashier_permissions" || permission.key === "can_create_manager_users" || permission.key === "can_create_cashier_users" || permission.key === "can_edit_manager_users" || permission.key === "can_edit_cashier_users" || permission.key === "can_delete_manager_users" || permission.key === "can_delete_cashier_users") return null;
+                                  if (permission.key === "can_manage_manager_permissions" || permission.key === "can_manage_cashier_permissions" || permission.key === "can_create_manager_users" || permission.key === "can_create_cashier_users" || permission.key === "can_edit_manager_users" || permission.key === "can_edit_cashier_users" || permission.key === "can_delete_manager_users" || permission.key === "can_delete_cashier_users" || permission.key === "can_manage_expenses" || permission.key === "can_manage_categories" || permission.key === "can_edit_inventory") return null;
                                   
-                                  const isViewPerm = isViewPermission(permission);
+                                const isViewPerm = isViewPermission(permission);
                                 const isEnabled =
                                   isPermissionEnabled(permission);
-                                const status = getPermissionStatus(permission);
                                 const isDisabled = isPermissionDisabledByParent(
                                   permission,
                                   category,
                                 );
+                                const replacementParentToggles =
+                                  REPLACEMENT_PARENT_TOGGLES[permission.key] || [];
+                                const hasReplacementParentToggles =
+                                  replacementParentToggles.length > 0;
                                 // Current user cannot toggle permissions they don't have
                                 const cannotGrant =
                                   !currentUserCanGrant(permission);
@@ -1582,6 +1660,7 @@ export default function UsersPage() {
 
                                 return (
                                     <div key={permission.id} className="flex flex-col">
+                                      {!hasReplacementParentToggles && (
                                       <div
                                         className={`flex items-start justify-between p-4 transition-colors ${
                                       isDisabled
@@ -1614,7 +1693,7 @@ export default function UsersPage() {
 
                                       {permission.description && (
                                         <p className="text-sm text-muted-foreground leading-relaxed">
-                                          {permission.description}
+                                          {normalizeDeleteArchiveWording(permission.description)}
                                         </p>
                                       )}
 
@@ -1634,19 +1713,72 @@ export default function UsersPage() {
                                       )}
                                     </div>
 
-                                    <div className="flex items-center h-6 mt-1">
-                                      <Switch
-                                        checked={isDisabled ? false : isEnabled}
-                                        onCheckedChange={(checked) =>
-                                          handlePermissionToggle(
-                                            permission,
-                                            checked,
-                                          )
-                                        }
-                                        disabled={isSwitchDisabled}
+                                      <div className="flex items-center h-6 mt-1">
+                                        <Switch
+                                          checked={isDisabled ? false : isEnabled}
+                                          onCheckedChange={(checked) =>
+                                            handlePermissionToggle(
+                                              permission,
+                                              checked,
+                                            )
+                                          }
+                                          disabled={isSwitchDisabled}
                                         />
                                       </div>
                                     </div>
+                                      )}
+
+                                    {hasReplacementParentToggles &&
+                                      replacementParentToggles.map((actionItem) => (
+                                        <div
+                                          key={`${permission.id}-${actionItem.label}`}
+                                          className={`flex items-start justify-between p-4 transition-colors ${
+                                            isDisabled
+                                              ? "opacity-50 bg-muted/10"
+                                              : cannotGrant
+                                                ? "opacity-60 bg-muted/10"
+                                                : "hover:bg-muted/30"
+                                          }`}
+                                        >
+                                          <div className="flex-1 mr-4">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <span
+                                                className={`font-medium text-sm ${isDisabled ? "text-muted-foreground" : ""}`}
+                                              >
+                                                {actionItem.label}
+                                              </span>
+                                              {!isDisabled && getStatusBadge()}
+                                            </div>
+
+                                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                              {actionItem.description}
+                                            </p>
+
+                                            {isDisabled && (
+                                              <p className="text-xs text-orange-600 mt-1.5 flex items-center gap-1.5">
+                                                <ShieldAlert className="h-3 w-3" />
+                                                {`Requires ${category.charAt(0).toUpperCase() + category.slice(1)} Access`}
+                                              </p>
+                                            )}
+                                            {!isDisabled && cannotGrant && (
+                                              <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                                                <Lock className="h-3 w-3" />
+                                                You don&apos;t have this permission
+                                              </p>
+                                            )}
+                                          </div>
+
+                                          <div className="flex items-center h-6 mt-1">
+                                            <Switch
+                                              checked={isDisabled ? false : isEnabled}
+                                              onCheckedChange={(checked) =>
+                                                handlePermissionToggle(permission, checked)
+                                              }
+                                              disabled={isSwitchDisabled}
+                                            />
+                                          </div>
+                                        </div>
+                                      ))}
 
 
                                     {/* Sub-permissions dropdown for Create */}
@@ -1668,7 +1800,7 @@ export default function UsersPage() {
                                                   </div>
                                                   {subPerm.description && (
                                                     <div className="text-xs text-muted-foreground mt-0.5">
-                                                      {subPerm.description}
+                                                      {normalizeDeleteArchiveWording(subPerm.description)}
                                                     </div>
                                                   )}
                                                 </div>
@@ -1702,7 +1834,7 @@ export default function UsersPage() {
                                                   </div>
                                                   {subPerm.description && (
                                                     <div className="text-xs text-muted-foreground mt-0.5">
-                                                      {subPerm.description}
+                                                      {normalizeDeleteArchiveWording(subPerm.description)}
                                                     </div>
                                                   )}
                                                 </div>
@@ -1736,7 +1868,7 @@ export default function UsersPage() {
                                                   </div>
                                                   {subPerm.description && (
                                                     <div className="text-xs text-muted-foreground mt-0.5">
-                                                      {subPerm.description}
+                                                      {normalizeDeleteArchiveWording(subPerm.description)}
                                                     </div>
                                                   )}
                                                 </div>
@@ -1770,7 +1902,7 @@ export default function UsersPage() {
                                                   </div>
                                                   {subPerm.description && (
                                                     <div className="text-xs text-muted-foreground mt-0.5">
-                                                      {subPerm.description}
+                                                      {normalizeDeleteArchiveWording(subPerm.description)}
                                                     </div>
                                                   )}
                                                 </div>
