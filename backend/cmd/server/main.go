@@ -41,6 +41,14 @@ func main() {
 
 	// Run database migrations
 	migrationsPath := "./migrations"
+	if _, err := os.Stat(migrationsPath); err != nil {
+		fallbackPath := "./backend/migrations"
+		if _, fallbackErr := os.Stat(fallbackPath); fallbackErr == nil {
+			migrationsPath = fallbackPath
+		}
+	}
+
+	log.Info().Str("migrations_path", migrationsPath).Msg("Running database migrations")
 	if err := database.RunMigrations(cfg.DatabaseURL, migrationsPath); err != nil {
 		log.Fatal().Err(err).Msg("Failed to run database migrations")
 	}
@@ -255,14 +263,14 @@ func setupRoutes(
 	userPermissions.Get("/:id/permissions", middleware.RequireAnyPermission(permissionChecker, "can_manage_permissions", "can_manage_manager_permissions", "can_manage_cashier_permissions"), userHandler.GetPermissions)
 	userPermissions.Patch("/:id/permissions", middleware.RequireAnyPermission(permissionChecker, "can_manage_permissions", "can_manage_manager_permissions", "can_manage_cashier_permissions"), userHandler.SetPermissions)
 
-	// Category endpoints (requires can_view_categories for viewing, can_manage_categories for modifications)
+	// Category endpoints (requires can_view_categories for viewing and granular category permissions for modifications)
 	categories := protected.Group("/categories")
 	categories.Get("/", middleware.RequirePermission(permissionChecker, "can_view_categories"), categoryHandler.List)
 	categories.Get("/:id", middleware.RequirePermission(permissionChecker, "can_view_categories"), categoryHandler.Get)
-	categories.Post("/", middleware.RequirePermission(permissionChecker, "can_manage_categories"), categoryHandler.Create)
-	categories.Patch("/:id", middleware.RequirePermission(permissionChecker, "can_manage_categories"), categoryHandler.Update)
-	categories.Delete("/:id", middleware.RequirePermission(permissionChecker, "can_manage_categories"), categoryHandler.Delete)
-	categories.Delete("/:id/permanent", middleware.RequirePermission(permissionChecker, "can_manage_categories"), categoryHandler.PermanentDelete)
+	categories.Post("/", middleware.RequirePermission(permissionChecker, "can_create_categories"), categoryHandler.Create)
+	categories.Patch("/:id", middleware.RequirePermission(permissionChecker, "can_edit_categories"), categoryHandler.Update)
+	categories.Delete("/:id", middleware.RequirePermission(permissionChecker, "can_delete_categories"), categoryHandler.Delete)
+	categories.Delete("/:id/permanent", middleware.RequirePermission(permissionChecker, "can_delete_categories"), categoryHandler.PermanentDelete)
 
 	// Product endpoints
 	products := protected.Group("/products")
@@ -278,7 +286,61 @@ func setupRoutes(
 	// Inventory endpoints
 	inventory := protected.Group("/inventory")
 	inventory.Get("/low-stock", productHandler.GetLowStock)
-	inventory.Post("/adjust", middleware.RequirePermission(permissionChecker, "can_edit_inventory"), productHandler.AdjustStock)
+	inventory.Post("/adjust",
+		func(c *fiber.Ctx) error {
+			userID := middleware.GetUserID(c)
+			if userID == uuid.Nil {
+				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+					"code":    "UNAUTHORIZED",
+					"message": "Authentication required",
+				})
+			}
+
+			var req struct {
+				AdjustmentType string `json:"adjustment_type"`
+			}
+
+			if err := c.BodyParser(&req); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"code":    "INVALID_REQUEST",
+					"message": "Invalid request body",
+				})
+			}
+
+			requiredPermission := ""
+			switch req.AdjustmentType {
+			case "purchase":
+				requiredPermission = "can_add_stock"
+			case "damage", "loss":
+				requiredPermission = "can_remove_stock"
+			case "adjustment", "count":
+				requiredPermission = "can_adjust_stock"
+			default:
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"code":    "INVALID_ADJUSTMENT_TYPE",
+					"message": "Invalid adjustment type",
+				})
+			}
+
+			hasPermission, err := permissionChecker(c, userID, requiredPermission)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"code":    "INTERNAL_ERROR",
+					"message": "Failed to check permissions",
+				})
+			}
+
+			if !hasPermission {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"code":    "FORBIDDEN",
+					"message": "You do not have the required permission: " + requiredPermission,
+				})
+			}
+
+			return c.Next()
+		},
+		productHandler.AdjustStock,
+	)
 
 	// Shift endpoints
 	shifts := protected.Group("/shifts")
@@ -320,17 +382,17 @@ func setupRoutes(
 	expenses := protected.Group("/expenses")
 	expenses.Get("/", middleware.RequirePermission(permissionChecker, "can_view_expenses"), expenseHandler.List)
 	expenses.Get("/categories", middleware.RequireAnyPermission(permissionChecker, "can_view_expenses", "can_view_categories"), expenseHandler.ListCategories)
-	expenses.Post("/categories", middleware.RequireAnyPermission(permissionChecker, "can_manage_expenses", "can_manage_categories"), expenseHandler.CreateCategory)
+	expenses.Post("/categories", middleware.RequirePermission(permissionChecker, "can_create_categories"), expenseHandler.CreateCategory)
 	expenses.Get("/categories/:id", middleware.RequireAnyPermission(permissionChecker, "can_view_expenses", "can_view_categories"), expenseHandler.GetCategory)
-	expenses.Patch("/categories/:id", middleware.RequireAnyPermission(permissionChecker, "can_manage_expenses", "can_manage_categories"), expenseHandler.UpdateCategory)
-	expenses.Delete("/categories/:id", middleware.RequireAnyPermission(permissionChecker, "can_manage_expenses", "can_manage_categories"), expenseHandler.DeleteCategory)
-	expenses.Delete("/categories/:id/permanent", middleware.RequireAnyPermission(permissionChecker, "can_manage_expenses", "can_manage_categories"), expenseHandler.PermanentDeleteCategory)
+	expenses.Patch("/categories/:id", middleware.RequirePermission(permissionChecker, "can_edit_categories"), expenseHandler.UpdateCategory)
+	expenses.Delete("/categories/:id", middleware.RequirePermission(permissionChecker, "can_delete_categories"), expenseHandler.DeleteCategory)
+	expenses.Delete("/categories/:id/permanent", middleware.RequirePermission(permissionChecker, "can_delete_categories"), expenseHandler.PermanentDeleteCategory)
 	expenses.Get("/summary", middleware.RequirePermission(permissionChecker, "can_view_expenses"), expenseHandler.GetSummary)
 	expenses.Get("/monthly", middleware.RequirePermission(permissionChecker, "can_view_expenses"), expenseHandler.GetMonthlyTotals)
-	expenses.Post("/", middleware.RequirePermission(permissionChecker, "can_manage_expenses"), expenseHandler.Create)
+	expenses.Post("/", middleware.RequirePermission(permissionChecker, "can_create_expenses"), expenseHandler.Create)
 	expenses.Get("/:id", middleware.RequirePermission(permissionChecker, "can_view_expenses"), expenseHandler.Get)
-	expenses.Patch("/:id", middleware.RequirePermission(permissionChecker, "can_manage_expenses"), expenseHandler.Update)
-	expenses.Delete("/:id", middleware.RequirePermission(permissionChecker, "can_manage_expenses"), expenseHandler.Delete)
+	expenses.Patch("/:id", middleware.RequirePermission(permissionChecker, "can_edit_expenses"), expenseHandler.Update)
+	expenses.Delete("/:id", middleware.RequirePermission(permissionChecker, "can_delete_expenses"), expenseHandler.Delete)
 
 	// Dashboard endpoints (accessible to all authenticated users)
 	dashboard := protected.Group("/dashboard")

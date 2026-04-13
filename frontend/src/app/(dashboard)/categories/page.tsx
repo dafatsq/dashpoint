@@ -48,7 +48,9 @@ interface CategoryFormData {
 export default function CategoriesPage() {
   const { hasPermission } = useAuth();
   const canViewCategories = hasPermission(PERMISSIONS.CATEGORIES_VIEW);
-  const canManageCategories = hasPermission(PERMISSIONS.CATEGORIES_MANAGE);
+  const canCreateCategories = hasPermission(PERMISSIONS.CATEGORIES_CREATE);
+  const canEditCategories = hasPermission(PERMISSIONS.CATEGORIES_EDIT);
+  const canDeleteCategories = hasPermission(PERMISSIONS.CATEGORIES_DELETE);
   
   const [activeTab, setActiveTab] = useState<CategoryType>('product');
   const [viewMode, setViewMode] = useState<ViewMode>('active');
@@ -125,12 +127,14 @@ export default function CategoriesPage() {
 
   // Open create dialog
   const openCreateDialog = () => {
+    if (!canCreateCategories) return;
     resetForm();
     setDialogOpen(true);
   };
 
   // Open edit dialog
   const openEditDialog = (cat: Category | ExpenseCategory) => {
+    if (!canEditCategories) return;
     setEditingCategory({ id: cat.id, type: activeTab });
     setFormData({
       name: cat.name,
@@ -161,6 +165,15 @@ export default function CategoriesPage() {
 
   // Handle submit
   const handleSubmit = async () => {
+    if (editingCategory && !canEditCategories) {
+      setError('You do not have permission to edit categories');
+      return;
+    }
+    if (!editingCategory && !canCreateCategories) {
+      setError('You do not have permission to create categories');
+      return;
+    }
+
     if (!formData.name.trim()) {
       setError('Category name is required');
       return;
@@ -209,7 +222,7 @@ export default function CategoriesPage() {
 
   // Handle archive (soft delete)
   const handleArchive = async () => {
-    if (!deletingCategory) return;
+    if (!deletingCategory || !canDeleteCategories) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -233,6 +246,7 @@ export default function CategoriesPage() {
 
   // Handle restore
   const handleRestore = async (id: string, name: string) => {
+    if (!canDeleteCategories) return;
     setIsLoading(true);
     try {
       const result = activeTab === 'product'
@@ -250,7 +264,7 @@ export default function CategoriesPage() {
 
   // Handle permanent delete
   const handlePermanentDelete = async () => {
-    if (!deletingCategory) return;
+    if (!deletingCategory || !canDeleteCategories) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -323,7 +337,7 @@ export default function CategoriesPage() {
                   className="pl-9 w-full"
                 />
               </div>
-              {canManageCategories && (
+              {canCreateCategories && (
                 <Button onClick={openCreateDialog}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Category
@@ -366,7 +380,8 @@ export default function CategoriesPage() {
                 }}
                 viewMode={viewMode}
                 type={activeTab}
-                canManageCategories={canManageCategories}
+                canEditCategories={canEditCategories}
+                canDeleteCategories={canDeleteCategories}
               />
             </Tabs>
           </Card>
@@ -499,10 +514,11 @@ interface ListProps {
   onPermanentDelete: (id: string, name: string) => void;
   viewMode: ViewMode;
   type: CategoryType;
-  canManageCategories: boolean;
+  canEditCategories: boolean;
+  canDeleteCategories: boolean;
 }
 
-function CategoryList({ isLoading, categories, onEdit, onArchive, onRestore, onPermanentDelete, viewMode, type, canManageCategories }: ListProps) {
+function CategoryList({ isLoading, categories, onEdit, onArchive, onRestore, onPermanentDelete, viewMode, type, canEditCategories, canDeleteCategories }: ListProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -547,25 +563,33 @@ function CategoryList({ isLoading, categories, onEdit, onArchive, onRestore, onP
                   {cat.description || 'No description'}
                 </CardDescription>
               </div>
-              {canManageCategories && (
+              {(canEditCategories || canDeleteCategories) && (
                 <div className="flex items-center gap-1">
                   {viewMode === 'active' ? (
                     <>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(cat)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onArchive(cat.id, cat.name)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {canEditCategories && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(cat)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canDeleteCategories && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onArchive(cat.id, cat.name)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => onRestore(cat.id, cat.name)}>
-                        <RotateCcw className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onPermanentDelete(cat.id, cat.name)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {canDeleteCategories && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => onRestore(cat.id, cat.name)}>
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canDeleteCategories && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onPermanentDelete(cat.id, cat.name)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
