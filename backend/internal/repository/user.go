@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -317,19 +318,35 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int, activeOnly
 	return users, total, nil
 }
 
-// ListWithFilter retrieves users with optional active status filter
-func (r *UserRepository) ListWithFilter(ctx context.Context, limit, offset int, isActive *bool) ([]*models.User, int, error) {
-	// Count query
-	countQuery := `SELECT COUNT(*) FROM users`
+// ListWithFilter retrieves users with optional active status, search, and role filters
+func (r *UserRepository) ListWithFilter(ctx context.Context, limit, offset int, isActive *bool, search, role string) ([]*models.User, int, error) {
 	var args []interface{}
 	argNum := 1
+	whereClauses := []string{}
 
 	if isActive != nil {
-		countQuery += fmt.Sprintf(` WHERE is_active = $%d`, argNum)
+		whereClauses = append(whereClauses, fmt.Sprintf(`u.is_active = $%d`, argNum))
 		args = append(args, *isActive)
 		argNum++
 	}
+	if search != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf(`(u.name ILIKE $%d OR u.email ILIKE $%d)`, argNum, argNum))
+		args = append(args, "%"+search+"%")
+		argNum++
+	}
+	if role != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf(`r.name ILIKE $%d`, argNum))
+		args = append(args, role)
+		argNum++
+	}
 
+	where := ""
+	if len(whereClauses) > 0 {
+		where = " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	// Count query
+	countQuery := `SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id = r.id` + where
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
@@ -337,25 +354,15 @@ func (r *UserRepository) ListWithFilter(ctx context.Context, limit, offset int, 
 	}
 
 	// List query
+	listArgs := append(args, limit, offset)
 	query := `
 		SELECT u.id, u.email, u.name, u.password_hash, u.pin_hash, u.role_id, u.is_active, u.last_login_at, u.created_at, u.updated_at,
 		       r.id, r.name, r.description, r.created_at, r.updated_at
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
-	`
-	if isActive != nil {
-		query += fmt.Sprintf(` WHERE u.is_active = $1`)
-		query += fmt.Sprintf(` ORDER BY u.created_at DESC LIMIT $2 OFFSET $3`)
-	} else {
-		query += ` ORDER BY u.created_at DESC LIMIT $1 OFFSET $2`
-	}
+	` + where + fmt.Sprintf(` ORDER BY u.created_at DESC LIMIT $%d OFFSET $%d`, argNum, argNum+1)
 
-	var rows pgx.Rows
-	if isActive != nil {
-		rows, err = r.pool.Query(ctx, query, *isActive, limit, offset)
-	} else {
-		rows, err = r.pool.Query(ctx, query, limit, offset)
-	}
+	rows, err := r.pool.Query(ctx, query, listArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query users: %w", err)
 	}

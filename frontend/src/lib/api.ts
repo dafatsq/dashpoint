@@ -292,12 +292,14 @@ class ApiClient {
   async getUsersPage(params?: {
     role?: string;
     active?: boolean;
+    search?: string;
     page?: number;
     per_page?: number;
   }): Promise<ApiResponse<import('@/types').User[]>> {
     const searchParams = new URLSearchParams();
-    if (params?.role) searchParams.set('role', params.role);
+    if (params?.role && params.role !== 'all') searchParams.set('role', params.role);
     if (params?.active !== undefined) searchParams.set('active_only', String(params.active));
+    if (params?.search) searchParams.set('search', params.search);
     if (params?.page !== undefined) searchParams.set('page', String(params.page));
     if (params?.per_page !== undefined) searchParams.set('per_page', String(params.per_page));
     const query = searchParams.toString();

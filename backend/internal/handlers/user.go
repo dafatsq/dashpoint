@@ -153,6 +153,8 @@ func (h *UserHandler) List(c *fiber.Ctx) error {
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	perPage, _ := strconv.Atoi(c.Query("per_page", "20"))
 	activeOnlyStr := c.Query("active_only", "")
+	search := strings.TrimSpace(c.Query("search", ""))
+	role := strings.TrimSpace(c.Query("role", ""))
 
 	if page < 1 {
 		page = 1
@@ -173,7 +175,7 @@ func (h *UserHandler) List(c *fiber.Ctx) error {
 		isActive = &active
 	}
 
-	users, total, err := h.userRepo.ListWithFilter(c.Context(), perPage, offset, isActive)
+	users, total, err := h.userRepo.ListWithFilter(c.Context(), perPage, offset, isActive, search, role)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list users")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
