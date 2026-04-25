@@ -265,6 +265,8 @@ export default function UsersPage() {
       try {
         const result = await api.getUsersPage({
           active: viewMode === "active",
+          search: searchQuery || undefined,
+          role: selectedRole !== "all" ? selectedRole : undefined,
           page,
           per_page: limit,
         });
@@ -285,7 +287,7 @@ export default function UsersPage() {
     };
 
     fetchUsers();
-  }, [viewMode, page, limit]);
+  }, [viewMode, page, limit, searchQuery, selectedRole]);
 
   // Fetch roles
   useEffect(() => {
@@ -301,15 +303,8 @@ export default function UsersPage() {
     fetchRoles();
   }, []);
 
-  // Filter users
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole =
-      selectedRole === "all" || user.role_name === selectedRole;
-    return matchesSearch && matchesRole;
-  });
+  // Server-side filtering: users returned from API are already filtered
+  const filteredUsers = users;
 
   // Reset form
   const resetForm = () => {
@@ -1043,7 +1038,7 @@ export default function UsersPage() {
                                   </>
                                 ) : (
                                   <>
-                                    {canEditUser(user) && (
+                                    {canDeleteUser(user) && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -1180,7 +1175,7 @@ export default function UsersPage() {
                           </>
                         ) : (
                           <>
-                            {canEditUser(user) && (
+                            {canDeleteUser(user) && (
                               <Button
                                 variant="outline"
                                 size="sm"
