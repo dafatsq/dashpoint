@@ -557,66 +557,108 @@ export default function UsersPage() {
     };
 
   // Handle permission toggle
+  // Handle permission toggle
   const handlePermissionToggle = (permission: Permission, enabled: boolean) => {
-      // Block modifying a permission the current user doesn't have
-      if (!currentUserCanGrant(permission)) return;
-      const newChanges = { ...permissionChanges };
-
+    // Block modifying a permission the current user doesn't have
+    if (!currentUserCanGrant(permission)) return;
+    const newChanges = { ...permissionChanges };
 
     // Helper to set a single permission change
     const setChange = (perm: Permission, value: boolean) => {
       const override = getPermissionOverride(perm.id);
-      const roleDefault =
-        userEffectivePermissions.includes(perm.key) && !override;
+      const initialState = override !== undefined
+        ? override.allowed
+        : userEffectivePermissions.includes(perm.key);
 
-      if (value === roleDefault && !override) {
+      if (value === initialState) {
         delete newChanges[perm.id];
       } else {
         newChanges[perm.id] = value;
       }
     };
 
+    const trySetChange = (perm: Permission, value: boolean) => {
+      if (value && !currentUserCanGrant(perm)) return;
+      setChange(perm, value);
+    };
+
     // Set the toggled permission
     setChange(permission, enabled);
 
-      // If this is a view/access permission being disabled, also disable all child permissions in the same category
-      if (!enabled) {
-        // Find which category this permission belongs to
-        for (const [category, permissions] of Object.entries(allPermissions)) {
-          const viewPerm = getViewPermissionForCategory(category, permissions);
-          if (viewPerm && viewPerm.id === permission.id) {
-            // This is the view permission for this category - disable all non-view children
-            for (const childPerm of permissions) {
-              if (childPerm.id !== permission.id) {
-                // Special case: can_void_sale depends on can_view_sales
-                if (category === "sales" && childPerm.key !== "can_void_sale")
-                  continue;
-                setChange(childPerm, false);
-              }
+    const HIDDEN_PERMS = [
+      "can_manage_manager_permissions", "can_manage_cashier_permissions",
+      "can_create_manager_users", "can_create_cashier_users",
+      "can_edit_manager_users", "can_edit_cashier_users",
+      "can_delete_manager_users", "can_delete_cashier_users",
+      "can_manage_expenses", "can_manage_categories", "can_edit_inventory"
+    ];
+
+    if (!enabled) {
+      // Find which category this permission belongs to
+      for (const [category, permissions] of Object.entries(allPermissions)) {
+        const viewPerm = getViewPermissionForCategory(category, permissions);
+        if (viewPerm && viewPerm.id === permission.id) {
+          // This is the view permission for this category - disable all non-view children
+          for (const childPerm of permissions) {
+            if (childPerm.id !== permission.id) {
+              // Special case: can_void_sale depends on can_view_sales
+              if (category === "sales" && childPerm.key !== "can_void_sale")
+                continue;
+              trySetChange(childPerm, false);
             }
-            break;
           }
+          break;
         }
+      }
 
-        // NEW: Special cascade for User Management granular permissions!
-        // When a parent toggle like "Edit Users" is disabled, we MUST actually disable the granular child toggles in state/DB.
-        const userManagementCascade: Record<string, string[]> = {
-          "can_create_user": ["can_create_manager_users", "can_create_cashier_users"],
-          "can_edit_user": ["can_edit_manager_users", "can_edit_cashier_users"],
-          "can_delete_user": ["can_delete_manager_users", "can_delete_cashier_users"],
-          "can_manage_permissions": ["can_manage_manager_permissions", "can_manage_cashier_permissions"]
-        };
+      // NEW: Special cascade for User Management granular permissions!
+      const userManagementCascade: Record<string, string[]> = {
+        "can_create_user": ["can_create_manager_users", "can_create_cashier_users"],
+        "can_edit_user": ["can_edit_manager_users", "can_edit_cashier_users"],
+        "can_delete_user": ["can_delete_manager_users", "can_delete_cashier_users"],
+        "can_manage_permissions": ["can_manage_manager_permissions", "can_manage_cashier_permissions"]
+      };
 
-        if (userManagementCascade[permission.key]) {
-          const childKeysToDisable = userManagementCascade[permission.key];
-          const usersCategoryPerms = allPermissions["users"] || [];
-          for (const childPerm of usersCategoryPerms) {
-            if (childKeysToDisable.includes(childPerm.key)) {
-              setChange(childPerm, false);
-            }
+      if (userManagementCascade[permission.key]) {
+        const childKeysToDisable = userManagementCascade[permission.key];
+        const usersCategoryPerms = allPermissions["users"] || [];
+        for (const childPerm of usersCategoryPerms) {
+          if (childKeysToDisable.includes(childPerm.key)) {
+            trySetChange(childPerm, false);
           }
         }
       }
+    } else {
+      // If enabled === true, we MUST re-enable hidden permissions that are children of this permission
+      for (const [category, permissions] of Object.entries(allPermissions)) {
+        const viewPerm = getViewPermissionForCategory(category, permissions);
+        if (viewPerm && viewPerm.id === permission.id) {
+          for (const childPerm of permissions) {
+            if (childPerm.id !== permission.id && HIDDEN_PERMS.includes(childPerm.key)) {
+              trySetChange(childPerm, true);
+            }
+          }
+          break;
+        }
+      }
+
+      const userManagementCascade: Record<string, string[]> = {
+        "can_create_user": ["can_create_manager_users", "can_create_cashier_users"],
+        "can_edit_user": ["can_edit_manager_users", "can_edit_cashier_users"],
+        "can_delete_user": ["can_delete_manager_users", "can_delete_cashier_users"],
+        "can_manage_permissions": ["can_manage_manager_permissions", "can_manage_cashier_permissions"]
+      };
+
+      if (userManagementCascade[permission.key]) {
+        const childKeysToEnable = userManagementCascade[permission.key];
+        const usersCategoryPerms = allPermissions["users"] || [];
+        for (const childPerm of usersCategoryPerms) {
+          if (childKeysToEnable.includes(childPerm.key)) {
+            trySetChange(childPerm, true);
+          }
+        }
+      }
+    }
 
     setPermissionChanges(newChanges);
   };
