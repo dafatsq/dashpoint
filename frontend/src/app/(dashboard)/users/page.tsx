@@ -79,6 +79,14 @@ const CATEGORY_ORDER = [
   "system",
 ];
 
+const HIDDEN_PERMS = [
+  "can_manage_manager_permissions", "can_manage_cashier_permissions",
+  "can_create_manager_users", "can_create_cashier_users",
+  "can_edit_manager_users", "can_edit_cashier_users",
+  "can_delete_manager_users", "can_delete_cashier_users",
+  "can_manage_expenses", "can_manage_categories", "can_edit_inventory"
+];
+
 // Frontend-only replacement rows for coarse backend permissions.
 // These toggles are linked to one backend permission key.
 const REPLACEMENT_PARENT_TOGGLES: Record<
@@ -599,14 +607,6 @@ export default function UsersPage() {
     // Set the toggled permission
     setChange(permission, enabled);
 
-    const HIDDEN_PERMS = [
-      "can_manage_manager_permissions", "can_manage_cashier_permissions",
-      "can_create_manager_users", "can_create_cashier_users",
-      "can_edit_manager_users", "can_edit_cashier_users",
-      "can_delete_manager_users", "can_delete_cashier_users",
-      "can_manage_expenses", "can_manage_categories", "can_edit_inventory"
-    ];
-
     if (!enabled) {
       // Find which category this permission belongs to
       for (const [category, permissions] of Object.entries(allPermissions)) {
@@ -880,6 +880,11 @@ export default function UsersPage() {
         return "bg-green-600 text-white dark:bg-green-600/90 dark:text-white";
     }
   };
+
+  const visibleChangesCount = Object.keys(permissionChanges).filter((id) => {
+    const perm = Object.values(allPermissions).flat().find((p) => p.id === id);
+    return perm ? !HIDDEN_PERMS.includes(perm.key) : true;
+  }).length;
 
   return (
     <div className="flex flex-col h-full">
@@ -1998,9 +2003,9 @@ export default function UsersPage() {
                   <CheckCircle className="h-4 w-4 flex-shrink-0" />
                   Permissions saved successfully!
                 </span>
-              ) : Object.keys(permissionChanges).length > 0 ? (
+              ) : visibleChangesCount > 0 ? (
                 <span className="text-yellow-600">
-                  {Object.keys(permissionChanges).length} unsaved change(s)
+                  {visibleChangesCount} unsaved change(s)
                 </span>
               ) : null}
             </div>
