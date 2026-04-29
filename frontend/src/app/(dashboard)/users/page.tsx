@@ -563,6 +563,12 @@ export default function UsersPage() {
     if (!currentUserCanGrant(permission)) return;
     const newChanges = { ...permissionChanges };
 
+    const parentOverride = getPermissionOverride(permission.id);
+    const parentInitialState = parentOverride !== undefined
+      ? parentOverride.allowed
+      : userEffectivePermissions.includes(permission.key);
+    const isParentRestored = enabled === parentInitialState;
+
     // Helper to set a single permission change
     const setChange = (perm: Permission, value: boolean) => {
       const override = getPermissionOverride(perm.id);
@@ -580,6 +586,14 @@ export default function UsersPage() {
     const trySetChange = (perm: Permission, value: boolean) => {
       if (value && !currentUserCanGrant(perm)) return;
       setChange(perm, value);
+    };
+
+    const cascadeHiddenChange = (perm: Permission, parentValue: boolean) => {
+      if (isParentRestored) {
+        delete newChanges[perm.id];
+      } else {
+        trySetChange(perm, parentValue);
+      }
     };
 
     // Set the toggled permission
@@ -604,7 +618,12 @@ export default function UsersPage() {
               // Special case: can_void_sale depends on can_view_sales
               if (category === "sales" && childPerm.key !== "can_void_sale")
                 continue;
-              trySetChange(childPerm, false);
+              
+              if (HIDDEN_PERMS.includes(childPerm.key)) {
+                cascadeHiddenChange(childPerm, false);
+              } else {
+                trySetChange(childPerm, false);
+              }
             }
           }
           break;
@@ -624,7 +643,7 @@ export default function UsersPage() {
         const usersCategoryPerms = allPermissions["users"] || [];
         for (const childPerm of usersCategoryPerms) {
           if (childKeysToDisable.includes(childPerm.key)) {
-            trySetChange(childPerm, false);
+            cascadeHiddenChange(childPerm, false);
           }
         }
       }
@@ -635,7 +654,7 @@ export default function UsersPage() {
         if (viewPerm && viewPerm.id === permission.id) {
           for (const childPerm of permissions) {
             if (childPerm.id !== permission.id && HIDDEN_PERMS.includes(childPerm.key)) {
-              trySetChange(childPerm, true);
+              cascadeHiddenChange(childPerm, true);
             }
           }
           break;
@@ -654,7 +673,7 @@ export default function UsersPage() {
         const usersCategoryPerms = allPermissions["users"] || [];
         for (const childPerm of usersCategoryPerms) {
           if (childKeysToEnable.includes(childPerm.key)) {
-            trySetChange(childPerm, true);
+            cascadeHiddenChange(childPerm, true);
           }
         }
       }
