@@ -3,15 +3,15 @@ version: "3.8"
 services:
   db:
     image: postgres:15-alpine
-    container_name: ${PROJECT_NAME:-dashpoint}-db-prod
+    container_name: ${PROJECT_NAME}-db-prod
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-dashpoint}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dashpoint_prod_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-dashpoint_prod}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U dashpoint -d dashpoint_prod" ]
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,14 +21,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: ${PROJECT_NAME:-dashpoint}-backend-prod
+    container_name: ${PROJECT_NAME}-backend-prod
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-dashpoint}:${POSTGRES_PASSWORD:-dashpoint_prod_secret}@db:5432/${POSTGRES_DB:-dashpoint_prod}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET:-production_secret_key_change_me_to_something_secure}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
       PORT: "8080"
       ENVIRONMENT: production
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_PORT}:8080"
     depends_on:
       db:
         condition: service_healthy
