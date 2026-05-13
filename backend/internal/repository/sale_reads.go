@@ -1,0 +1,214 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"dashpoint/backend/internal/models"
+)
+
+// GetByID retrieves a sale by ID with items and payments.
+func (r *SaleRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sale, error) {
+	sale := &models.Sale{}
+
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
+			s.item_count, s.payment_status, s.amount_paid, s.change_amount, s.discount_type,
+			s.discount_value, s.discount_reason, s.employee_id, s.shift_id, s.customer_name,
+			s.customer_phone, s.status, s.voided_at, s.voided_by, s.void_reason, s.notes,
+			s.created_at, s.updated_at, u.name as employee_name
+		FROM sales s
+		LEFT JOIN users u ON s.employee_id = u.id
+		WHERE s.id = $1
+	`, id).Scan(
+		&sale.ID, &sale.InvoiceNo, &sale.Subtotal, &sale.TaxAmount, &sale.DiscountAmount,
+		&sale.TotalAmount, &sale.ItemCount, &sale.PaymentStatus, &sale.AmountPaid, &sale.ChangeAmount,
+		&sale.DiscountType, &sale.DiscountValue, &sale.DiscountReason, &sale.EmployeeID, &sale.ShiftID,
+		&sale.CustomerName, &sale.CustomerPhone, &sale.Status, &sale.VoidedAt, &sale.VoidedBy,
+		&sale.VoidReason, &sale.Notes, &sale.CreatedAt, &sale.UpdatedAt, &sale.EmployeeName,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	items, err := loadSaleItems(ctx, r.pool, id)
+	if err != nil {
+		return nil, err
+	}
+	payments, err := loadSalePayments(ctx, r.pool, id)
+	if err != nil {
+		return nil, err
+	}
+	sale.Items = items
+	sale.Payments = payments
+
+	return sale, nil
+}
+
+// GetByInvoiceNo retrieves a sale by invoice number.
+func (r *SaleRepository) GetByInvoiceNo(ctx context.Context, invoiceNo string) (*models.Sale, error) {
+	var id uuid.UUID
+	err := r.pool.QueryRow(ctx, `SELECT id FROM sales WHERE invoice_no = $1`, invoiceNo).Scan(&id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return r.GetByID(ctx, id)
+}
+
+// List retrieves sales with pagination and filters.
+func (r *SaleRepository) List(ctx context.Context, filter *SaleFilter) ([]models.Sale, int, error) {
+	args := []interface{}{}
+	argIndex := 1
+	whereClause := "WHERE 1=1"
+
+	if filter.EmployeeID != nil {
+		whereClause += fmt.Sprintf(" AND s.employee_id = $%d", argIndex)
+		args = append(args, *filter.EmployeeID)
+		argIndex++
+	}
+	if filter.ShiftID != nil {
+		whereClause += fmt.Sprintf(" AND s.shift_id = $%d", argIndex)
+		args = append(args, *filter.ShiftID)
+		argIndex++
+	}
+	if filter.Status != nil {
+		whereClause += fmt.Sprintf(" AND s.status = $%d", argIndex)
+		args = append(args, *filter.Status)
+		argIndex++
+	}
+	if filter.StartDate != nil {
+		whereClause += fmt.Sprintf(" AND s.created_at >= $%d", argIndex)
+		args = append(args, *filter.StartDate)
+		argIndex++
+	}
+	if filter.EndDate != nil {
+		whereClause += fmt.Sprintf(" AND s.created_at <= $%d", argIndex)
+		args = append(args, *filter.EndDate)
+		argIndex++
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM sales s %s", whereClause)
+	var total int
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
+			s.item_count, s.payment_status, s.amount_paid, s.change_amount,
+			s.employee_id, s.shift_id, s.customer_name, s.status, s.created_at, s.updated_at,
+			u.name as employee_name,
+			(SELECT payment_method FROM payments WHERE sale_id = s.id LIMIT 1) as payment_method
+		FROM sales s
+		LEFT JOIN users u ON s.employee_id = u.id
+		%s
+		ORDER BY s.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argIndex, argIndex+1)
+	args = append(args, filter.Limit, filter.Offset)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var sales []models.Sale
+	for rows.Next() {
+		var s models.Sale
+		var paymentMethod *string
+		err := rows.Scan(
+			&s.ID, &s.InvoiceNo, &s.Subtotal, &s.TaxAmount, &s.DiscountAmount, &s.TotalAmount,
+			&s.ItemCount, &s.PaymentStatus, &s.AmountPaid, &s.ChangeAmount,
+			&s.EmployeeID, &s.ShiftID, &s.CustomerName, &s.Status, &s.CreatedAt, &s.UpdatedAt,
+			&s.EmployeeName, &paymentMethod,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		if paymentMethod != nil {
+			s.Payments = []models.Payment{{PaymentMethod: models.PaymentMethod(*paymentMethod)}}
+		}
+		sales = append(sales, s)
+	}
+
+	return sales, total, nil
+}
+
+func loadSaleItems(ctx context.Context, db interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, saleID uuid.UUID) ([]models.SaleItem, error) {
+	rows, err := db.Query(ctx, `
+		SELECT
+			id, sale_id, product_id, product_name, product_sku, product_barcode,
+			quantity, unit_price, cost_price, discount_type, discount_value, discount_amount,
+			tax_rate, tax_amount, subtotal, total, is_refunded, refunded_quantity, created_at
+		FROM sale_items
+		WHERE sale_id = $1
+		ORDER BY created_at
+	`, saleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.SaleItem
+	for rows.Next() {
+		var item models.SaleItem
+		if err := rows.Scan(
+			&item.ID, &item.SaleID, &item.ProductID, &item.ProductName, &item.ProductSKU,
+			&item.ProductBarcode, &item.Quantity, &item.UnitPrice, &item.CostPrice,
+			&item.DiscountType, &item.DiscountValue, &item.DiscountAmount, &item.TaxRate,
+			&item.TaxAmount, &item.Subtotal, &item.Total, &item.IsRefunded, &item.RefundedQuantity,
+			&item.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func loadSalePayments(ctx context.Context, db interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, saleID uuid.UUID) ([]models.Payment, error) {
+	rows, err := db.Query(ctx, `
+		SELECT
+			id, sale_id, payment_method, amount, amount_tendered, change_given,
+			card_type, card_last_four, reference_no, bank_name, account_no,
+			voucher_code, status, notes, processed_by, created_at
+		FROM payments
+		WHERE sale_id = $1
+		ORDER BY created_at
+	`, saleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []models.Payment
+	for rows.Next() {
+		var payment models.Payment
+		if err := rows.Scan(
+			&payment.ID, &payment.SaleID, &payment.PaymentMethod, &payment.Amount,
+			&payment.AmountTendered, &payment.ChangeGiven, &payment.CardType, &payment.CardLastFour,
+			&payment.ReferenceNo, &payment.BankName, &payment.AccountNo, &payment.VoucherCode,
+			&payment.Status, &payment.Notes, &payment.ProcessedBy, &payment.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		payments = append(payments, payment)
+	}
+	return payments, nil
+}

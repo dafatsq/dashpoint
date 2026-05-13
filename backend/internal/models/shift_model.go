@@ -1,0 +1,47 @@
+package models
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
+
+// ShiftStatus represents the status of a shift.
+type ShiftStatus string
+
+const (
+	ShiftStatusOpen      ShiftStatus = "open"
+	ShiftStatusClosed    ShiftStatus = "closed"
+	ShiftStatusSuspended ShiftStatus = "suspended"
+)
+
+// Shift represents a cashier shift.
+type Shift struct {
+	ID         uuid.UUID   `json:"id"`
+	EmployeeID uuid.UUID   `json:"employee_id"`
+	StartedAt  time.Time   `json:"started_at"`
+	EndedAt    *time.Time  `json:"ended_at,omitempty"`
+	Status     ShiftStatus `json:"status"`
+
+	OpeningCash    decimal.Decimal  `json:"opening_cash"`
+	ClosingCash    *decimal.Decimal `json:"closing_cash,omitempty"`
+	ExpectedCash   *decimal.Decimal `json:"expected_cash,omitempty"`
+	CashDifference *decimal.Decimal `json:"cash_difference,omitempty"`
+
+	TotalSales       decimal.Decimal `json:"total_sales"`
+	TotalCashSales   decimal.Decimal `json:"total_cash_sales"`
+	TotalRefunds     decimal.Decimal `json:"total_refunds"`
+	TransactionCount int             `json:"transaction_count"`
+	RefundCount      int             `json:"refund_count"`
+
+	Notes *string `json:"notes,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	EmployeeName *string               `json:"employee_name,omitempty"`
+	ClosedBy     *uuid.UUID            `json:"closed_by,omitempty"`
+	ClosedByName *string               `json:"closed_by_name,omitempty"`
+	Operations   []CashDrawerOperation `json:"operations,omitempty"`
+}
