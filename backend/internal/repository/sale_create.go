@@ -1,0 +1,279 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
+
+	"dashpoint/backend/internal/models"
+)
+
+type salePreparedItem struct {
+	SaleItem   models.SaleItem
+	ProductQty decimal.Decimal
+	NewQty     decimal.Decimal
+}
+
+// Create creates a new sale with items and payments in a single transaction.
+func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*models.Sale, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	now := time.Now()
+	invoiceNo, err := r.generateInvoiceNumber(ctx, tx, now)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate invoice number: %w", err)
+	}
+
+	preparedItems, subtotal, taxAmount, itemDiscountAmount, err := prepareSaleItems(ctx, tx, req.Items, now)
+	if err != nil {
+		return nil, err
+	}
+
+	discountAmount := calculateSaleDiscount(subtotal, itemDiscountAmount, req.DiscountType, req.DiscountValue)
+	totalAmount := subtotal.Add(taxAmount).Sub(discountAmount)
+	amountPaid, paymentStatus, changeAmount := calculateSalePaymentStatus(totalAmount, req.Payments)
+
+	sale := &models.Sale{
+		ID:             uuid.New(),
+		InvoiceNo:      invoiceNo,
+		Subtotal:       subtotal,
+		TaxAmount:      taxAmount,
+		DiscountAmount: discountAmount,
+		TotalAmount:    totalAmount,
+		ItemCount:      len(req.Items),
+		PaymentStatus:  paymentStatus,
+		AmountPaid:     amountPaid,
+		ChangeAmount:   changeAmount,
+		EmployeeID:     req.EmployeeID,
+		ShiftID:        req.ShiftID,
+		CustomerName:   req.CustomerName,
+		CustomerPhone:  req.CustomerPhone,
+		DiscountType:   req.DiscountType,
+		DiscountValue:  req.DiscountValue,
+		DiscountReason: req.DiscountReason,
+		Notes:          req.Notes,
+		Status:         models.SaleStatusCompleted,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	if err := insertSaleTx(ctx, tx, sale); err != nil {
+		return nil, fmt.Errorf("failed to insert sale: %w", err)
+	}
+	if err := insertSaleItemsAndAdjustInventoryTx(ctx, tx, sale, preparedItems, req.EmployeeID, invoiceNo, now); err != nil {
+		return nil, err
+	}
+	if err := insertSalePaymentsTx(ctx, tx, sale, req.Payments, req.EmployeeID, now); err != nil {
+		return nil, err
+	}
+	if req.ShiftID != nil {
+		if err := updateShiftSalesTotalsTx(ctx, tx, *req.ShiftID, totalAmount, now); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return sale, nil
+}
+
+func prepareSaleItems(ctx context.Context, tx pgx.Tx, items []CreateSaleItemRequest, now time.Time) ([]salePreparedItem, decimal.Decimal, decimal.Decimal, decimal.Decimal, error) {
+	var subtotal, taxAmount, itemDiscountAmount decimal.Decimal
+	preparedItems := make([]salePreparedItem, 0, len(items))
+
+	for i := range items {
+		item := &items[i]
+		product, err := loadSaleProductForUpdate(ctx, tx, item.ProductID)
+		if err != nil {
+			return nil, decimal.Zero, decimal.Zero, decimal.Zero, err
+		}
+
+		productQty := product.Inventory.Quantity
+		if productQty.LessThan(item.Quantity) {
+			return nil, decimal.Zero, decimal.Zero, decimal.Zero, fmt.Errorf("insufficient stock for %s: available %s, requested %s", product.Name, productQty.String(), item.Quantity.String())
+		}
+
+		itemSubtotal := item.UnitPrice.Mul(item.Quantity)
+		itemTax := itemSubtotal.Mul(product.TaxRate).Div(decimal.NewFromInt(100))
+		itemTotal := itemSubtotal.Add(itemTax).Sub(item.DiscountAmount)
+
+		preparedItems = append(preparedItems, salePreparedItem{
+			SaleItem: models.SaleItem{
+				ID:             uuid.New(),
+				ProductID:      product.ID,
+				ProductName:    product.Name,
+				ProductSKU:     product.SKU,
+				ProductBarcode: product.Barcode,
+				Quantity:       item.Quantity,
+				UnitPrice:      item.UnitPrice,
+				CostPrice:      product.Cost,
+				DiscountType:   item.DiscountType,
+				DiscountValue:  item.DiscountValue,
+				DiscountAmount: item.DiscountAmount,
+				TaxRate:        product.TaxRate,
+				TaxAmount:      itemTax,
+				Subtotal:       itemSubtotal,
+				Total:          itemTotal,
+				CreatedAt:      now,
+			},
+			ProductQty: productQty,
+			NewQty:     productQty.Sub(item.Quantity),
+		})
+
+		subtotal = subtotal.Add(itemSubtotal)
+		taxAmount = taxAmount.Add(itemTax)
+		itemDiscountAmount = itemDiscountAmount.Add(item.DiscountAmount)
+	}
+
+	return preparedItems, subtotal, taxAmount, itemDiscountAmount, nil
+}
+
+func loadSaleProductForUpdate(ctx context.Context, tx pgx.Tx, productID uuid.UUID) (*models.Product, error) {
+	var product models.Product
+	var qty decimal.Decimal
+	err := tx.QueryRow(ctx, `
+		SELECT p.id, p.name, p.sku, p.barcode, p.price, p.cost, p.tax_rate, COALESCE(i.quantity, 0)
+		FROM products p
+		LEFT JOIN inventory_items i ON p.id = i.product_id
+		WHERE p.id = $1 AND p.is_active = true
+		FOR UPDATE OF p
+	`, productID).Scan(
+		&product.ID, &product.Name, &product.SKU, &product.Barcode,
+		&product.Price, &product.Cost, &product.TaxRate, &qty,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("product not found: %s", productID)
+		}
+		return nil, fmt.Errorf("failed to get product: %w", err)
+	}
+	product.Inventory = &models.InventoryItem{Quantity: qty}
+	return &product, nil
+}
+
+func calculateSaleDiscount(subtotal, itemDiscountAmount decimal.Decimal, discountType *string, discountValue *decimal.Decimal) decimal.Decimal {
+	discountAmount := itemDiscountAmount
+	if discountType == nil || discountValue == nil {
+		return discountAmount
+	}
+	if *discountType == "percentage" {
+		return discountAmount.Add(subtotal.Mul(*discountValue).Div(decimal.NewFromInt(100)))
+	}
+	return discountAmount.Add(*discountValue)
+}
+
+func calculateSalePaymentStatus(totalAmount decimal.Decimal, payments []CreatePaymentRequest) (decimal.Decimal, models.PaymentStatus, decimal.Decimal) {
+	amountPaid := decimal.Zero
+	for _, payment := range payments {
+		amountPaid = amountPaid.Add(payment.Amount)
+	}
+
+	paymentStatus := models.PaymentStatusPending
+	changeAmount := decimal.Zero
+	if amountPaid.GreaterThanOrEqual(totalAmount) {
+		paymentStatus = models.PaymentStatusPaid
+		changeAmount = amountPaid.Sub(totalAmount)
+	} else if amountPaid.GreaterThan(decimal.Zero) {
+		paymentStatus = models.PaymentStatusPartial
+	}
+
+	return amountPaid, paymentStatus, changeAmount
+}
+
+func insertSaleTx(ctx context.Context, tx pgx.Tx, sale *models.Sale) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO sales (
+			id, invoice_no, subtotal, tax_amount, discount_amount, total_amount, item_count,
+			payment_status, amount_paid, change_amount, discount_type, discount_value, discount_reason,
+			employee_id, shift_id, customer_name, customer_phone, status, notes, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+	`,
+		sale.ID, sale.InvoiceNo, sale.Subtotal, sale.TaxAmount, sale.DiscountAmount, sale.TotalAmount,
+		sale.ItemCount, sale.PaymentStatus, sale.AmountPaid, sale.ChangeAmount, sale.DiscountType,
+		sale.DiscountValue, sale.DiscountReason, sale.EmployeeID, sale.ShiftID, sale.CustomerName,
+		sale.CustomerPhone, sale.Status, sale.Notes, sale.CreatedAt, sale.UpdatedAt,
+	)
+	return err
+}
+
+func insertSaleItemsAndAdjustInventoryTx(ctx context.Context, tx pgx.Tx, sale *models.Sale, preparedItems []salePreparedItem, employeeID uuid.UUID, invoiceNo string, now time.Time) error {
+	for _, prepared := range preparedItems {
+		saleItem := prepared.SaleItem
+		saleItem.SaleID = sale.ID
+
+		if err := insertSaleItemTx(ctx, tx, saleItem); err != nil {
+			return fmt.Errorf("failed to insert sale item: %w", err)
+		}
+		if err := setInventoryQuantityTx(ctx, tx, saleItem.ProductID, prepared.NewQty, now); err != nil {
+			return fmt.Errorf("failed to update inventory: %w", err)
+		}
+		if err := insertStockAdjustmentTx(ctx, tx, stockAdjustmentRecord{
+			ProductID:      saleItem.ProductID,
+			AdjustmentType: "sale",
+			QuantityBefore: prepared.ProductQty,
+			QuantityChange: saleItem.Quantity.Neg(),
+			QuantityAfter:  prepared.NewQty,
+			Reason:         fmt.Sprintf("Sale: %s", invoiceNo),
+			ReferenceType:  "sale",
+			ReferenceID:    sale.ID,
+			AdjustedBy:     employeeID,
+			CreatedAt:      now,
+		}); err != nil {
+			return fmt.Errorf("failed to record stock adjustment: %w", err)
+		}
+
+		sale.Items = append(sale.Items, saleItem)
+	}
+	return nil
+}
+
+func insertSalePaymentsTx(ctx context.Context, tx pgx.Tx, sale *models.Sale, paymentReqs []CreatePaymentRequest, employeeID uuid.UUID, now time.Time) error {
+	for _, paymentReq := range paymentReqs {
+		payment := models.Payment{
+			ID:             uuid.New(),
+			SaleID:         sale.ID,
+			PaymentMethod:  paymentReq.PaymentMethod,
+			Amount:         paymentReq.Amount,
+			AmountTendered: paymentReq.AmountTendered,
+			ChangeGiven:    paymentReq.ChangeGiven,
+			CardType:       paymentReq.CardType,
+			CardLastFour:   paymentReq.CardLastFour,
+			ReferenceNo:    paymentReq.ReferenceNo,
+			BankName:       paymentReq.BankName,
+			AccountNo:      paymentReq.AccountNo,
+			VoucherCode:    paymentReq.VoucherCode,
+			Status:         models.PaymentRecordCompleted,
+			Notes:          paymentReq.Notes,
+			ProcessedBy:    &employeeID,
+			CreatedAt:      now,
+		}
+		if err := insertPaymentTx(ctx, tx, payment); err != nil {
+			return fmt.Errorf("failed to insert payment: %w", err)
+		}
+		sale.Payments = append(sale.Payments, payment)
+	}
+	return nil
+}
+
+func updateShiftSalesTotalsTx(ctx context.Context, tx pgx.Tx, shiftID uuid.UUID, totalAmount decimal.Decimal, now time.Time) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE shifts SET
+			total_sales = total_sales + $1,
+			transaction_count = transaction_count + 1,
+			updated_at = $2
+		WHERE id = $3
+	`, totalAmount, now, shiftID)
+	if err != nil {
+		return fmt.Errorf("failed to update shift totals: %w", err)
+	}
+	return nil
+}
