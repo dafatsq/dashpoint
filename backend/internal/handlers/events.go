@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/valyala/fasthttp"
 
-	"dashpoint/backend/internal/auth"
+	"dashpoint/backend/internal/middleware"
 )
 
 // UserEventType represents different types of user management events
@@ -49,36 +50,31 @@ type Client struct {
 type EventsHandler struct {
 	clients    map[string]*Client
 	clientsMux sync.RWMutex
-	jwtManager *auth.JWTManager
+	jwtManager authTokenManager
+	origins    []string
 }
 
 // NewEventsHandler creates a new events handler
-func NewEventsHandler(jwtManager *auth.JWTManager) *EventsHandler {
+func NewEventsHandler(jwtManager authTokenManager, origins []string) *EventsHandler {
 	return &EventsHandler{
 		clients:    make(map[string]*Client),
 		jwtManager: jwtManager,
+		origins:    origins,
 	}
 }
 
 // Subscribe handles GET /api/v1/events/subscribe
 // This establishes an SSE connection for the authenticated user
 func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
-	// Get the token from query parameter (SSE can't use headers)
-	token := c.Query("token")
+	token := eventStreamToken(c)
 	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"code":    "MISSING_TOKEN",
-			"message": "Token is required",
-		})
+		return middleware.JSONError(c, fiber.StatusUnauthorized, "MISSING_TOKEN", "Token is required")
 	}
 
 	// Validate the token
 	claims, err := h.jwtManager.ValidateAccessToken(token)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"code":    "INVALID_TOKEN",
-			"message": "Invalid or expired access token",
-		})
+		return middleware.JSONError(c, fiber.StatusUnauthorized, "INVALID_TOKEN", "Invalid or expired access token")
 	}
 
 	// Create a unique client ID
@@ -100,15 +96,14 @@ func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
 	log.Debug().
 		Str("client_id", clientID).
 		Str("user_id", claims.UserID.String()).
-		Int("total_clients", len(h.clients)).
 		Msg("SSE client connected")
 
 	// Set SSE headers
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("Connection", "keep-alive")
-	c.Set("Access-Control-Allow-Origin", "*")
 	c.Set("X-Accel-Buffering", "no")
+	middleware.ApplyCORSHeaders(c, h.origins)
 
 	// Use streaming - the cleanup must happen INSIDE the StreamWriter
 	// because SetBodyStreamWriter returns immediately
@@ -155,19 +150,10 @@ func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
 					// Channel closed
 					return
 				}
-				log.Info().
-					Str("client_id", clientID).
-					Str("event_type", string(event.Type)).
-					Str("user_id", event.UserID).
-					Msg("Sending SSE event to client")
 				if err := h.sendEvent(w, event); err != nil {
 					log.Error().Err(err).Msg("Failed to send SSE event")
 					return
 				}
-				log.Info().
-					Str("client_id", clientID).
-					Str("event_type", string(event.Type)).
-					Msg("SSE event sent successfully")
 			case <-keepaliveTicker.C:
 				// Send keepalive comment
 				if _, err := fmt.Fprintf(w, ": keepalive %s\n\n", time.Now().Format(time.RFC3339)); err != nil {
@@ -186,6 +172,18 @@ func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
 	}))
 
 	return nil
+}
+
+func eventStreamToken(c *fiber.Ctx) string {
+	authHeader := c.Get("Authorization")
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			return strings.TrimSpace(parts[1])
+		}
+	}
+
+	return c.Query("token")
 }
 
 // sendEvent sends an SSE event to the writer
@@ -216,11 +214,6 @@ func (h *EventsHandler) BroadcastToUser(userID uuid.UUID, event UserEvent) {
 			clientCount++
 			select {
 			case client.Channel <- event:
-				log.Info().
-					Str("client_id", client.ID).
-					Str("user_id", userID.String()).
-					Str("event_type", string(event.Type)).
-					Msg("Event queued for client")
 			default:
 				log.Warn().
 					Str("client_id", client.ID).
@@ -234,12 +227,6 @@ func (h *EventsHandler) BroadcastToUser(userID uuid.UUID, event UserEvent) {
 			Str("user_id", userID.String()).
 			Str("event_type", string(event.Type)).
 			Msg("No connected clients for user, event not delivered")
-	} else {
-		log.Info().
-			Str("user_id", userID.String()).
-			Str("event_type", string(event.Type)).
-			Int("client_count", clientCount).
-			Msg("Event broadcast to user's clients")
 	}
 }
 

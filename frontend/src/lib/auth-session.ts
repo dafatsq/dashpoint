@@ -60,6 +60,10 @@ export function syncSavedAccount(user: User): void {
   });
 }
 
+function shouldPreserveSavedAccount(userId: string): boolean {
+  return AccountManager.getAccount(userId) !== null;
+}
+
 export function persistAuthUser(
   apiUser: ApiUserPayload | User,
   options: { saveAccount?: boolean } = {},
@@ -128,7 +132,9 @@ export async function refreshSessionTokens(): Promise<boolean> {
     }
 
     const data = (await response.json()) as AuthPayload;
-    persistAuthPayload(data);
+    const saveAccount =
+      data.user ? shouldPreserveSavedAccount(normalizeUser(data.user).id) : false;
+    persistAuthPayload(data, { saveAccount });
     return true;
   } catch {
     clearAuthSession();

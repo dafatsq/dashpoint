@@ -65,7 +65,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
     enabled = true,
   } = options;
 
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectRef = useRef<() => void>(() => {});
   const reconnectAttemptsRef = useRef(0);
@@ -127,9 +127,9 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
       reconnectTimeoutRef.current = null;
     }
 
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
 
     setIsConnected(false);
@@ -183,83 +183,152 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
     callbacksRef.current.onAnyEvent?.(event);
   }, []);
 
+  const handleStreamData = useCallback(
+    (buffer: string) => {
+      const segments = buffer.split("\n\n");
+      const remainder = segments.pop() ?? "";
+
+      for (const segment of segments) {
+        const lines = segment.split("\n");
+        let eventType = "";
+        const dataLines: string[] = [];
+
+        for (const line of lines) {
+          if (!line || line.startsWith(":")) continue;
+          if (line.startsWith("event:")) {
+            eventType = line.slice("event:".length).trim();
+            continue;
+          }
+          if (line.startsWith("data:")) {
+            dataLines.push(line.slice("data:".length).trimStart());
+          }
+        }
+
+        if (!eventType || dataLines.length === 0) {
+          continue;
+        }
+
+        if (!USER_EVENT_TYPES.includes(eventType as UserEventType)) {
+          continue;
+        }
+
+        try {
+          const event = JSON.parse(dataLines.join("\n")) as UserEvent;
+          dispatchEvent(event);
+        } catch (error) {
+          console.error("[SSE] Failed to parse event:", error);
+        }
+      }
+
+      return remainder;
+    },
+    [dispatchEvent],
+  );
+
   const connect = useCallback(() => {
     const token = getAccessToken();
     if (!token || !enabledRef.current) return;
 
-    if (
-      eventSourceRef.current &&
-      eventSourceRef.current.readyState === EventSource.OPEN
-    ) {
+    if (abortControllerRef.current) {
       return;
     }
 
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    fetch(`${API_BASE_URL}/me`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    const openStream = async () => {
+      let validToken = token;
+
+      const connectResponse = await fetch(`${API_BASE_URL}/events/subscribe`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${validToken}`,
+          Accept: "text/event-stream",
+          "Cache-Control": "no-cache",
+        },
+        signal: controller.signal,
+      });
+
+      if (connectResponse.status === 401) {
+        const refreshed = await refreshSessionTokens();
+        if (!refreshed) {
+          callbacksRef.current.onError?.(new Event("Token refresh failed"));
+          return;
+        }
+
+        const nextToken = getAccessToken();
+        if (!nextToken) {
+          callbacksRef.current.onError?.(new Event("Token refresh failed"));
+          return;
+        }
+        validToken = nextToken;
+
+        const retryResponse = await fetch(`${API_BASE_URL}/events/subscribe`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${validToken}`,
+            Accept: "text/event-stream",
+            "Cache-Control": "no-cache",
+          },
+          signal: controller.signal,
+        });
+
+        return retryResponse;
+      }
+
+      return connectResponse;
+    };
+
+    openStream()
       .then(async (response) => {
-        let validToken = token;
-
-        if (response.status === 401) {
-          const refreshed = await refreshSessionTokens();
-          if (!refreshed) {
-            callbacksRef.current.onError?.(new Event("Token refresh failed"));
-            return;
-          }
-
-          const nextToken = getAccessToken();
-          if (!nextToken) {
-            callbacksRef.current.onError?.(new Event("Token refresh failed"));
-            return;
-          }
-          validToken = nextToken;
-        } else if (!response.ok) {
+        if (!response) {
+          abortControllerRef.current = null;
+          return;
+        }
+        if (!response.ok || !response.body) {
+          abortControllerRef.current = null;
           callbacksRef.current.onError?.(new Event("Token validation failed"));
           return;
         }
 
-        const eventSource = new EventSource(
-          `${API_BASE_URL}/events/subscribe?token=${encodeURIComponent(validToken)}`,
-        );
-        eventSourceRef.current = eventSource;
+        setIsConnected(true);
+        reconnectAttemptsRef.current = 0;
+        callbacksRef.current.onConnected?.();
 
-        eventSource.onopen = () => {
-          setIsConnected(true);
-          reconnectAttemptsRef.current = 0;
-          callbacksRef.current.onConnected?.();
-        };
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        eventSource.onerror = () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          buffer = handleStreamData(buffer);
+        }
+
+        if (!controller.signal.aborted) {
           setIsConnected(false);
           callbacksRef.current.onDisconnected?.();
-          eventSource.close();
-          eventSourceRef.current = null;
+          abortControllerRef.current = null;
           scheduleReconnect();
-        };
-
-        USER_EVENT_TYPES.forEach((eventType) => {
-          eventSource.addEventListener(eventType, (messageEvent: MessageEvent) => {
-            try {
-              const event = JSON.parse(messageEvent.data) as UserEvent;
-              dispatchEvent(event);
-            } catch (error) {
-              console.error("[SSE] Failed to parse event:", error);
-            }
-          });
-        });
+        }
       })
-      .catch(() => {
-        callbacksRef.current.onError?.(new Event("Pre-flight check failed"));
+      .catch((error) => {
+        abortControllerRef.current = null;
+        if (controller.signal.aborted) {
+          return;
+        }
+        setIsConnected(false);
+        callbacksRef.current.onDisconnected?.();
+        callbacksRef.current.onError?.(
+          error instanceof Event ? error : new Event("Stream connection failed"),
+        );
+        scheduleReconnect();
       });
-  }, [dispatchEvent, scheduleReconnect]);
+  }, [handleStreamData, scheduleReconnect]);
 
   useEffect(() => {
     connectRef.current = connect;
@@ -282,7 +351,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
       }
 
       setTimeout(() => {
-        if (!eventSourceRef.current && getAccessToken()) {
+        if (!abortControllerRef.current && getAccessToken()) {
           reconnectAttemptsRef.current = 0;
           connectRef.current();
         }

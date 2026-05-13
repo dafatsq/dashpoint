@@ -19,24 +19,24 @@ import (
 )
 
 type serverDependencies struct {
-	jwtManager         *auth.JWTManager
-	userRepo           *repository.UserRepository
-	permissionChecker  middleware.PermissionChecker
-	healthHandler      *handlers.HealthHandler
-	authHandler        *handlers.AuthHandler
-	eventsHandler      *handlers.EventsHandler
-	userHandler        *handlers.UserHandler
-	roleHandler        *handlers.RoleHandler
-	productHandler     *handlers.ProductHandler
-	categoryHandler    *handlers.CategoryHandler
-	shiftHandler       *handlers.ShiftHandler
-	saleHandler        *handlers.SaleHandler
-	reportHandler      *handlers.ReportHandler
-	auditHandler       *handlers.AuditHandler
-	expenseHandler     *handlers.ExpenseHandler
-	uploadHandler      *handlers.UploadHandler
-	cashDrawerHandler  *handlers.CashDrawerHandler
-	uploadDir          string
+	jwtManager        *auth.JWTManager
+	userRepo          *repository.UserRepository
+	permissionChecker middleware.PermissionChecker
+	healthHandler     *handlers.HealthHandler
+	authHandler       *handlers.AuthHandler
+	eventsHandler     *handlers.EventsHandler
+	userHandler       *handlers.UserHandler
+	roleHandler       *handlers.RoleHandler
+	productHandler    *handlers.ProductHandler
+	categoryHandler   *handlers.CategoryHandler
+	shiftHandler      *handlers.ShiftHandler
+	saleHandler       *handlers.SaleHandler
+	reportHandler     *handlers.ReportHandler
+	auditHandler      *handlers.AuditHandler
+	expenseHandler    *handlers.ExpenseHandler
+	uploadHandler     *handlers.UploadHandler
+	cashDrawerHandler *handlers.CashDrawerHandler
+	uploadDir         string
 }
 
 func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDependencies, error) {
@@ -65,7 +65,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 
 	healthHandler := handlers.NewHealthHandler(db)
 	authHandler := handlers.NewAuthHandler(userRepo, refreshTokenRepo, jwtManager)
-	eventsHandler := handlers.NewEventsHandler(jwtManager)
+	eventsHandler := handlers.NewEventsHandler(jwtManager, cfg.CORSOrigins)
 	userHandler := handlers.NewUserHandler(userRepo, roleRepo, permissionRepo)
 	userHandler.SetEventsHandler(eventsHandler)
 
