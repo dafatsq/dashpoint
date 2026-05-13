@@ -17,19 +17,13 @@ func AuthMiddleware(jwtManager *auth.JWTManager, userRepo *repository.UserReposi
 		// Get the Authorization header
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"code":    "MISSING_TOKEN",
-				"message": "Authorization header is required",
-			})
+			return JSONError(c, fiber.StatusUnauthorized, "MISSING_TOKEN", "Authorization header is required")
 		}
 
 		// Check for Bearer token
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"code":    "INVALID_TOKEN_FORMAT",
-				"message": "Authorization header must be in format: Bearer <token>",
-			})
+			return JSONError(c, fiber.StatusUnauthorized, "INVALID_TOKEN_FORMAT", "Authorization header must be in format: Bearer <token>")
 		}
 
 		tokenString := parts[1]
@@ -37,27 +31,18 @@ func AuthMiddleware(jwtManager *auth.JWTManager, userRepo *repository.UserReposi
 		// Validate the token
 		claims, err := jwtManager.ValidateAccessToken(tokenString)
 		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"code":    "INVALID_TOKEN",
-				"message": "Invalid or expired access token",
-			})
+			return JSONError(c, fiber.StatusUnauthorized, "INVALID_TOKEN", "Invalid or expired access token")
 		}
 
 		// Verify user is still active
 		user, err := userRepo.GetByID(c.Context(), claims.UserID)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to verify user status")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"code":    "INTERNAL_ERROR",
-				"message": "Failed to verify authentication",
-			})
+			return JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to verify authentication")
 		}
 
 		if user == nil || !user.IsActive {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"code":    "ACCOUNT_INACTIVE",
-				"message": "Your account has been deactivated",
-			})
+			return JSONError(c, fiber.StatusUnauthorized, "ACCOUNT_INACTIVE", "Your account has been deactivated")
 		}
 
 		// Store claims in context
@@ -108,17 +93,11 @@ func RequireRole(roles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		roleName := GetRoleName(c)
 		if roleName == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"code":    "UNAUTHORIZED",
-				"message": "Authentication required",
-			})
+			return JSONError(c, fiber.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
 		}
 
 		if !roleSet[roleName] {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"code":    "FORBIDDEN",
-				"message": "You do not have permission to access this resource",
-			})
+			return JSONError(c, fiber.StatusForbidden, "FORBIDDEN", "You do not have permission to access this resource")
 		}
 
 		return c.Next()
@@ -133,27 +112,18 @@ func RequirePermission(checker PermissionChecker, permissions ...string) fiber.H
 	return func(c *fiber.Ctx) error {
 		userID := GetUserID(c)
 		if userID == uuid.Nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"code":    "UNAUTHORIZED",
-				"message": "Authentication required",
-			})
+			return JSONError(c, fiber.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
 		}
 
 		// Check each required permission
 		for _, perm := range permissions {
 			hasPermission, err := checker(c, userID, perm)
 			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"code":    "INTERNAL_ERROR",
-					"message": "Failed to check permissions",
-				})
+				return JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to check permissions")
 			}
 
 			if !hasPermission {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-					"code":    "FORBIDDEN",
-					"message": "You do not have the required permission: " + perm,
-				})
+				return JSONError(c, fiber.StatusForbidden, "FORBIDDEN", "You do not have the required permission: "+perm)
 			}
 		}
 
@@ -166,20 +136,14 @@ func RequireAnyPermission(checker PermissionChecker, permissions ...string) fibe
 	return func(c *fiber.Ctx) error {
 		userID := GetUserID(c)
 		if userID == uuid.Nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"code":    "UNAUTHORIZED",
-				"message": "Authentication required",
-			})
+			return JSONError(c, fiber.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
 		}
 
 		// Check if any of the permissions are granted
 		for _, perm := range permissions {
 			hasPermission, err := checker(c, userID, perm)
 			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"code":    "INTERNAL_ERROR",
-					"message": "Failed to check permissions",
-				})
+				return JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to check permissions")
 			}
 
 			if hasPermission {
@@ -187,9 +151,6 @@ func RequireAnyPermission(checker PermissionChecker, permissions ...string) fibe
 			}
 		}
 
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    "FORBIDDEN",
-			"message": "You do not have any of the required permissions",
-		})
+		return JSONError(c, fiber.StatusForbidden, "FORBIDDEN", "You do not have any of the required permissions")
 	}
 }
