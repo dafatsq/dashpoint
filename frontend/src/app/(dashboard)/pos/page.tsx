@@ -40,6 +40,7 @@ import {
   ArrowUpCircle,
 } from "lucide-react";
 import api from "@/lib/api";
+import { buildBackendUrl } from "@/lib/config";
 import {
   Product,
   CartItem,
@@ -62,15 +63,7 @@ import {
 
 // Helper to get full image URL
 function getImageUrl(path: string | null | undefined): string {
-  if (!path) return "";
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path;
-  }
-  // Derive the backend base URL from the API URL env var
-  // e.g. "http://localhost:8080/api/v1" -> "http://localhost:8080"
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
-  const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, "");
-  return `${baseUrl}${path}`;
+  return path ? buildBackendUrl(path) : "";
 }
 
 // Helper functions to parse Product string values
