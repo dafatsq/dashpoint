@@ -1,3 +1,5 @@
+import { getSessionItem } from "@/lib/session";
+
 /**
  * Account Manager - Handles multiple employee accounts on a single device
  * Stores account information (without sensitive tokens) for quick switching
@@ -103,7 +105,7 @@ export class AccountManager {
     if (typeof window === 'undefined') return false;
     
     try {
-      const currentUser = localStorage.getItem('user');
+      const currentUser = getSessionItem('user');
       if (!currentUser) return false;
       
       const user = JSON.parse(currentUser);

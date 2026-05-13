@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import Cropper from 'react-easy-crop';
 import type { Area } from 'react-easy-crop';
+import { API_BASE_URL, buildBackendUrl } from '@/lib/config';
 import { getSessionItem } from '@/lib/session';
 
 interface ImageUploadProps {
@@ -35,15 +36,7 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
 
   // Helper to construct full image URL
   const getImageUrl = (path: string) => {
-    if (!path) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-    // Derive the backend base URL from the API URL env var
-    // e.g. "http://localhost:8080/api/v1" -> "http://localhost:8080"
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
-    const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
-    return `${baseUrl}${path}`;
+    return buildBackendUrl(path);
   };
 
   const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
@@ -135,8 +128,7 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
       const formData = new FormData();
       formData.append('image', blob, 'cropped-image.jpg');
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
-      const response = await fetch(`${apiUrl}/upload/image`, {
+      const response = await fetch(`${API_BASE_URL}/upload/image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getSessionItem('access_token')}`,
