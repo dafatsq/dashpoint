@@ -3,8 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -58,6 +58,9 @@ func Load() (*Config, error) {
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET is required")
 	}
+	if !cfg.IsDevelopment() && !hasExplicitEnv("CORS_ORIGINS") {
+		return nil, fmt.Errorf("CORS_ORIGINS is required outside development")
+	}
 
 	return cfg, nil
 }
@@ -68,6 +71,11 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func hasExplicitEnv(key string) bool {
+	value, exists := os.LookupEnv(key)
+	return exists && strings.TrimSpace(value) != ""
 }
 
 func getEnvList(key string, defaultValues []string) []string {

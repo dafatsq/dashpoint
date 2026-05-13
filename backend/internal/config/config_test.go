@@ -26,6 +26,7 @@ func TestLoadParsesCORSOrigins(t *testing.T) {
 func TestLoadDefaultsCORSOriginsForDevelopment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint")
 	t.Setenv("JWT_SECRET", "super-secret")
+	t.Setenv("ENVIRONMENT", "development")
 	t.Setenv("CORS_ORIGINS", "")
 
 	cfg, err := Load()
@@ -35,5 +36,17 @@ func TestLoadDefaultsCORSOriginsForDevelopment(t *testing.T) {
 
 	if len(cfg.CORSOrigins) == 0 {
 		t.Fatal("expected default CORS origins to be populated")
+	}
+}
+
+func TestLoadRequiresCorsOriginsOutsideDevelopment(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint")
+	t.Setenv("JWT_SECRET", "super-secret")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ORIGINS", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected Load to fail when CORS_ORIGINS is missing outside development")
 	}
 }
