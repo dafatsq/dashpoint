@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"slices"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -36,6 +38,7 @@ func Logger() fiber.Handler {
 			Int("status", status).
 			Dur("duration", duration).
 			Str("ip", c.IP()).
+			Str("request_id", GetRequestID(c)).
 			Str("user_agent", c.Get("User-Agent")).
 			Msg("HTTP request")
 
@@ -46,23 +49,33 @@ func Logger() fiber.Handler {
 // RequestID adds a unique request ID to each request
 func RequestID() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Check if request ID already exists
 		requestID := c.Get("X-Request-ID")
 		if requestID == "" {
-			requestID = c.GetRespHeader("X-Request-ID")
+			requestID = uuid.NewString()
 		}
 
-		// Set request ID in response header
+		c.Locals("requestid", requestID)
+		c.Locals("request_id", requestID)
 		c.Set("X-Request-ID", requestID)
 
 		return c.Next()
 	}
 }
 
+func GetRequestID(c *fiber.Ctx) string {
+	if requestID, ok := c.Locals("requestid").(string); ok && requestID != "" {
+		return requestID
+	}
+	if requestID, ok := c.Locals("request_id").(string); ok && requestID != "" {
+		return requestID
+	}
+	return ""
+}
+
 // CORS returns a middleware that handles CORS
-func CORS() fiber.Handler {
+func CORS(allowedOrigins []string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		c.Set("Access-Control-Allow-Origin", "*")
+		applyCORSHeaders(c, allowedOrigins)
 		c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Request-ID")
 		c.Set("Access-Control-Max-Age", "86400")
@@ -74,6 +87,29 @@ func CORS() fiber.Handler {
 
 		return c.Next()
 	}
+}
+
+func ApplyCORSHeaders(c *fiber.Ctx, allowedOrigins []string) {
+	applyCORSHeaders(c, allowedOrigins)
+}
+
+func applyCORSHeaders(c *fiber.Ctx, allowedOrigins []string) {
+	origin := c.Get("Origin")
+	if origin == "" {
+		return
+	}
+
+	if slices.Contains(allowedOrigins, origin) {
+		c.Set("Access-Control-Allow-Origin", origin)
+		c.Set("Vary", "Origin")
+	}
+}
+
+func JSONError(c *fiber.Ctx, status int, code, message string) error {
+	return c.Status(status).JSON(fiber.Map{
+		"code":    code,
+		"message": message,
+	})
 }
 
 // Recover returns a middleware that recovers from panics

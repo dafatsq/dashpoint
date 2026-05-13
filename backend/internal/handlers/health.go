@@ -5,17 +5,19 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-
-	"dashpoint/backend/internal/database"
 )
+
+type healthChecker interface {
+	HealthCheck(context.Context) (bool, error)
+}
 
 // HealthHandler handles health check endpoints
 type HealthHandler struct {
-	db *database.DB
+	db healthChecker
 }
 
 // NewHealthHandler creates a new health handler
-func NewHealthHandler(db *database.DB) *HealthHandler {
+func NewHealthHandler(db healthChecker) *HealthHandler {
 	return &HealthHandler{db: db}
 }
 

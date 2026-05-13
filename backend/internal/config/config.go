@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"strconv"
 
 	"github.com/joho/godotenv"
@@ -13,6 +14,7 @@ type Config struct {
 	// Server
 	Port        string
 	Environment string
+	CORSOrigins []string
 
 	// Database
 	DatabaseURL string
@@ -31,6 +33,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Port:        getEnv("PORT", "8080"),
 		Environment: getEnv("ENVIRONMENT", "development"),
+		CORSOrigins: getEnvList("CORS_ORIGINS", []string{"http://localhost:3000"}),
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 		JWTSecret:   getEnv("JWT_SECRET", ""),
 	}
@@ -65,6 +68,28 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvList(key string, defaultValues []string) []string {
+	value, exists := os.LookupEnv(key)
+	if !exists || strings.TrimSpace(value) == "" {
+		return append([]string(nil), defaultValues...)
+	}
+
+	parts := strings.Split(value, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			values = append(values, trimmed)
+		}
+	}
+
+	if len(values) == 0 {
+		return append([]string(nil), defaultValues...)
+	}
+
+	return values
 }
 
 // IsDevelopment returns true if running in development mode
