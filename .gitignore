@@ -43,12 +43,15 @@ node_modules/
 .npm
 .cache/
 next-env.d.ts
+!frontend/next-env.d.ts
 
 # Backend (Go)
 vendor/
 backend/server
 backend/backend
 backend/bin/
+backend/uploads/*
+!backend/uploads/.gitkeep
 *.exe
 *.exe~
 *.dll

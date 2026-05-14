@@ -5,15 +5,15 @@ services:
     image: postgres:15-alpine
     container_name: dashpoint-db
     environment:
-      POSTGRES_USER: dashpoint
-      POSTGRES_PASSWORD: dashpoint_dev
-      POSTGRES_DB: dashpoint_dev
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dashpoint -d dashpoint_dev"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,10 +25,14 @@ services:
       dockerfile: Dockerfile
     container_name: dashpoint-backend
     environment:
-      DATABASE_URL: postgres://dashpoint:dashpoint_dev@db:5432/dashpoint_dev?sslmode=disable
-      JWT_SECRET: dev-secret-change-in-production
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY_MINUTES: ${JWT_EXPIRY_MINUTES}
+      REFRESH_EXPIRY_HOURS: ${REFRESH_EXPIRY_HOURS}
+      CORS_ORIGINS: ${CORS_ORIGINS}
       PORT: "8080"
       ENVIRONMENT: development
+      DEBUG: ${DEBUG}
     ports:
       - "${BACKEND_PORT}:8080"
     depends_on:

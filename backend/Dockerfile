@@ -32,6 +32,9 @@ COPY --from=builder /app/server .
 # Copy migrations
 COPY --from=builder /app/migrations ./migrations
 
+# Preserve the expected upload path in container images.
+RUN mkdir -p /app/uploads
+
 # Expose port
 EXPOSE 8080
 
