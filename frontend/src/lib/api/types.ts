@@ -161,7 +161,7 @@ export interface CatalogApi {
   }): Promise<ApiResponse<Category>>;
   updateCategory(
     id: string,
-    category: { name?: string; description?: string },
+    category: { name?: string; description?: string; is_active?: boolean },
   ): Promise<ApiResponse<Category>>;
   deleteCategory(id: string): Promise<ApiResponse<unknown>>;
   permanentDeleteCategory(id: string): Promise<ApiResponse<unknown>>;
