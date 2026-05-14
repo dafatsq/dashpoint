@@ -2,44 +2,27 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useAuth, PERMISSIONS } from '@/contexts/auth-context';
-import { AccountManager, SavedAccount } from '@/lib/account-manager';
+import { useAuth } from '@/contexts/auth-context';
+import { AccountManager } from '@/lib/account-manager';
 import { AccountSwitcher } from '@/components/account-switcher';
 import { cn } from '@/lib/utils';
 import {
   Store,
-  UserCog,
   ChevronLeft,
   ChevronRight,
   LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  permission?: string;
-}
-
-import { navItems } from '@/lib/nav-config';
+import { filterSwitchableAccounts, } from '@/components/account-switcher-utils';
+import { filterVisibleNavItems, navItems } from '@/lib/nav-config';
 
 interface SidebarProps {
   onNavigate?: () => void;
@@ -48,73 +31,32 @@ interface SidebarProps {
 export function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, hasPermission, hasAnyPermission, logout, pinLogin } = useAuth();
+  const { user, hasPermission, hasAnyPermission, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
-  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(AccountManager.getSavedAccounts());
+  const [, setSavedAccountsVersion] = useState(0);
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<SavedAccount | null>(null);
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  useEffect(() => {
-    // Update saved accounts when dialog is opened/closed
-    if (showSwitchDialog) {
-      setSavedAccounts(AccountManager.getSavedAccounts());
-      setRefreshTrigger(prev => prev + 1); // Trigger refresh in AccountSwitcher
-    }
-  }, [showSwitchDialog]);
-
-  useEffect(() => {
-    // Refresh saved accounts list
-    setSavedAccounts(AccountManager.getSavedAccounts());
-  }, []);
-
-  const filteredNavItems = navItems.filter(
-    (item) => {
-      if (item.permissions) {
-        return hasAnyPermission(item.permissions);
-      }
-      return !item.permission || hasPermission(item.permission);
-    }
+  const filteredNavItems = useMemo(
+    () =>
+      filterVisibleNavItems(navItems, {
+        hasPermission,
+        hasAnyPermission,
+      }),
+    [hasAnyPermission, hasPermission],
   );
+
+  const switchableAccountsCount = filterSwitchableAccounts(
+    AccountManager.getSavedAccounts(),
+    user?.id,
+  ).length;
+
+  const refreshSavedAccounts = () => {
+    setSavedAccountsVersion((version) => version + 1);
+  };
 
   const handleLogout = async () => {
     await logout();
-    window.location.href = '/login';
-  };
-
-  const handleAccountClick = (account: SavedAccount) => {
-    setSelectedAccount(account);
-    setPin('');
-    setPinError('');
-    setShowSwitchDialog(true);
-  };
-
-  const handlePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedAccount) return;
-
-    setPinError('');
-    setIsSubmitting(true);
-
-    try {
-      const result = await pinLogin(selectedAccount.id, pin);
-
-      if (result.success) {
-        setShowSwitchDialog(false);
-        setSelectedAccount(null);
-        setPin('');
-        router.push('/');
-      } else {
-        setPinError(result.error || 'Invalid PIN');
-      }
-    } catch {
-      setPinError('An unexpected error occurred');
-    } finally {
-      setIsSubmitting(false);
-    }
+    router.replace('/login');
   };
 
   return (
@@ -187,36 +129,17 @@ export function Sidebar({ onNavigate }: SidebarProps) {
           </div>
         )}
         <div className={cn('flex gap-2', collapsed && 'flex-col')}>
-          {savedAccounts.filter(account => account.id !== user?.id).length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size={collapsed ? 'icon' : 'default'}
-                  className={cn('flex-1', collapsed && 'w-full')}
-                  title={collapsed ? 'Switch Account' : undefined}
-                >
-                  <UserCog className="h-4 w-4" />
-                  {!collapsed && <span className="ml-2">Switch</span>}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 mb-2 ml-1">
-                <DropdownMenuLabel>Saved Accounts ({savedAccounts.filter(account => account.id !== user?.id).length})</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {savedAccounts.filter(account => account.id !== user?.id).map((account) => (
-                  <DropdownMenuItem
-                    key={account.id}
-                    onClick={() => handleAccountClick(account)}
-                    className="cursor-pointer"
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-medium">{account.name}</span>
-                      <span className="text-xs text-muted-foreground capitalize">{account.role_name}</span>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {switchableAccountsCount > 0 && (
+            <Button
+              variant="ghost"
+              size={collapsed ? 'icon' : 'default'}
+              onClick={() => setShowSwitchDialog(true)}
+              className={cn('flex-1', collapsed && 'w-full')}
+              title={collapsed ? 'Switch Account' : undefined}
+            >
+              <Store className="h-4 w-4" />
+              {!collapsed && <span className="ml-2">Switch</span>}
+            </Button>
           )}
           <Button
             variant="ghost"
@@ -232,78 +155,28 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       </div>
 
       {/* Switch Account Dialog */}
-      <Dialog open={showSwitchDialog} onOpenChange={setShowSwitchDialog}>
+      <Dialog
+        open={showSwitchDialog}
+        onOpenChange={(open) => {
+          setShowSwitchDialog(open);
+          if (open) {
+            refreshSavedAccounts();
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enter PIN</DialogTitle>
-            <DialogDescription>
-              Enter your PIN to access {selectedAccount?.name}&apos;s account
-            </DialogDescription>
+            <DialogTitle>Switch Account</DialogTitle>
           </DialogHeader>
-
-          <form onSubmit={handlePinSubmit} className="space-y-4 mt-4" autoComplete="off">
-            <input type="text" name="username" autoComplete="username" style={{ display: 'none' }} />
-
-            {pinError && (
-              <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                <UserCog className="h-4 w-4 flex-shrink-0" />
-                <span>{pinError}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Input
-                type="password"
-                name="pin-entry"
-                placeholder="Enter your PIN"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                onFocus={(e) => e.target.removeAttribute('readonly')}
-                readOnly
-                required
-                disabled={isSubmitting}
-                autoFocus
-                maxLength={6}
-                pattern="\d*"
-                inputMode="numeric"
-                autoComplete="new-password"
-                data-form-type="other"
-                data-lpignore="true"
-                data-1p-ignore="true"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setShowSwitchDialog(false);
-                  setSelectedAccount(null);
-                  setPin('');
-                  setPinError('');
-                }}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="flex-1"
-                disabled={isSubmitting || !pin}
-              >
-                {isSubmitting ? (
-                  <>
-                    <UserCog className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </Button>
-            </div>
-          </form>
+          <AccountSwitcher
+            excludeUserId={user?.id}
+            refreshTrigger={showSwitchDialog ? 1 : 0}
+            onAccountsChange={refreshSavedAccounts}
+            onAccountSelect={() => {
+              refreshSavedAccounts();
+              setShowSwitchDialog(false);
+            }}
+          />
         </DialogContent>
       </Dialog>
     </aside>
