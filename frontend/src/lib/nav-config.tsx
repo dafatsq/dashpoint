@@ -25,6 +25,8 @@ export interface NavItem {
   color?: string;
 }
 
+export type RoutePermission = string | string[] | undefined;
+
 export const navItems: NavItem[] = [
   {
     href: '/',
@@ -129,3 +131,62 @@ export const navItems: NavItem[] = [
     color: 'text-slate-500',
   },
 ];
+
+export const routePermissions: Record<string, RoutePermission> = {
+  "/": undefined,
+  "/pos": PERMISSIONS.POS_VIEW,
+  "/products": PERMISSIONS.PRODUCTS_VIEW,
+  "/inventory": PERMISSIONS.INVENTORY_VIEW,
+  "/sales": PERMISSIONS.SALES_VIEW,
+  "/reports": PERMISSIONS.REPORTS_VIEW,
+  "/expenses": PERMISSIONS.EXPENSES_VIEW,
+  "/users": PERMISSIONS.USERS_VIEW,
+  "/audit": PERMISSIONS.AUDIT_VIEW,
+  "/shifts": [PERMISSIONS.POS_VIEW, PERMISSIONS.SALES_VIEW, PERMISSIONS.REPORTS_VIEW],
+  "/categories": PERMISSIONS.CATEGORIES_VIEW,
+};
+
+export function getRequiredRoutePermission(pathname: string): RoutePermission {
+  if (routePermissions[pathname] !== undefined) {
+    return routePermissions[pathname];
+  }
+
+  const pathParts = pathname.split("/");
+  for (let i = pathParts.length; i > 0; i -= 1) {
+    const parentPath = pathParts.slice(0, i).join("/") || "/";
+    if (parentPath in routePermissions) {
+      return routePermissions[parentPath];
+    }
+  }
+
+  return undefined;
+}
+
+interface PermissionAccess {
+  hasPermission: (permission: string) => boolean;
+  hasAnyPermission: (permissions: string[]) => boolean;
+}
+
+export function hasRouteAccess(
+  pathname: string,
+  access: PermissionAccess,
+): boolean {
+  const requiredPermission = getRequiredRoutePermission(pathname);
+  if (!requiredPermission) return true;
+
+  return Array.isArray(requiredPermission)
+    ? access.hasAnyPermission(requiredPermission)
+    : access.hasPermission(requiredPermission);
+}
+
+export function filterVisibleNavItems(
+  items: NavItem[],
+  access: PermissionAccess,
+): NavItem[] {
+  return items.filter((item) => {
+    if (item.permissions) {
+      return access.hasAnyPermission(item.permissions);
+    }
+    return !item.permission || access.hasPermission(item.permission);
+  });
+}

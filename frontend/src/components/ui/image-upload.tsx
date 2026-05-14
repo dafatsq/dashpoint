@@ -1,20 +1,18 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Upload, X, Loader2, ImageIcon, Check } from 'lucide-react';
+import Image from 'next/image';
+import { Upload, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import Cropper from 'react-easy-crop';
 import type { Area } from 'react-easy-crop';
 import { API_BASE_URL, buildBackendUrl } from '@/lib/config';
 import { getSessionItem } from '@/lib/session';
+import { ImageUploadCropDialog } from './image-upload-crop-dialog';
+import {
+  getCroppedImg,
+  uploadImageBlob as uploadImageBlobRequest,
+  validateImageFile,
+} from './image-upload-utils';
 
 interface ImageUploadProps {
   value?: string;
@@ -43,51 +41,6 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
-  const createImage = (url: string): Promise<HTMLImageElement> =>
-    new Promise((resolve, reject) => {
-      const image = new Image();
-      image.addEventListener('load', () => resolve(image));
-      image.addEventListener('error', (error) => reject(error));
-      image.src = url;
-    });
-
-  const getCroppedImg = async (imageSrc: string, pixelCrop: Area): Promise<Blob> => {
-    const image = await createImage(imageSrc);
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    if (!ctx) {
-      throw new Error('No 2d context');
-    }
-
-    // Set canvas size to the cropped area
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
-
-    // Draw the cropped image
-    ctx.drawImage(
-      image,
-      pixelCrop.x,
-      pixelCrop.y,
-      pixelCrop.width,
-      pixelCrop.height,
-      0,
-      0,
-      pixelCrop.width,
-      pixelCrop.height
-    );
-
-    return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error('Canvas is empty'));
-          return;
-        }
-        resolve(blob);
-      }, 'image/jpeg', 0.95);
-    });
-  };
-
   const handleCropConfirm = async () => {
     if (!imageToCrop || !croppedAreaPixels) return;
 
@@ -99,7 +52,7 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
       const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
 
       // Upload the cropped image
-      await uploadImageBlob(croppedBlob);
+      await handleUploadBlob(croppedBlob);
 
       // Clean up
       setImageToCrop(null);
@@ -121,28 +74,16 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
     setCroppedAreaPixels(null);
   };
 
-  const uploadImageBlob = async (blob: Blob) => {
+  const handleUploadBlob = async (blob: Blob) => {
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append('image', blob, 'cropped-image.jpg');
-
-      const response = await fetch(`${API_BASE_URL}/upload/image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getSessionItem('access_token')}`,
-        },
-        body: formData,
+      const url = await uploadImageBlobRequest({
+        blob,
+        apiBaseUrl: API_BASE_URL,
+        accessToken: getSessionItem('access_token'),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Upload failed');
-      }
-
-      const data = await response.json();
-      onChange(data.url); // Store relative path like "/uploads/abc123.jpg"
+      onChange(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload image');
       throw err;
@@ -152,19 +93,12 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
   };
 
   const handleFileSelected = (file: File) => {
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
-    // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image must be less than 5MB');
-      return;
-    }
-
-    // Read the file and show crop dialog
     const reader = new FileReader();
     reader.onload = () => {
       setImageToCrop(reader.result as string);
@@ -213,12 +147,15 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
       {value ? (
         <div className="relative inline-block">
           <div className="relative h-32 w-32 rounded-lg border overflow-hidden bg-muted">
-            <img
+            <Image
               src={getImageUrl(value)}
               alt="Product"
-              className="h-full w-full object-cover"
+              fill
+              sizes="128px"
+              unoptimized
+              className="object-cover"
               onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
               }}
             />
           </div>
@@ -280,55 +217,19 @@ export function ImageUpload({ value, onChange, onRemove }: ImageUploadProps) {
       {error && (
         <p className="text-sm text-destructive">{error}</p>
       )}
-
-      {/* Crop Dialog */}
-      <Dialog open={cropDialogOpen} onOpenChange={setCropDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Crop Image</DialogTitle>
-            <DialogDescription>
-              Adjust the image to fit a 1:1 square ratio
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="relative w-full h-96 bg-muted rounded-lg overflow-hidden">
-            {imageToCrop && (
-              <Cropper
-                image={imageToCrop}
-                crop={crop}
-                zoom={zoom}
-                aspect={1}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={onCropComplete}
-              />
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Zoom</label>
-            <input
-              type="range"
-              min={1}
-              max={3}
-              step={0.1}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
-            />
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCropCancel}>
-              Cancel
-            </Button>
-            <Button onClick={handleCropConfirm} disabled={!croppedAreaPixels}>
-              <Check className="h-4 w-4 mr-2" />
-              Crop & Upload
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ImageUploadCropDialog
+        open={cropDialogOpen}
+        image={imageToCrop}
+        crop={crop}
+        zoom={zoom}
+        croppedAreaPixels={croppedAreaPixels}
+        onOpenChange={setCropDialogOpen}
+        onCropChange={setCrop}
+        onZoomChange={setZoom}
+        onCropComplete={onCropComplete}
+        onCancel={handleCropCancel}
+        onConfirm={handleCropConfirm}
+      />
     </div>
   );
 }

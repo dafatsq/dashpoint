@@ -4,19 +4,27 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { AccountManager, SavedAccount } from '@/lib/account-manager';
+import { filterSwitchableAccounts } from './account-switcher-utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { User, Shield, ShieldCheck, ShieldAlert, X, AlertCircle, Loader2, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AccountSwitcherProps {
   onAccountSelect?: () => void;
+  onAccountsChange?: () => void;
   refreshTrigger?: number;
+  excludeUserId?: string;
 }
 
-export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwitcherProps) {
+export function AccountSwitcher({
+  onAccountSelect,
+  onAccountsChange,
+  refreshTrigger,
+  excludeUserId,
+}: AccountSwitcherProps) {
   const router = useRouter();
   const { pinLogin } = useAuth();
   const [accounts, setAccounts] = useState<SavedAccount[]>(AccountManager.getSavedAccounts());
@@ -29,6 +37,8 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
     // Refresh accounts when component mounts or refreshTrigger changes
     setAccounts(AccountManager.getSavedAccounts());
   }, [refreshTrigger]);
+
+  const visibleAccounts = filterSwitchableAccounts(accounts, excludeUserId);
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -95,9 +105,10 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
     e.stopPropagation();
     AccountManager.removeAccount(accountId);
     setAccounts(AccountManager.getSavedAccounts());
+    onAccountsChange?.();
   };
 
-  if (accounts.length === 0) {
+  if (visibleAccounts.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
@@ -124,7 +135,7 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
         </div>
 
         <div className="grid gap-3">
-          {accounts.map((account) => (
+          {visibleAccounts.map((account) => (
             <Card
               key={account.id}
               className="cursor-pointer hover:bg-accent transition-colors overflow-hidden min-w-0"
