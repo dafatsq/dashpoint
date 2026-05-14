@@ -95,10 +95,8 @@ skills-lock.json
 .github/
 .opencode/
 
-# SDD
+# Documents
 SDD.md
-
-frontend2/
 deploy_clients.sh
 PROJECT_DISSECTION.md
 DEPLOY_NEW_CLIENT.md
