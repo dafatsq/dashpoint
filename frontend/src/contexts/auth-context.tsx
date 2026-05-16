@@ -71,6 +71,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const isRefreshingRef = useRef(false);
   const isProcessingEventRef = useRef(false);
+  const hasBootstrappedRefreshRef = useRef(false);
 
   const applyAuthPayload = useCallback(
     (payload: AuthPayload, options?: { saveAccount?: boolean }) => {
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       try {
         const result = await api.getMe();
+        if (result.error) return;
         if (!result.data) return;
 
         const nextUser = persistAuthUser(result.data);
@@ -110,6 +112,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     },
     [],
   );
+
+  const requestUserRefresh = useCallback(() => {
+    void refreshUser();
+  }, [refreshUser]);
 
   const forceLogout = useCallback((message?: string) => {
     clearAuthSession();
@@ -172,7 +178,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const storedUser = loadStoredUser();
     setUser(storedUser);
     setIsLoading(false);
-  }, []);
+
+    if (storedUser && !hasBootstrappedRefreshRef.current) {
+      hasBootstrappedRefreshRef.current = true;
+      requestUserRefresh();
+    }
+  }, [requestUserRefresh]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const handleWindowFocus = () => {
+      requestUserRefresh();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        requestUserRefresh();
+      }
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [requestUserRefresh, user]);
 
   const login = useCallback(
     async (email: string, password: string, saveAccount = true) => {
