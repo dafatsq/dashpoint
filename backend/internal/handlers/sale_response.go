@@ -8,6 +8,47 @@ import (
 	"dashpoint/backend/internal/models"
 )
 
+func saleItemResponse(item models.SaleItem) fiber.Map {
+	itemMap := fiber.Map{
+		"id":              item.ID.String(),
+		"product_id":      item.ProductID.String(),
+		"product_name":    item.ProductName,
+		"quantity":        item.Quantity.String(),
+		"unit_price":      item.UnitPrice.String(),
+		"discount_amount": item.DiscountAmount.String(),
+		"tax_rate":        item.TaxRate.String(),
+		"tax_amount":      item.TaxAmount.String(),
+		"subtotal":        item.Subtotal.String(),
+		"total":           item.Total.String(),
+	}
+	if item.ProductSKU != nil {
+		itemMap["product_sku"] = *item.ProductSKU
+	}
+	if item.ProductBarcode != nil {
+		itemMap["product_barcode"] = *item.ProductBarcode
+	}
+	return itemMap
+}
+
+func paymentResponse(payment models.Payment) fiber.Map {
+	paymentMap := fiber.Map{
+		"id":             payment.ID.String(),
+		"payment_method": payment.PaymentMethod,
+		"amount":         payment.Amount.String(),
+		"status":         payment.Status,
+	}
+	if payment.AmountTendered != nil {
+		paymentMap["amount_tendered"] = payment.AmountTendered.String()
+	}
+	if payment.ChangeGiven != nil {
+		paymentMap["change_given"] = payment.ChangeGiven.String()
+	}
+	if payment.ReferenceNo != nil {
+		paymentMap["reference_no"] = *payment.ReferenceNo
+	}
+	return paymentMap
+}
+
 func (h *SaleHandler) toSaleResponse(s *models.Sale) fiber.Map {
 	if s == nil {
 		return nil
@@ -66,47 +107,14 @@ func (h *SaleHandler) toSaleResponse(s *models.Sale) fiber.Map {
 	if len(s.Items) > 0 {
 		items := make([]fiber.Map, 0, len(s.Items))
 		for _, item := range s.Items {
-			itemMap := fiber.Map{
-				"id":              item.ID.String(),
-				"product_id":      item.ProductID.String(),
-				"product_name":    item.ProductName,
-				"quantity":        item.Quantity.String(),
-				"unit_price":      item.UnitPrice.String(),
-				"discount_amount": item.DiscountAmount.String(),
-				"tax_rate":        item.TaxRate.String(),
-				"tax_amount":      item.TaxAmount.String(),
-				"subtotal":        item.Subtotal.String(),
-				"total":           item.Total.String(),
-			}
-			if item.ProductSKU != nil {
-				itemMap["product_sku"] = *item.ProductSKU
-			}
-			if item.ProductBarcode != nil {
-				itemMap["product_barcode"] = *item.ProductBarcode
-			}
-			items = append(items, itemMap)
+			items = append(items, saleItemResponse(item))
 		}
 		response["items"] = items
 	}
 	if len(s.Payments) > 0 {
 		payments := make([]fiber.Map, 0, len(s.Payments))
 		for _, payment := range s.Payments {
-			paymentMap := fiber.Map{
-				"id":             payment.ID.String(),
-				"payment_method": payment.PaymentMethod,
-				"amount":         payment.Amount.String(),
-				"status":         payment.Status,
-			}
-			if payment.AmountTendered != nil {
-				paymentMap["amount_tendered"] = payment.AmountTendered.String()
-			}
-			if payment.ChangeGiven != nil {
-				paymentMap["change_given"] = payment.ChangeGiven.String()
-			}
-			if payment.ReferenceNo != nil {
-				paymentMap["reference_no"] = *payment.ReferenceNo
-			}
-			payments = append(payments, paymentMap)
+			payments = append(payments, paymentResponse(payment))
 		}
 		response["payments"] = payments
 	}
@@ -122,6 +130,7 @@ func (h *SaleHandler) toSaleListResponse(s *models.Sale) fiber.Map {
 		"item_count":     s.ItemCount,
 		"payment_status": s.PaymentStatus,
 		"status":         s.Status,
+		"employee_id":    s.EmployeeID.String(),
 		"created_at":     s.CreatedAt.Format(time.RFC3339),
 	}
 

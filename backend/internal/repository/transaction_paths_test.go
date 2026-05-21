@@ -132,7 +132,23 @@ func TestRotateRefreshTokenTxReturnsStepSpecificError(t *testing.T) {
 	}
 }
 
-func TestHasSalesHistoryFailsClosedOnSchemaError(t *testing.T) {
+func TestHasSalesHistoryReturnsCount(t *testing.T) {
+	querier := &fakeSalesQuerier{
+		rows: []fakeBoolRow{
+			{value: 1},
+		},
+	}
+
+	hasSales, err := hasSalesHistory(context.Background(), querier, uuid.New())
+	if err != nil {
+		t.Fatalf("hasSalesHistory returned error: %v", err)
+	}
+	if !hasSales {
+		t.Fatalf("expected sales history to be detected")
+	}
+}
+
+func TestHasSalesHistoryReturnsQueryError(t *testing.T) {
 	querier := &fakeSalesQuerier{
 		rows: []fakeBoolRow{
 			{err: errors.New("db unavailable")},
@@ -143,7 +159,7 @@ func TestHasSalesHistoryFailsClosedOnSchemaError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if !strings.Contains(err.Error(), "failed to verify sales table existence") {
+	if !strings.Contains(err.Error(), "failed to query sales history") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

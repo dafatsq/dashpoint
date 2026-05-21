@@ -3,6 +3,22 @@ import type { Category, ExpenseCategory } from "@/types";
 export type CategoryType = "product" | "expense";
 export type CategoryViewMode = "active" | "archived";
 export type ManagedCategory = Category | ExpenseCategory;
+type CategoryActionLabels = {
+  emptyTitle: string;
+  emptyDescription: string;
+  deleteActionLabel: string;
+};
+
+/** The one expense category that is system-managed and must never be edited, archived, or deleted. */
+export const SPECIAL_EXPENSE_CATEGORY_NAME = "Inventory Purchase";
+
+/**
+ * Returns true if the given category is the protected "Inventory Purchase" special category.
+ * Only applicable to expense categories.
+ */
+export function isSpecialExpenseCategory(category: ManagedCategory, type: CategoryType): boolean {
+  return type === "expense" && category.name === SPECIAL_EXPENSE_CATEGORY_NAME;
+}
 
 export interface CategoryFormData {
   name: string;
@@ -49,17 +65,19 @@ export function filterCategories<T extends ManagedCategory>(
 }
 
 export function resolveCategoryActionLabels(viewMode: CategoryViewMode) {
-  if (viewMode === "archived") {
-    return {
+  const labelsByViewMode: Record<CategoryViewMode, CategoryActionLabels> = {
+    active: {
+      emptyTitle: "No active categories found",
+      emptyDescription:
+        "Try adjusting your search or add a new category to get started.",
+      deleteActionLabel: "Archive Category",
+    },
+    archived: {
       emptyTitle: "No archived categories found",
       emptyDescription: "Archived categories will appear here.",
       deleteActionLabel: "Delete Permanently",
-    };
-  }
-
-  return {
-    emptyTitle: "No active categories found",
-    emptyDescription: "Try adjusting your search or add a new category to get started.",
-    deleteActionLabel: "Archive Category",
+    },
   };
+
+  return labelsByViewMode[viewMode];
 }

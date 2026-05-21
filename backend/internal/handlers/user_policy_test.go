@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -18,6 +19,8 @@ type fakeUserRepo struct {
 	permissions         []string
 	getPermissionsErr   error
 	permissionOverrides []*models.UserPermission
+	hasSalesHistory     bool
+	hasExpenseHistory   bool
 }
 
 func (f *fakeUserRepo) GetByID(context.Context, uuid.UUID) (*models.User, error) {
@@ -26,14 +29,22 @@ func (f *fakeUserRepo) GetByID(context.Context, uuid.UUID) (*models.User, error)
 func (f *fakeUserRepo) ListWithFilter(context.Context, int, int, *bool, string, string) ([]*models.User, int, error) {
 	return nil, 0, nil
 }
-func (f *fakeUserRepo) Create(context.Context, *models.User) error               { return nil }
-func (f *fakeUserRepo) Update(context.Context, *models.User) error               { return nil }
-func (f *fakeUserRepo) UpdatePassword(context.Context, uuid.UUID, string) error  { return nil }
-func (f *fakeUserRepo) UpdatePIN(context.Context, uuid.UUID, *string) error      { return nil }
-func (f *fakeUserRepo) Deactivate(context.Context, uuid.UUID) error              { return nil }
-func (f *fakeUserRepo) PermanentDelete(context.Context, uuid.UUID) error         { return nil }
-func (f *fakeUserRepo) HasSalesHistory(context.Context, uuid.UUID) (bool, error) { return false, nil }
+func (f *fakeUserRepo) Create(context.Context, *models.User) error              { return nil }
+func (f *fakeUserRepo) Update(context.Context, *models.User) error              { return nil }
+func (f *fakeUserRepo) UpdatePassword(context.Context, uuid.UUID, string) error { return nil }
+func (f *fakeUserRepo) UpdatePIN(context.Context, uuid.UUID, *string) error     { return nil }
+func (f *fakeUserRepo) Deactivate(context.Context, uuid.UUID) error             { return nil }
+func (f *fakeUserRepo) PermanentDelete(context.Context, uuid.UUID) error        { return nil }
+func (f *fakeUserRepo) HasSalesHistory(context.Context, uuid.UUID) (bool, error) {
+	return f.hasSalesHistory, nil
+}
+func (f *fakeUserRepo) HasExpenseHistory(context.Context, uuid.UUID) (bool, error) {
+	return f.hasExpenseHistory, nil
+}
 func (f *fakeUserRepo) EmailExists(context.Context, string, *uuid.UUID) (bool, error) {
+	return false, nil
+}
+func (f *fakeUserRepo) NameExists(context.Context, string, *uuid.UUID) (bool, error) {
 	return false, nil
 }
 func (f *fakeUserRepo) GetUserPermissions(context.Context, uuid.UUID) ([]string, error) {
@@ -68,7 +79,10 @@ func TestUserHandlerEnforceTargetUserActionRequiresManagerGrant(t *testing.T) {
 	app.Get("/", func(c *fiber.Ctx) error {
 		c.Locals("role_name", "manager")
 		c.Locals("user_id", uuid.New())
-		return handler.enforceTargetUserAction(c, "manager", userActionEdit)
+		if !handler.enforceTargetUserAction(c, "manager", userActionEdit) {
+			return nil
+		}
+		return nil
 	})
 
 	req := httptest.NewRequest("GET", "/", nil)
@@ -136,5 +150,32 @@ func TestUserHandlerSetPermissionsRejectsUnownedPermissionGrant(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("expected status 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestUserHandlerPermanentDeleteRejectsExpenseHistory(t *testing.T) {
+	targetUserID := uuid.New()
+	handler := &UserHandler{
+		userRepo: &fakeUserRepo{
+			getByIDUser:       &models.User{ID: targetUserID, Name: "Cashier", Role: &models.Role{Name: "cashier"}},
+			permissions:       []string{"can_delete_cashier_users"},
+			hasExpenseHistory: true,
+		},
+	}
+
+	app := fiber.New()
+	app.Delete("/users/:id/permanent", func(c *fiber.Ctx) error {
+		c.Locals("user_id", uuid.New())
+		c.Locals("role_name", "manager")
+		return handler.PermanentDelete(c)
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/users/"+targetUserID.String()+"/permanent", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected status 409, got %d", resp.StatusCode)
 	}
 }

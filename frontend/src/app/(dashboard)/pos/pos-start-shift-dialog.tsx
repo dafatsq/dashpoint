@@ -49,7 +49,7 @@ export function PosStartShiftDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void onSubmit()} disabled={!startingCash}>
+          <Button onClick={() => void onSubmit()}>
             Start Shift
           </Button>
         </DialogFooter>

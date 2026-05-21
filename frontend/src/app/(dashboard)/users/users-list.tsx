@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Archive,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -18,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -28,6 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { User, UserRole } from "@/types";
+import { ActiveArchivedToggle } from "@/components/shared/active-archived-toggle";
+import { DataTableContainer } from "@/components/shared/data-table-container";
 
 interface UsersListProps {
   pageError?: string | null;
@@ -83,6 +84,12 @@ function getRoleBadgeColor(role: UserRole) {
   }
 }
 
+function getBooleanBadgeClasses(enabled: boolean) {
+  return enabled
+    ? "bg-green-600 text-white dark:bg-green-600/90 dark:text-white"
+    : "bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white";
+}
+
 export function UsersList({
   pageError,
   users,
@@ -116,29 +123,7 @@ export function UsersList({
 }: UsersListProps) {
   return (
     <div className="flex-1 p-6 overflow-auto">
-      <div className="flex gap-1 mb-4 p-1 bg-muted rounded-lg w-fit">
-        <button
-          onClick={() => onViewModeChange("active")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            viewMode === "active"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Active
-        </button>
-        <button
-          onClick={() => onViewModeChange("archived")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-            viewMode === "archived"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Archive className="h-4 w-4" />
-          Archived
-        </button>
-      </div>
+      <ActiveArchivedToggle value={viewMode} onChange={onViewModeChange} className="mb-4" />
 
       <Card className="mb-6">
         <CardContent className="p-6">
@@ -178,34 +163,27 @@ export function UsersList({
         </CardContent>
       </Card>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : users.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">
-              {viewMode === "active" ? "No users found" : "No archived users"}
-            </p>
-            {canCreateUser && viewMode === "active" && (
-              <Button variant="link" onClick={onCreate}>
-                Add your first user
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <Card className="hidden lg:block">
-            <CardHeader>
-              <CardTitle>
-                {viewMode === "active" ? "Users" : "Archived Users"} ({users.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
+      <DataTableContainer limit={limit} onLimitChange={onLimitChange} total={total} currentCount={users.length}>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : users.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">
+                {viewMode === "active" ? "No users found" : "No archived users"}
+              </p>
+              {canCreateUser && viewMode === "active" && (
+                <Button variant="link" onClick={onCreate}>
+                  Add your first user
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b text-left text-sm text-muted-foreground">
@@ -243,22 +221,18 @@ export function UsersList({
                         </td>
                         <td className="py-3 text-center">
                           <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              user.has_pin
-                                ? "bg-green-600 text-white dark:bg-green-600/90 dark:text-white"
-                                : "bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white"
-                            }`}
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getBooleanBadgeClasses(
+                              user.has_pin,
+                            )}`}
                           >
                             {user.has_pin ? "Yes" : "No"}
                           </span>
                         </td>
                         <td className="py-3 text-center">
                           <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              user.is_active
-                                ? "bg-green-600 text-white dark:bg-green-600/90 dark:text-white"
-                                : "bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white"
-                            }`}
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getBooleanBadgeClasses(
+                              user.is_active,
+                            )}`}
                           >
                             {user.is_active ? "Active" : "Archived"}
                           </span>
@@ -336,13 +310,8 @@ export function UsersList({
                   </tbody>
                 </table>
               </div>
-            </CardContent>
-          </Card>
 
-          <div className="lg:hidden space-y-4">
-            <h3 className="font-semibold text-lg">
-              {viewMode === "active" ? "Users" : "Archived Users"} ({users.length})
-            </h3>
+              <div className="lg:hidden space-y-4">
             {users.map((user) => (
               <Card key={user.id}>
                 <CardContent className="p-4 space-y-3">
@@ -459,52 +428,35 @@ export function UsersList({
                 </CardContent>
               </Card>
             ))}
-          </div>
+              </div>
+            </>
+          )}
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Show</span>
-              <Select value={String(limit)} onValueChange={(value) => onLimitChange(Number(value))}>
-                <SelectTrigger className="w-[80px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground">entries</span>
+          {!isLoading && users.length > 0 && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(page + 1)}
+                  disabled={!hasMore}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
-
-            <div className="text-sm text-muted-foreground">
-              Page {page} • {Math.min(users.length, limit)} entries of {total}
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(Math.max(1, page - 1))}
-                disabled={page === 1}
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(page + 1)}
-                disabled={!hasMore}
-              >
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
+          )}
+      </DataTableContainer>
     </div>
   );
 }

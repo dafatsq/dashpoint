@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { getCashDrawerDialogCopy } from "./pos-helpers";
 
 interface PosCashDrawerDialogProps {
   open: boolean;
@@ -35,6 +36,8 @@ export function PosCashDrawerDialog({
   onReasonChange,
   onSubmit,
 }: PosCashDrawerDialogProps) {
+  const copy = getCashDrawerDialogCopy(operationType);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
@@ -42,19 +45,15 @@ export function PosCashDrawerDialog({
           <DialogTitle className="flex items-center gap-2">
             {operationType === "pay_in" ? (
               <>
-                <ArrowDownCircle className="h-5 w-5 text-green-600" /> Pay In
+                <ArrowDownCircle className="h-5 w-5 text-green-600" /> {copy.title}
               </>
             ) : (
               <>
-                <ArrowUpCircle className="h-5 w-5 text-red-600" /> Pay Out
+                <ArrowUpCircle className="h-5 w-5 text-red-600" /> {copy.title}
               </>
             )}
           </DialogTitle>
-          <DialogDescription>
-            {operationType === "pay_in"
-              ? "Add cash to the drawer (e.g., change float, deposit)."
-              : "Remove cash from the drawer (e.g., petty cash, withdrawal)."}
-          </DialogDescription>
+          <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div>
@@ -83,14 +82,10 @@ export function PosCashDrawerDialog({
           </Button>
           <Button
             onClick={() => void onSubmit()}
-            disabled={!amount || !reason || isSubmitting}
-            className={operationType === "pay_in" ? "" : "bg-red-600 hover:bg-red-700"}
+            disabled={isSubmitting}
+            className={copy.confirmClassName}
           >
-            {isSubmitting
-              ? "Processing..."
-              : operationType === "pay_in"
-                ? "Confirm Pay In"
-                : "Confirm Pay Out"}
+            {isSubmitting ? "Processing..." : copy.confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

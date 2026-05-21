@@ -1,5 +1,7 @@
 "use client";
 
+import { AlertCircle } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,21 +11,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertCircle } from "lucide-react";
 
-import type { PosErrorState } from "./pos-types";
+export interface GlobalErrorState {
+  title: string;
+  message: string;
+}
 
-interface PosErrorDialogProps {
-  error: PosErrorState | null;
+interface ErrorDialogProps {
+  error: GlobalErrorState | null;
   onClose: () => void;
 }
 
-export function PosErrorDialog({ error, onClose }: PosErrorDialogProps) {
+export function ErrorDialog({ error, onClose }: ErrorDialogProps) {
+  const isOpen = error !== null;
+
   return (
-    <Dialog open={!!error} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="z-[100]">
         <DialogHeader>
-          <DialogTitle className="text-destructive flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertCircle className="h-5 w-5" />
             {error?.title}
           </DialogTitle>

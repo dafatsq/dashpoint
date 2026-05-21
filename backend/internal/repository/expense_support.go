@@ -15,14 +15,27 @@ const expenseSelectColumns = `
 	       e.quantity, e.amount, e.description,
 	       e.expense_date, e.vendor, e.reference_number, e.notes,
 	       e.created_by, u.name as created_by_name, e.created_at, e.updated_at
+`
+
+const expenseListFromClause = `
 	FROM expenses e
 	LEFT JOIN expense_categories ec ON e.category_id = ec.id
 	LEFT JOIN products p ON e.product_id = p.id
 	LEFT JOIN users u ON e.created_by = u.id
 `
 
+func expenseSelectQuery(whereClause string) string {
+	return expenseSelectColumns + expenseListFromClause + whereClause
+}
+
 type expenseScanner interface {
 	Scan(dest ...interface{}) error
+}
+
+type expenseRows interface {
+	Next() bool
+	Scan(dest ...interface{}) error
+	Err() error
 }
 
 func scanExpense(scanner expenseScanner) (*models.Expense, error) {
@@ -53,14 +66,27 @@ func scanExpense(scanner expenseScanner) (*models.Expense, error) {
 	return &expense, nil
 }
 
+func collectExpenses(rows expenseRows) ([]models.Expense, error) {
+	expenses := make([]models.Expense, 0)
+	for rows.Next() {
+		expense, err := scanExpense(rows)
+		if err != nil {
+			return nil, err
+		}
+		if expense != nil {
+			expenses = append(expenses, *expense)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate expenses: %w", err)
+	}
+	return expenses, nil
+}
+
 func buildExpenseListBaseQuery(categoryID *uuid.UUID, startDate, endDate *time.Time) (string, []interface{}, int) {
-	baseQuery := `
-		FROM expenses e
-		LEFT JOIN expense_categories ec ON e.category_id = ec.id
-		LEFT JOIN products p ON e.product_id = p.id
-		LEFT JOIN users u ON e.created_by = u.id
-		WHERE 1=1
-	`
+	baseQuery := expenseListFromClause + `
+	WHERE 1=1
+`
 	args := []interface{}{}
 	argNum := 1
 

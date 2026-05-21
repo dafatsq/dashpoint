@@ -29,7 +29,6 @@ interface ExpensesFormDialogProps {
   formData: CreateExpenseRequest;
   formErrors: { amount?: string; description?: string; general?: string };
   isSubmitting: boolean;
-  hasChanges: boolean;
   isInventoryPurchase: boolean;
   isManualAmount: boolean;
   isManualDescription: boolean;
@@ -50,7 +49,6 @@ export function ExpensesFormDialog({
   formData,
   formErrors,
   isSubmitting,
-  hasChanges,
   isInventoryPurchase,
   isManualAmount,
   isManualDescription,
@@ -62,6 +60,10 @@ export function ExpensesFormDialog({
   onSubmit,
   formatCurrency,
 }: ExpensesFormDialogProps) {
+  const updateFormData = (patch: Partial<CreateExpenseRequest>) => {
+    onFormDataChange({ ...formData, ...patch });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
@@ -98,7 +100,7 @@ export function ExpensesFormDialog({
                       notes: "",
                     });
                   } else {
-                    onFormDataChange({ ...formData, category_id: value, product_id: "", quantity: "" });
+                    updateFormData({ category_id: value, product_id: "", quantity: "" });
                   }
                   onManualAmountChange(false);
                   onManualDescriptionChange(false);
@@ -129,7 +131,7 @@ export function ExpensesFormDialog({
                     min="1"
                     value={formData.quantity}
                     onChange={(event) => {
-                      onFormDataChange({ ...formData, quantity: event.target.value });
+                      updateFormData({ quantity: event.target.value });
                       onManualAmountChange(false);
                       onManualDescriptionChange(false);
                     }}
@@ -163,7 +165,7 @@ export function ExpensesFormDialog({
                 <Select
                   value={formData.product_id || "none"}
                   onValueChange={(value) => {
-                    onFormDataChange({ ...formData, product_id: value === "none" ? "" : value });
+                    updateFormData({ product_id: value === "none" ? "" : value });
                     onManualAmountChange(false);
                     onManualDescriptionChange(false);
                   }}
@@ -191,16 +193,14 @@ export function ExpensesFormDialog({
                   id="description"
                   value={formData.description}
                   onChange={(event) => {
-                    onFormDataChange({ ...formData, description: event.target.value });
+                    updateFormData({ description: event.target.value });
                     if (formErrors.description) {
                       onFormErrorsChange({ ...formErrors, description: undefined });
                     }
                   }}
                   placeholder="e.g., Monthly electricity bill"
-                  className={formErrors.description ? "border-destructive" : ""}
                   disabled={!formData.category_id}
                 />
-                {formErrors.description && <p className="text-sm text-destructive">{formErrors.description}</p>}
               </>
             )}
           </div>
@@ -229,7 +229,7 @@ export function ExpensesFormDialog({
                 type="number"
                 value={formData.amount}
                 onChange={(event) => {
-                  onFormDataChange({ ...formData, amount: event.target.value });
+                  updateFormData({ amount: event.target.value });
                   if (formErrors.amount) {
                     onFormErrorsChange({ ...formErrors, amount: undefined });
                   }
@@ -238,7 +238,6 @@ export function ExpensesFormDialog({
                   }
                 }}
                 placeholder="100000"
-                className={formErrors.amount ? "border-destructive" : ""}
                 disabled={
                   !formData.category_id ||
                   (isInventoryPurchase && !isManualAmount && !!formData.product_id && !!formData.quantity)
@@ -247,7 +246,6 @@ export function ExpensesFormDialog({
               {isInventoryPurchase && !isManualAmount && formData.product_id && formData.quantity && (
                 <p className="text-xs text-muted-foreground">Auto-calculated from product cost × quantity</p>
               )}
-              {formErrors.amount && <p className="text-sm text-destructive">{formErrors.amount}</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="expense_date" className={!formData.category_id ? "opacity-50" : ""}>
@@ -255,7 +253,7 @@ export function ExpensesFormDialog({
               </Label>
               <DatePicker
                 date={formData.expense_date}
-                onSelect={(date) => onFormDataChange({ ...formData, expense_date: date })}
+                onSelect={(date) => updateFormData({ expense_date: date })}
                 disabled={!formData.category_id}
               />
             </div>
@@ -277,7 +275,7 @@ export function ExpensesFormDialog({
                 <Input
                   id="vendor_inventory"
                   value={formData.vendor}
-                  onChange={(event) => onFormDataChange({ ...formData, vendor: event.target.value })}
+                  onChange={(event) => updateFormData({ vendor: event.target.value })}
                   placeholder="e.g., Supplier Name"
                   disabled={!formData.category_id}
                 />
@@ -305,14 +303,13 @@ export function ExpensesFormDialog({
                   id="description_inventory"
                   value={formData.description}
                   onChange={(event) => {
-                    onFormDataChange({ ...formData, description: event.target.value });
+                    updateFormData({ description: event.target.value });
                     if (formErrors.description) {
                       onFormErrorsChange({ ...formErrors, description: undefined });
                     }
                     onManualDescriptionChange(true);
                   }}
                   placeholder="e.g., Stock for February"
-                  className={formErrors.description ? "border-destructive" : ""}
                   disabled={!formData.category_id || (!isManualDescription && !!formData.product_id && !!formData.quantity)}
                 />
                 {!isManualDescription && formData.product_id && formData.quantity && (
@@ -329,7 +326,7 @@ export function ExpensesFormDialog({
             <Input
               id="reference_number"
               value={formData.reference_number}
-              onChange={(event) => onFormDataChange({ ...formData, reference_number: event.target.value })}
+              onChange={(event) => updateFormData({ reference_number: event.target.value })}
               placeholder="e.g., Invoice #12345"
               disabled={!formData.category_id}
             />
@@ -342,7 +339,7 @@ export function ExpensesFormDialog({
             <Input
               id="notes"
               value={formData.notes}
-              onChange={(event) => onFormDataChange({ ...formData, notes: event.target.value })}
+              onChange={(event) => updateFormData({ notes: event.target.value })}
               placeholder="Additional notes..."
               disabled={!formData.category_id}
             />
@@ -353,7 +350,7 @@ export function ExpensesFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting || !formData.category_id || !hasChanges}>
+          <Button onClick={onSubmit} disabled={isSubmitting}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

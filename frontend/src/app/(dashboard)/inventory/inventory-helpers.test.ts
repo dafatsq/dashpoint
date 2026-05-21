@@ -5,6 +5,7 @@ import type { Product } from "@/types";
 import {
   ADJUSTMENT_TYPE_OPTIONS,
   buildInventoryAdjustmentRequest,
+  canSubmitInventoryAdjustment,
   classifyInventoryStock,
   createEmptyAdjustmentFormState,
   getDefaultAdjustmentType,
@@ -66,6 +67,43 @@ describe("inventory helpers", () => {
       "add",
       "count",
     ]);
+  });
+
+  test("requires at least one allowed action and a permitted selected action before submit", () => {
+    expect(
+      canSubmitInventoryAdjustment({
+        allowedActions: [],
+        action: "add",
+        quantity: "5",
+        isSubmitting: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitInventoryAdjustment({
+        allowedActions: ["count"],
+        action: "add",
+        quantity: "5",
+        isSubmitting: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitInventoryAdjustment({
+        allowedActions: ["count"],
+        action: "count",
+        quantity: "5",
+        isSubmitting: false,
+      }),
+    ).toBe(true);
+    expect(
+      canSubmitInventoryAdjustment({
+        allowedActions: ["count"],
+        action: "count",
+        quantity: "",
+        isSubmitting: false,
+      }),
+    ).toBe(false);
   });
 
   test("returns the correct default backend adjustment type", () => {

@@ -57,6 +57,11 @@ func (f *fakeManagedCategoryStore) Delete(ctx context.Context, id uuid.UUID) err
 	}
 	return nil
 }
+
+func (f *fakeManagedCategoryStore) DuplicateSiblingExists(context.Context, string, *uuid.UUID, *uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 func (f *fakeManagedCategoryStore) PermanentDelete(ctx context.Context, id uuid.UUID) error {
 	if f.permanentDeleteFunc != nil {
 		return f.permanentDeleteFunc(ctx, id)

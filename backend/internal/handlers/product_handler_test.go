@@ -277,6 +277,10 @@ func (f *fakeProductStore) BarcodeExists(ctx context.Context, barcode string, ex
 	return false, nil
 }
 
+func (f *fakeProductStore) NameExists(ctx context.Context, name string, excludeID *uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 type fakeInventoryStore struct {
 	getByProductIDFunc       func(context.Context, uuid.UUID) (*models.InventoryItem, error)
 	adjustStockFunc          func(context.Context, uuid.UUID, models.AdjustmentType, decimal.Decimal, *string, *string, *uuid.UUID, uuid.UUID) (*models.StockAdjustment, error)

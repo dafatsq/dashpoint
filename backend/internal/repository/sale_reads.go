@@ -10,32 +10,98 @@ import (
 	"dashpoint/backend/internal/models"
 )
 
-// GetByID retrieves a sale by ID with items and payments.
-func (r *SaleRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sale, error) {
-	sale := &models.Sale{}
-
-	err := r.pool.QueryRow(ctx, `
+const saleSummarySelectColumns = `
 		SELECT
 			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
 			s.item_count, s.payment_status, s.amount_paid, s.change_amount, s.discount_type,
 			s.discount_value, s.discount_reason, s.employee_id, s.shift_id, s.customer_name,
 			s.customer_phone, s.status, s.voided_at, s.voided_by, s.void_reason, s.notes,
 			s.created_at, s.updated_at, u.name as employee_name
-		FROM sales s
-		LEFT JOIN users u ON s.employee_id = u.id
-		WHERE s.id = $1
-	`, id).Scan(
+`
+
+const saleListSelectColumns = `
+		SELECT
+			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
+			s.item_count, s.payment_status, s.amount_paid, s.change_amount,
+			s.employee_id, s.shift_id, s.customer_name, s.status, s.created_at, s.updated_at,
+			u.name as employee_name,
+			(SELECT payment_method FROM payments WHERE sale_id = s.id LIMIT 1) as payment_method
+`
+
+type saleScanner interface {
+	Scan(dest ...any) error
+}
+
+type saleRows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Err() error
+}
+
+func scanSaleSummary(scanner saleScanner) (*models.Sale, error) {
+	sale := &models.Sale{}
+	if err := scanner.Scan(
 		&sale.ID, &sale.InvoiceNo, &sale.Subtotal, &sale.TaxAmount, &sale.DiscountAmount,
 		&sale.TotalAmount, &sale.ItemCount, &sale.PaymentStatus, &sale.AmountPaid, &sale.ChangeAmount,
 		&sale.DiscountType, &sale.DiscountValue, &sale.DiscountReason, &sale.EmployeeID, &sale.ShiftID,
 		&sale.CustomerName, &sale.CustomerPhone, &sale.Status, &sale.VoidedAt, &sale.VoidedBy,
 		&sale.VoidReason, &sale.Notes, &sale.CreatedAt, &sale.UpdatedAt, &sale.EmployeeName,
-	)
-	if err != nil {
+	); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
+	}
+	return sale, nil
+}
+
+func scanSaleListRow(scanner saleScanner) (*models.Sale, error) {
+	var (
+		sale          models.Sale
+		paymentMethod *string
+	)
+	if err := scanner.Scan(
+		&sale.ID, &sale.InvoiceNo, &sale.Subtotal, &sale.TaxAmount, &sale.DiscountAmount, &sale.TotalAmount,
+		&sale.ItemCount, &sale.PaymentStatus, &sale.AmountPaid, &sale.ChangeAmount,
+		&sale.EmployeeID, &sale.ShiftID, &sale.CustomerName, &sale.Status, &sale.CreatedAt, &sale.UpdatedAt,
+		&sale.EmployeeName, &paymentMethod,
+	); err != nil {
+		return nil, err
+	}
+	if paymentMethod != nil {
+		sale.Payments = []models.Payment{{PaymentMethod: models.PaymentMethod(*paymentMethod)}}
+	}
+	return &sale, nil
+}
+
+func collectSales(rows saleRows) ([]models.Sale, error) {
+	sales := make([]models.Sale, 0)
+	for rows.Next() {
+		sale, err := scanSaleListRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		sales = append(sales, *sale)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return sales, nil
+}
+
+// GetByID retrieves a sale by ID with items and payments.
+func (r *SaleRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sale, error) {
+	sale, err := scanSaleSummary(r.pool.QueryRow(ctx, `
+`+saleSummarySelectColumns+`
+		FROM sales s
+		LEFT JOIN users u ON s.employee_id = u.id
+		WHERE s.id = $1
+	`, id))
+	if err != nil {
+		return nil, err
+	}
+	if sale == nil {
+		return nil, nil
 	}
 
 	items, err := loadSaleItems(ctx, r.pool, id)
@@ -96,6 +162,11 @@ func (r *SaleRepository) List(ctx context.Context, filter *SaleFilter) ([]models
 		args = append(args, *filter.EndDate)
 		argIndex++
 	}
+	if filter.InvoiceSearch != nil {
+		whereClause += fmt.Sprintf(" AND s.invoice_no ILIKE $%d", argIndex)
+		args = append(args, "%"+*filter.InvoiceSearch+"%")
+		argIndex++
+	}
 
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM sales s %s", whereClause)
 	var total int
@@ -104,18 +175,13 @@ func (r *SaleRepository) List(ctx context.Context, filter *SaleFilter) ([]models
 	}
 
 	query := fmt.Sprintf(`
-		SELECT
-			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
-			s.item_count, s.payment_status, s.amount_paid, s.change_amount,
-			s.employee_id, s.shift_id, s.customer_name, s.status, s.created_at, s.updated_at,
-			u.name as employee_name,
-			(SELECT payment_method FROM payments WHERE sale_id = s.id LIMIT 1) as payment_method
+%s
 		FROM sales s
 		LEFT JOIN users u ON s.employee_id = u.id
 		%s
 		ORDER BY s.created_at DESC
 		LIMIT $%d OFFSET $%d
-	`, whereClause, argIndex, argIndex+1)
+	`, saleListSelectColumns, whereClause, argIndex, argIndex+1)
 	args = append(args, filter.Limit, filter.Offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -124,23 +190,9 @@ func (r *SaleRepository) List(ctx context.Context, filter *SaleFilter) ([]models
 	}
 	defer rows.Close()
 
-	var sales []models.Sale
-	for rows.Next() {
-		var s models.Sale
-		var paymentMethod *string
-		err := rows.Scan(
-			&s.ID, &s.InvoiceNo, &s.Subtotal, &s.TaxAmount, &s.DiscountAmount, &s.TotalAmount,
-			&s.ItemCount, &s.PaymentStatus, &s.AmountPaid, &s.ChangeAmount,
-			&s.EmployeeID, &s.ShiftID, &s.CustomerName, &s.Status, &s.CreatedAt, &s.UpdatedAt,
-			&s.EmployeeName, &paymentMethod,
-		)
-		if err != nil {
-			return nil, 0, err
-		}
-		if paymentMethod != nil {
-			s.Payments = []models.Payment{{PaymentMethod: models.PaymentMethod(*paymentMethod)}}
-		}
-		sales = append(sales, s)
+	sales, err := collectSales(rows)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return sales, total, nil

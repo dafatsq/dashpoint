@@ -13,7 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Banknote, Building2, CheckCircle, CreditCard, Loader2, QrCode } from "lucide-react";
 import type { PaymentMethod } from "@/types";
 
-import { formatCurrency, QUICK_CASH_AMOUNTS } from "./pos-helpers";
+import {
+  formatCurrency,
+  parseNumericInput,
+  QUICK_CASH_AMOUNTS,
+} from "./pos-helpers";
 
 interface PosCheckoutDialogProps {
   open: boolean;
@@ -44,7 +48,7 @@ export function PosCheckoutDialog({
   onAmountPaidChange,
   onSubmit,
 }: PosCheckoutDialogProps) {
-  const amountPaidNumber = parseFloat(amountPaid || "0");
+  const amountPaidNumber = parseNumericInput(amountPaid);
   const change = amountPaidNumber - total;
 
   return (
@@ -161,7 +165,7 @@ export function PosCheckoutDialog({
               </Button>
               <Button
                 onClick={() => void onSubmit()}
-                disabled={isProcessing || (paymentMethod === "cash" && amountPaidNumber < total)}
+                disabled={isProcessing}
               >
                 {isProcessing ? (
                   <>

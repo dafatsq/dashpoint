@@ -1,7 +1,7 @@
 import { ImageIcon, Loader2, Package, Pencil, RotateCcw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Product } from "@/types";
 
 import { getProductLowStockThreshold, getProductPriceValue, getProductQuantityValue } from "./products-helpers";
@@ -11,7 +11,6 @@ interface ProductsListProps {
   canEdit: boolean;
   canDelete: boolean;
   products: Product[];
-  totalProducts: number;
   viewMode: "active" | "archived";
   isLoading: boolean;
   isFetchingMore: boolean;
@@ -32,7 +31,6 @@ export function ProductsList({
   canEdit,
   canDelete,
   products,
-  totalProducts,
   viewMode,
   isLoading,
   isFetchingMore,
@@ -201,12 +199,7 @@ export function ProductsList({
       </div>
 
       <Card className="hidden md:block">
-        <CardHeader>
-          <CardTitle>
-            {viewMode === "active" ? "Products" : "Archived Products"} ({totalProducts || products.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>

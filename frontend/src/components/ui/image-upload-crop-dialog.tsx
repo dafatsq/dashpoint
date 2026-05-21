@@ -1,10 +1,12 @@
-'use client';
+"use client";
 
-import Cropper from 'react-easy-crop';
-import type { Area } from 'react-easy-crop';
-import { Check } from 'lucide-react';
+import { useState } from "react";
 
-import { Button } from '@/components/ui/button';
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
+import { Check } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
 interface ImageUploadCropDialogProps {
   open: boolean;
@@ -28,6 +30,12 @@ interface ImageUploadCropDialogProps {
   onConfirm: () => void;
 }
 
+const cropZoomBounds = {
+  min: 1,
+  max: 3,
+  step: 0.1,
+} as const;
+
 export function ImageUploadCropDialog({
   open,
   image,
@@ -41,6 +49,18 @@ export function ImageUploadCropDialog({
   onCancel,
   onConfirm,
 }: ImageUploadCropDialogProps) {
+  const [error, setError] = useState("");
+
+  const handleConfirm = () => {
+    if (!croppedAreaPixels) {
+      setError("Adjust the crop area before uploading.");
+      return;
+    }
+
+    setError("");
+    onConfirm();
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -69,20 +89,26 @@ export function ImageUploadCropDialog({
           <label className="text-sm font-medium">Zoom</label>
           <input
             type="range"
-            min={1}
-            max={3}
-            step={0.1}
+            min={cropZoomBounds.min}
+            max={cropZoomBounds.max}
+            step={cropZoomBounds.step}
             value={zoom}
             onChange={(e) => onZoomChange(Number(e.target.value))}
             className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
           />
         </div>
 
+        {error ? (
+          <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        ) : null}
+
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={onConfirm} disabled={!croppedAreaPixels}>
+          <Button onClick={handleConfirm}>
             <Check className="h-4 w-4 mr-2" />
             Crop & Upload
           </Button>

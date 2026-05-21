@@ -21,12 +21,15 @@ import type {
 import { PosCartView } from "./pos-cart-view";
 import { PosCashDrawerDialog } from "./pos-cash-drawer-dialog";
 import { PosCheckoutDialog } from "./pos-checkout-dialog";
-import { PosErrorDialog } from "./pos-error-dialog";
+import { useGlobalError } from "@/contexts/error-context";
 import {
   addCartItem,
   buildSaleRequest,
+  canSubmitEndShift,
+  canSubmitStartShift,
   calculateCartTotals,
   formatCurrency,
+  parseNumericInput,
   removeCartItem,
   updateCartItemQuantity,
 } from "./pos-helpers";
@@ -34,10 +37,16 @@ import { PosProductGrid } from "./pos-product-grid";
 import { PosShiftDetailsDialog } from "./pos-shift-details-dialog";
 import { PosShiftStatusBar } from "./pos-shift-status-bar";
 import { PosStartShiftDialog } from "./pos-start-shift-dialog";
-import type { PosErrorState } from "./pos-types";
 
 function getApiErrorMessage(error: string | undefined, fallback: string): string {
   return error || fallback;
+}
+
+function createEmptyCashDrawerTotals() {
+  return {
+    pay_in_total: "0",
+    pay_out_total: "0",
+  };
 }
 
 export function POSScreen() {
@@ -76,10 +85,7 @@ export function POSScreen() {
   const [cashDrawerAmount, setCashDrawerAmount] = useState("");
   const [cashDrawerReason, setCashDrawerReason] = useState("");
   const [cashDrawerOps, setCashDrawerOps] = useState<CashDrawerOperation[]>([]);
-  const [cashDrawerTotals, setCashDrawerTotals] = useState({
-    pay_in_total: "0",
-    pay_out_total: "0",
-  });
+  const [cashDrawerTotals, setCashDrawerTotals] = useState(createEmptyCashDrawerTotals);
   const [isSubmittingOp, setIsSubmittingOp] = useState(false);
 
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
@@ -90,13 +96,9 @@ export function POSScreen() {
   const [lastInvoice, setLastInvoice] = useState("");
   const [lastChange, setLastChange] = useState(0);
 
-  const [errorState, setErrorState] = useState<PosErrorState | null>(null);
+  const { showError } = useGlobalError();
 
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-
-  const showError = useCallback((title: string, message: string) => {
-    setErrorState({ title, message });
-  }, []);
 
   useEffect(() => {
     if (!isAuthLoading && !hasPermission(PERMISSIONS.POS_VIEW)) {
@@ -113,7 +115,7 @@ export function POSScreen() {
   }, [searchQuery]);
 
   const totals = useMemo(
-    () => calculateCartTotals(cartItems, discount, parseFloat(amountPaid || "0")),
+    () => calculateCartTotals(cartItems, discount, parseNumericInput(amountPaid)),
     [amountPaid, cartItems, discount],
   );
 
@@ -209,6 +211,11 @@ export function POSScreen() {
     [fetchProductsPage],
   );
 
+  const resetCashDrawerSummary = useCallback(() => {
+    setCashDrawerOps([]);
+    setCashDrawerTotals(createEmptyCashDrawerTotals());
+  }, []);
+
   useEffect(() => {
     setProducts([]);
     setPage(1);
@@ -270,10 +277,23 @@ export function POSScreen() {
 
   const handleStartShift = useCallback(async () => {
     if (!startingCash) {
+      showError("Missing Amount", "Enter a starting cash amount before starting a shift.");
       return;
     }
 
-    const result = await api.startShift(parseFloat(startingCash));
+    if (
+      !canSubmitStartShift({
+        canStartShift,
+        startingCash,
+      })
+    ) {
+      if (!canStartShift) {
+        showError("Permission Required", "You no longer have permission to start a shift.");
+      }
+      return;
+    }
+
+    const result = await api.startShift(parseNumericInput(startingCash));
     if (result.error) {
       showError("Start Shift Failed", getApiErrorMessage(result.error, "Failed to start shift."));
       return;
@@ -284,14 +304,23 @@ export function POSScreen() {
       setShiftDialogOpen(false);
       setStartingCash("");
     }
-  }, [showError, startingCash]);
+  }, [canStartShift, showError, startingCash]);
 
   const handleEndShift = useCallback(async () => {
-    if (!endingCash) {
+    if (
+      !canSubmitEndShift({
+        canEndShift,
+        endingCash,
+        isProcessing,
+      })
+    ) {
+      if (!canEndShift) {
+        showError("Permission Required", "You no longer have permission to end a shift.");
+      }
       return;
     }
 
-    const cashAmount = parseFloat(endingCash);
+    const cashAmount = parseNumericInput(endingCash);
     if (Number.isNaN(cashAmount) || cashAmount < 0) {
       showError("Invalid Amount", "Please enter a valid positive cash amount");
       return;
@@ -313,7 +342,7 @@ export function POSScreen() {
     } finally {
       setIsProcessing(false);
     }
-  }, [closingNotes, endingCash, showError]);
+  }, [canEndShift, closingNotes, endingCash, isProcessing, showError]);
 
   const openShiftDetails = useCallback(async () => {
     const shiftResult = await api.getCurrentShift();
@@ -324,11 +353,7 @@ export function POSScreen() {
 
     const nextShift = shiftResult.data || null;
     setCurrentShift(nextShift);
-    setCashDrawerOps([]);
-    setCashDrawerTotals({
-      pay_in_total: "0",
-      pay_out_total: "0",
-    });
+    resetCashDrawerSummary();
 
     if (nextShift) {
       const operationsResult = await api.getShiftOperations(nextShift.id);
@@ -352,7 +377,7 @@ export function POSScreen() {
     setEndingCash("");
     setClosingNotes("");
     setShiftDetailsOpen(true);
-  }, [showError]);
+  }, [resetCashDrawerSummary, showError]);
 
   const openCashDrawerDialog = useCallback((type: "pay_in" | "pay_out") => {
     setCashDrawerOpType(type);
@@ -362,7 +387,13 @@ export function POSScreen() {
   }, []);
 
   const handleCashDrawerOp = useCallback(async () => {
-    if (!cashDrawerAmount || !cashDrawerReason) {
+    if (!cashDrawerAmount) {
+      showError("Missing Amount", "Enter an amount before submitting this cash drawer operation.");
+      return;
+    }
+
+    if (!cashDrawerReason) {
+      showError("Missing Reason", "Enter a reason before submitting this cash drawer operation.");
       return;
     }
 
@@ -390,6 +421,11 @@ export function POSScreen() {
       return;
     }
 
+    if (paymentMethod === "cash" && parseNumericInput(amountPaid) < totals.total) {
+      showError("Insufficient Payment", "Amount received must cover the total before completing the sale.");
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const saleRequest = buildSaleRequest(
@@ -397,7 +433,7 @@ export function POSScreen() {
         paymentMethod,
         discount,
         totals.total,
-        parseFloat(amountPaid || "0"),
+        parseNumericInput(amountPaid),
       );
 
       const result = await api.createSale(saleRequest);
@@ -597,7 +633,7 @@ export function POSScreen() {
         onSubmit={handleCompleteSale}
       />
 
-      <PosErrorDialog error={errorState} onClose={() => setErrorState(null)} />
+
     </div>
   );
 }

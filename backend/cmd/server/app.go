@@ -18,6 +18,8 @@ import (
 	"dashpoint/backend/internal/repository"
 )
 
+const uploadDirectory = "./uploads"
+
 type serverDependencies struct {
 	jwtManager        *auth.JWTManager
 	userRepo          *repository.UserRepository
@@ -58,8 +60,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 
 	audit.Init(auditRepo)
 
-	uploadDir := "./uploads"
-	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+	if err := os.MkdirAll(uploadDirectory, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create upload directory: %w", err)
 	}
 
@@ -78,16 +79,16 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 		eventsHandler:     eventsHandler,
 		userHandler:       userHandler,
 		roleHandler:       handlers.NewRoleHandler(roleRepo, permissionRepo),
-		productHandler:    handlers.NewProductHandler(productRepo, inventoryRepo, categoryRepo, uploadDir),
+		productHandler:    handlers.NewProductHandler(productRepo, inventoryRepo, categoryRepo, uploadDirectory),
 		categoryHandler:   handlers.NewCategoryHandler(categoryRepo),
 		shiftHandler:      handlers.NewShiftHandler(shiftRepo),
 		saleHandler:       handlers.NewSaleHandler(saleRepo, shiftRepo),
 		reportHandler:     handlers.NewReportHandler(reportRepo),
 		auditHandler:      handlers.NewAuditHandler(auditRepo),
 		expenseHandler:    handlers.NewExpenseHandler(expenseRepo, inventoryRepo, productRepo),
-		uploadHandler:     handlers.NewUploadHandler(uploadDir),
+		uploadHandler:     handlers.NewUploadHandler(uploadDirectory),
 		cashDrawerHandler: handlers.NewCashDrawerHandler(cashDrawerRepo, shiftRepo),
-		uploadDir:         uploadDir,
+		uploadDir:         uploadDirectory,
 	}
 
 	return deps, nil
@@ -123,6 +124,7 @@ func newServerApp(cfg *config.Config, deps *serverDependencies) *fiber.App {
 	app.Use(middleware.Logger())
 	app.Use(middleware.CORS(cfg.CORSOrigins))
 	app.Use(middleware.RequestID())
+	app.Use(middleware.SecureHeaders())
 
 	app.Static("/uploads", deps.uploadDir, fiber.Static{
 		Browse: false,
@@ -155,7 +157,8 @@ func errorHandler(c *fiber.Ctx, err error) error {
 		Msg("Request error")
 
 	return c.Status(code).JSON(fiber.Map{
-		"code":    code,
-		"message": message,
+		"code":       code,
+		"message":    message,
+		"request_id": middleware.GetRequestID(c),
 	})
 }

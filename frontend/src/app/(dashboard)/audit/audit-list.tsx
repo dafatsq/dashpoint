@@ -1,6 +1,12 @@
-'use client';
+"use client";
 
-import { ChevronLeft, ChevronRight, Eye, Loader2, ScrollText } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Loader2,
+  ScrollText,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +40,18 @@ export function AuditList({
   onPageChange,
   onViewLog,
 }: AuditListProps) {
+  const renderDetailsButton = (log: AuditLog) => (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-8"
+      onClick={() => onViewLog(log)}
+    >
+      <Eye className="mr-1 h-3.5 w-3.5" />
+      Details
+    </Button>
+  );
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -89,10 +107,16 @@ export function AuditList({
               <tbody>
                 {logs.map((log) => (
                   <tr key={log.id} className="border-b last:border-0">
-                    <td className="py-3 text-sm">{formatActivityDate(log.created_at)}</td>
-                    <td className="py-3 text-sm font-medium">{log.user_name || "System"}</td>
+                    <td className="py-3 text-sm">
+                      {formatActivityDate(log.created_at)}
+                    </td>
+                    <td className="py-3 text-sm font-medium">
+                      {log.user_name || "System"}
+                    </td>
                     <td className="py-3">
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${getActivityBadgeColor(log.action)}`}>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${getActivityBadgeColor(log.action)}`}
+                      >
                         {getActivityActionLabel(log.action)}
                       </span>
                     </td>
@@ -104,11 +128,11 @@ export function AuditList({
                         </span>
                       ) : null}
                     </td>
-                    <td className="py-3 text-sm text-muted-foreground">{log.ip_address || "-"}</td>
+                    <td className="py-3 text-sm text-muted-foreground">
+                      {log.ip_address || "-"}
+                    </td>
                     <td className="py-3 text-right">
-                      <Button variant="ghost" size="icon" onClick={() => onViewLog(log)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      {renderDetailsButton(log)}
                     </td>
                   </tr>
                 ))}
@@ -124,29 +148,37 @@ export function AuditList({
             <CardContent className="p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${getActivityBadgeColor(log.action)}`}>
+                  <span
+                    className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${getActivityBadgeColor(log.action)}`}
+                  >
                     {getActivityActionLabel(log.action)}
                   </span>
-                  <span className="text-xs text-muted-foreground">{formatActivityDate(log.created_at)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatActivityDate(log.created_at)}
+                  </span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onViewLog(log)}>
-                  <Eye className="h-4 w-4" />
-                </Button>
+                {renderDetailsButton(log)}
               </div>
 
               <div className="grid gap-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">User:</span>
-                  <span className="font-medium">{log.user_name || "System"}</span>
+                  <span className="font-medium">
+                    {log.user_name || "System"}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Entity:</span>
-                  <span className="font-medium">{getActivityEntityLabel(log.entity_type)}</span>
+                  <span className="font-medium">
+                    {getActivityEntityLabel(log.entity_type)}
+                  </span>
                 </div>
                 {log.entity_id ? (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">ID:</span>
-                    <span className="font-mono text-xs">{log.entity_id.slice(0, 8)}...</span>
+                    <span className="font-mono text-xs">
+                      {log.entity_id.slice(0, 8)}...
+                    </span>
                   </div>
                 ) : null}
               </div>
@@ -158,11 +190,21 @@ export function AuditList({
       <div className="flex items-center justify-between pt-4">
         <p className="text-sm text-muted-foreground">Page {page}</p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            disabled={page === 1}
+          >
             <ChevronLeft className="h-4 w-4" />
             Previous
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onPageChange(page + 1)} disabled={!hasMore}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(page + 1)}
+            disabled={!hasMore}
+          >
             Next
             <ChevronRight className="h-4 w-4" />
           </Button>

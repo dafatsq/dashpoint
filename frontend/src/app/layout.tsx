@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
+import { ErrorProvider } from "@/contexts/error-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,17 +19,25 @@ export const metadata: Metadata = {
   description: "Point of Sale System for Indonesian Stores",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
+type RootLayoutProps = Readonly<{
   children: React.ReactNode;
-}>) {
+}>;
+
+function AppProviders({ children }: RootLayoutProps) {
+  return (
+    <ErrorProvider>
+      <AuthProvider>{children}</AuthProvider>
+    </ErrorProvider>
+  );
+}
+
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>{children}</AuthProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

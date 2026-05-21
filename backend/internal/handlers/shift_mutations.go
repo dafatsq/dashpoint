@@ -10,6 +10,11 @@ import (
 	"dashpoint/backend/internal/models"
 )
 
+const (
+	shiftStartSuccessMessage = "Shift started successfully"
+	shiftCloseSuccessMessage = "Shift closed successfully"
+)
+
 // StartShift handles POST /api/v1/shifts/start.
 func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
@@ -27,18 +32,9 @@ func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 		})
 	}
 
-	var req StartShiftRequest
-	if err := c.BodyParser(&req); err != nil {
+	req, openingCash, err := parseStartShiftRequest(c)
+	if err != nil {
 		return shiftInvalidRequest(c)
-	}
-
-	openingCash := decimal.Zero
-	if req.OpeningCash != "" {
-		cash, err := decimal.NewFromString(req.OpeningCash)
-		if err != nil {
-			return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_AMOUNT", "Invalid opening cash amount")
-		}
-		openingCash = cash
 	}
 
 	shift := &models.Shift{
@@ -55,10 +51,17 @@ func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 		shift = created
 	}
 
-	audit.LogFromFiber(c, models.AuditActionShiftStart, models.AuditEntityShift, shift.ID.String(), "Started shift")
+	newValues := map[string]interface{}{}
+	if req.OpeningCash != "" {
+		newValues["opening_cash"] = req.OpeningCash
+	}
+	if req.Notes != nil {
+		newValues["notes"] = *req.Notes
+	}
+	audit.LogWithValues(c, models.AuditActionShiftStart, models.AuditEntityShift, shift.ID.String(), "Started shift", nil, newValues)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Shift started successfully",
+		"message": shiftStartSuccessMessage,
 		"shift":   shift,
 	})
 }
@@ -76,14 +79,9 @@ func (h *ShiftHandler) CloseShift(c *fiber.Ctx) error {
 		return middleware.JSONError(c, fiber.StatusNotFound, "NO_OPEN_SHIFT", "No open shift found")
 	}
 
-	var req CloseShiftRequest
-	if err := c.BodyParser(&req); err != nil {
-		return shiftInvalidRequest(c)
-	}
-
-	closingCash, err := decimal.NewFromString(req.ClosingCash)
+	req, closingCash, err := parseCloseShiftRequest(c)
 	if err != nil {
-		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_AMOUNT", "Invalid closing cash amount")
+		return err
 	}
 
 	if err := h.shiftRepo.CloseShift(c.Context(), shift.ID, closingCash, req.Notes, userID); err != nil {
@@ -92,10 +90,56 @@ func (h *ShiftHandler) CloseShift(c *fiber.Ctx) error {
 	}
 
 	closed, _ := h.shiftRepo.GetByID(c.Context(), shift.ID)
-	audit.LogFromFiber(c, models.AuditActionShiftClose, models.AuditEntityShift, shift.ID.String(), "Closed shift")
+	oldValues := map[string]interface{}{}
+	if closed.ExpectedCash != nil {
+		oldValues["expected_cash"] = closed.ExpectedCash.String()
+	}
+	newValues := map[string]interface{}{}
+	if closed.ClosingCash != nil {
+		newValues["closing_cash"] = closed.ClosingCash.String()
+	}
+	if closed.CashDifference != nil {
+		newValues["difference"] = closed.CashDifference.String()
+	}
+	if req.Notes != nil {
+		newValues["notes"] = *req.Notes
+	}
+	audit.LogWithValues(c, models.AuditActionShiftClose, models.AuditEntityShift, shift.ID.String(), "Closed shift", oldValues, newValues)
 
 	return c.JSON(fiber.Map{
-		"message": "Shift closed successfully",
+		"message": shiftCloseSuccessMessage,
 		"shift":   closed,
 	})
+}
+
+func parseStartShiftRequest(c *fiber.Ctx) (*StartShiftRequest, decimal.Decimal, error) {
+	var req StartShiftRequest
+	if err := c.BodyParser(&req); err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	openingCash := decimal.Zero
+	if req.OpeningCash != "" {
+		cash, err := decimal.NewFromString(req.OpeningCash)
+		if err != nil {
+			return nil, decimal.Zero, middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_AMOUNT", "Invalid opening cash amount")
+		}
+		openingCash = cash
+	}
+
+	return &req, openingCash, nil
+}
+
+func parseCloseShiftRequest(c *fiber.Ctx) (*CloseShiftRequest, decimal.Decimal, error) {
+	var req CloseShiftRequest
+	if err := c.BodyParser(&req); err != nil {
+		return nil, decimal.Zero, shiftInvalidRequest(c)
+	}
+
+	closingCash, err := decimal.NewFromString(req.ClosingCash)
+	if err != nil {
+		return nil, decimal.Zero, middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_AMOUNT", "Invalid closing cash amount")
+	}
+
+	return &req, closingCash, nil
 }

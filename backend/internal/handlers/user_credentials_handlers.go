@@ -26,12 +26,9 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 		return userNotFound(c)
 	}
 
-	targetRoleName := ""
-	if user.Role != nil {
-		targetRoleName = user.Role.Name
-	}
-	if err := h.enforceTargetUserAction(c, targetRoleName, userActionEdit); err != nil {
-		return err
+	targetRoleName := roleNameOfUser(user)
+	if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
+		return nil
 	}
 
 	if req.Password == "" {
@@ -49,10 +46,7 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 	}
 
 	user, _ = h.userRepo.GetByID(c.Context(), id)
-	userName := "Unknown"
-	if user != nil {
-		userName = user.Name
-	}
+	userName := userNameOrUnknown(user)
 	audit.LogWithValues(c, models.AuditActionUserUpdate, models.AuditEntityUser, id.String(), "Updated password for: "+userName,
 		map[string]interface{}{"affected_user": userName, "password": "[set]"},
 		map[string]interface{}{"affected_user": userName, "password": "[changed]"})
@@ -77,12 +71,9 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 		return userNotFound(c)
 	}
 
-	targetRoleName := ""
-	if user.Role != nil {
-		targetRoleName = user.Role.Name
-	}
-	if err := h.enforceTargetUserAction(c, targetRoleName, userActionEdit); err != nil {
-		return err
+	targetRoleName := roleNameOfUser(user)
+	if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
+		return nil
 	}
 
 	var pinHash *string
@@ -101,10 +92,7 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 	}
 
 	user, _ = h.userRepo.GetByID(c.Context(), id)
-	userName := "Unknown"
-	if user != nil {
-		userName = user.Name
-	}
+	userName := userNameOrUnknown(user)
 	newPinStatus := "[changed]"
 	if pinHash == nil {
 		newPinStatus = "[removed]"

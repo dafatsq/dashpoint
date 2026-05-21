@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"strings"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -29,12 +27,9 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 		return middleware.JSONError(c, fiber.StatusForbidden, "CANNOT_MODIFY_SELF", "You cannot modify your own permissions")
 	}
 
-	targetRoleName := ""
-	if user.Role != nil {
-		targetRoleName = user.Role.Name
-	}
-	if err := h.enforceTargetUserAction(c, targetRoleName, userActionManagePermissions); err != nil {
-		return err
+	targetRoleName := roleNameOfUser(user)
+	if !h.enforceTargetUserAction(c, targetRoleName, userActionManagePermissions) {
+		return nil
 	}
 
 	var req SetPermissionsRequest
@@ -43,17 +38,10 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 	}
 
 	grantedBy := middleware.GetUserID(c)
-	var currentUserPermSet map[string]bool
-	if strings.ToLower(middleware.GetRoleName(c)) != "owner" {
-		currentUserPerms, err := h.userRepo.GetUserPermissions(c.Context(), currentUserID)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to fetch current user permissions")
-			return userInternalError(c, "Failed to validate permissions")
-		}
-		currentUserPermSet = make(map[string]bool, len(currentUserPerms))
-		for _, p := range currentUserPerms {
-			currentUserPermSet[p] = true
-		}
+	currentUserPermSet, err := h.permissionSetForPermissionManagement(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to fetch current user permissions")
+		return userInternalError(c, "Failed to validate permissions")
 	}
 
 	oldOverrides, _ := h.userRepo.GetUserPermissionOverrides(c.Context(), id)
@@ -120,6 +108,14 @@ func (h *UserHandler) SetPermissions(c *fiber.Ctx) error {
 		"effective_permissions": permissions,
 		"overrides":             len(overrides),
 	})
+}
+
+func (h *UserHandler) permissionSetForPermissionManagement(c *fiber.Ctx) (map[string]bool, error) {
+	if isRoleName(middleware.GetRoleName(c), roleOwner) {
+		return nil, nil
+	}
+
+	return h.currentUserPermissionSet(c)
 }
 
 // GetPermissions handles GET /api/v1/users/:id/permissions.

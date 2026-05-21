@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Header } from "@/components/layout/header";
+import { DataTableContainer } from "@/components/shared/data-table-container";
 import api from "@/lib/api";
 import type { AuditLog } from "@/types";
 
@@ -20,57 +21,67 @@ export function AuditScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedAction, setSelectedAction] = useState("all");
   const [selectedEntity, setSelectedEntity] = useState("all");
-  const [dateRange, setDateRange] = useState<ActivityDateRange>({ start: "", end: "" });
+  const [dateRange, setDateRange] = useState<ActivityDateRange>({
+    start: "",
+    end: "",
+  });
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [limit, setLimit] = useState(50);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
-  const limit = 50;
+  const resetToFirstPage = useCallback(() => {
+    setPage(1);
+  }, []);
+
+  const loadAuditLogs = useCallback(async () => {
+    setIsLoading(true);
+    setFetchError(null);
+
+    const result = await api.getAuditLogs(
+      buildAuditLogParams({
+        page,
+        limit,
+        selectedAction,
+        selectedEntity,
+        dateRange,
+        searchQuery: debouncedSearch,
+      }),
+    );
+
+    if (result.error) {
+      setFetchError(result.error);
+    } else {
+      const nextLogs = result.data || [];
+      setLogs(nextLogs);
+      setHasMore(nextLogs.length === limit);
+      setTotal(result.total || 0);
+    }
+
+    setIsLoading(false);
+  }, [dateRange, debouncedSearch, limit, page, selectedAction, selectedEntity]);
 
   useEffect(() => {
-    const timer = window.setTimeout(async () => {
-      setIsLoading(true);
-      setFetchError(null);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      resetToFirstPage();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [resetToFirstPage, searchQuery]);
 
-      const result = await api.getAuditLogs(
-        buildAuditLogParams({
-          page,
-          limit,
-          selectedAction,
-          selectedEntity,
-          dateRange,
-        }),
-      );
-
-      if (result.error) {
-        setFetchError(result.error);
-      } else {
-        setLogs(result.data || []);
-        setHasMore((result.data || []).length === limit);
-      }
-
-      setIsLoading(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadAuditLogs();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [dateRange, page, refreshKey, selectedAction, selectedEntity]);
-
-  const filteredLogs = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-    if (!normalizedSearch) return logs;
-
-    return logs.filter((log) => {
-      return (
-        log.user_name?.toLowerCase().includes(normalizedSearch) ||
-        log.action?.toLowerCase().includes(normalizedSearch) ||
-        log.entity_type?.toLowerCase().includes(normalizedSearch)
-      );
-    });
-  }, [logs, searchQuery]);
+  }, [loadAuditLogs, refreshKey]);
 
   return (
     <div className="flex h-full flex-col">
@@ -85,31 +96,41 @@ export function AuditScreen() {
           onSearchChange={setSearchQuery}
           onActionChange={(value) => {
             setSelectedAction(value);
-            setPage(1);
+            resetToFirstPage();
           }}
           onEntityChange={(value) => {
             setSelectedEntity(value);
-            setPage(1);
+            resetToFirstPage();
           }}
           onDateRangeChange={(value) => {
             setDateRange(value);
-            setPage(1);
+            resetToFirstPage();
           }}
         />
 
-        <AuditList
-          logs={filteredLogs}
-          isLoading={isLoading}
-          error={fetchError}
-          page={page}
-          hasMore={hasMore}
-          onRetry={() => setRefreshKey(incrementActivityRefreshKey)}
-          onPageChange={setPage}
-          onViewLog={(log) => {
-            setSelectedLog(log);
-            setDetailDialogOpen(true);
+        <DataTableContainer
+          limit={limit}
+          onLimitChange={(value) => {
+            setLimit(value);
+            resetToFirstPage();
           }}
-        />
+          total={total}
+          currentCount={logs.length}
+        >
+          <AuditList
+            logs={logs}
+            isLoading={isLoading}
+            error={fetchError}
+            page={page}
+            hasMore={hasMore}
+            onRetry={() => setRefreshKey(incrementActivityRefreshKey)}
+            onPageChange={setPage}
+            onViewLog={(log) => {
+              setSelectedLog(log);
+              setDetailDialogOpen(true);
+            }}
+          />
+        </DataTableContainer>
       </div>
 
       <AuditDetailDialog

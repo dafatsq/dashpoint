@@ -13,6 +13,7 @@ import {
   canManageUserPermissions,
   createPermissionChangeSet,
   findRoleIdByName,
+  getAssignableUserRoles,
   getPermissionDisplayName,
   getVisibleChangesCount,
   hasUserFormChanges,
@@ -93,6 +94,13 @@ const viewSalesPermission: Permission = {
   category: "sales",
 };
 
+const viewUsersPermission: Permission = {
+  id: "perm-view-users",
+  key: "can_view_users",
+  name: "View Users",
+  category: "users",
+};
+
 const voidSalePermission: Permission = {
   id: "perm-void-sale",
   key: "can_void_sale",
@@ -100,12 +108,12 @@ const voidSalePermission: Permission = {
   category: "sales",
 };
 
-describe("users helper policy rules", () => {
-  const makeHasPermission =
-    (user: User) =>
-    (permission: string): boolean =>
-      user.role_name === "owner" || (user.permissions || []).includes(permission);
+const makeHasPermission =
+  (user: User) =>
+  (permission: string): boolean =>
+    user.role_name === "owner" || (user.permissions || []).includes(permission);
 
+describe("users helper policy rules", () => {
   test("manager can edit cashier but not manager", () => {
     expect(
       canEditUser({
@@ -151,6 +159,7 @@ describe("users helper permission cascades", () => {
   const groupedPermissions: Record<string, Permission[]> = {
     sales: [viewSalesPermission, voidSalePermission],
     users: [
+      viewUsersPermission,
       createUserPermission,
       createCashierUsersPermission,
       managePermissionsPermission,
@@ -194,9 +203,55 @@ describe("users helper permission cascades", () => {
     expect(changes[managePermissionsPermission.id]).toBe(false);
     expect(changes[manageCashierPermissionsPermission.id]).toBe(false);
   });
+
+  test("re-enabling users access does not silently restore hidden user-management grants", () => {
+    const changes = createPermissionChangeSet({
+      permission: viewUsersPermission,
+      enabled: true,
+      allPermissions: groupedPermissions,
+      permissionChanges: {
+        [viewUsersPermission.id]: false,
+        [createCashierUsersPermission.id]: false,
+        [manageCashierPermissionsPermission.id]: false,
+      },
+      userOverrides: managerOverrides,
+      userEffectivePermissions: [
+        "can_view_users",
+        "can_create_cashier_users",
+        "can_manage_cashier_permissions",
+      ],
+      currentUser: owner,
+      targetUser: manager,
+    });
+
+    expect(changes[viewUsersPermission.id]).toBeUndefined();
+    expect(changes[createCashierUsersPermission.id]).toBe(false);
+    expect(changes[manageCashierPermissionsPermission.id]).toBe(false);
+  });
 });
 
 describe("users helper display and form helpers", () => {
+  test("create-role assignment requires at least one explicit child role grant for managers", () => {
+    expect(
+      getAssignableUserRoles({
+        currentUser: manager,
+        isOwner: false,
+        hasPermission: makeHasPermission(manager),
+      }),
+    ).toEqual([]);
+
+    expect(
+      getAssignableUserRoles({
+        currentUser: {
+          ...manager,
+          permissions: ["can_create_cashier_users"],
+        },
+        isOwner: false,
+        hasPermission: (permission) => permission === "can_create_cashier_users",
+      }),
+    ).toEqual(["cashier"]);
+  });
+
   test("normalizes delete/archive display names", () => {
     expect(getPermissionDisplayName(voidSalePermission, "sales")).toBe(
       "Void Sale",
@@ -235,6 +290,7 @@ describe("users helper display and form helpers", () => {
         {
           users: [createUserPermission, createCashierUsersPermission],
         },
+        null
       ),
     ).toBe(1);
   });

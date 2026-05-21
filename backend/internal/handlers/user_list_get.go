@@ -33,6 +33,29 @@ func (h *UserHandler) List(c *fiber.Ctx) error {
 	})
 }
 
+// ListBasic handles GET /api/v1/users/basic.
+func (h *UserHandler) ListBasic(c *fiber.Ctx) error {
+	// Get up to 100 active users for dropdowns
+	isActive := true
+	users, _, err := h.userRepo.ListWithFilter(c.Context(), 100, 0, &isActive, "", "")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to list users")
+		return userInternalError(c, "Failed to retrieve users")
+	}
+
+	type basicUser struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	responses := make([]basicUser, len(users))
+	for i, user := range users {
+		responses[i] = basicUser{ID: user.ID.String(), Name: user.Name}
+	}
+
+	return c.JSON(fiber.Map{"data": responses})
+}
+
 // Get handles GET /api/v1/users/:id.
 func (h *UserHandler) Get(c *fiber.Ctx) error {
 	id, err := parseUserIDParam(c)

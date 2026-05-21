@@ -3,6 +3,10 @@ import type { CartItem, CreateSaleRequest, PaymentMethod, Product } from "@/type
 
 export const QUICK_CASH_AMOUNTS = [10000, 20000, 50000, 100000] as const;
 
+export function parseNumericInput(value: string): number {
+  return parseFloat(value || "0");
+}
+
 export function getImageUrl(path: string | null | undefined): string {
   return path ? buildBackendUrl(path) : "";
 }
@@ -27,6 +31,32 @@ export function formatCurrency(amount: number): string {
     currency: "IDR",
     minimumFractionDigits: 0,
   }).format(amount);
+}
+
+export function getCashDrawerDialogCopy(
+  operationType: "pay_in" | "pay_out",
+): {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  confirmClassName?: string;
+} {
+  if (operationType === "pay_out") {
+    return {
+      title: "Pay Out",
+      description:
+        "Remove cash from the drawer (e.g., petty cash, withdrawal).",
+      confirmLabel: "Confirm Pay Out",
+      confirmClassName: "bg-red-600 hover:bg-red-700",
+    };
+  }
+
+  return {
+    title: "Pay In",
+    description:
+      "Add cash to the drawer (e.g., change float, deposit).",
+    confirmLabel: "Confirm Pay In",
+  };
 }
 
 export function calculateCartTotals(
@@ -104,6 +134,21 @@ export function classifyStock(product: Product): {
     isOutOfStock: quantity <= 0,
     isLowStock: quantity <= minQuantity && quantity > 0,
   };
+}
+
+export function canSubmitStartShift(input: {
+  canStartShift: boolean;
+  startingCash: string;
+}): boolean {
+  return input.canStartShift && Boolean(input.startingCash);
+}
+
+export function canSubmitEndShift(input: {
+  canEndShift: boolean;
+  endingCash: string;
+  isProcessing: boolean;
+}): boolean {
+  return input.canEndShift && Boolean(input.endingCash) && !input.isProcessing;
 }
 
 export function buildSaleRequest(

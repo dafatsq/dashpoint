@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type salesHistoryQuerier interface {
+type countHistoryQuerier interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
@@ -24,35 +24,30 @@ type namedCleanupQuery struct {
 	query string
 }
 
+const (
+	countSalesHistoryQuery   = `SELECT COUNT(*) FROM sales WHERE employee_id = $1`
+	countExpenseHistoryQuery = `SELECT COUNT(*) FROM expenses WHERE created_by = $1`
+)
+
 // HasSalesHistory checks if a user has created any sales.
 func (r *UserRepository) HasSalesHistory(ctx context.Context, userID uuid.UUID) (bool, error) {
-	return hasSalesHistory(ctx, r.pool, userID)
+	return hasRelatedHistory(ctx, r.pool, countSalesHistoryQuery, "sales", userID)
 }
 
-func hasSalesHistory(ctx context.Context, querier salesHistoryQuerier, userID uuid.UUID) (bool, error) {
-	var tableExists bool
-	err := querier.QueryRow(ctx, `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'sales')`).Scan(&tableExists)
-	if err != nil {
-		return false, fmt.Errorf("failed to verify sales table existence: %w", err)
-	}
-	if !tableExists {
-		return false, nil
-	}
+func hasSalesHistory(ctx context.Context, querier countHistoryQuerier, userID uuid.UUID) (bool, error) {
+	return hasRelatedHistory(ctx, querier, countSalesHistoryQuery, "sales", userID)
+}
 
-	var columnExists bool
-	err = querier.QueryRow(ctx, `SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'sales' AND column_name = 'cashier_id')`).Scan(&columnExists)
-	if err != nil {
-		return false, fmt.Errorf("failed to verify sales.cashier_id existence: %w", err)
-	}
-	if !columnExists {
-		return false, nil
-	}
+// HasExpenseHistory checks if a user has created any expenses.
+func (r *UserRepository) HasExpenseHistory(ctx context.Context, userID uuid.UUID) (bool, error) {
+	return hasRelatedHistory(ctx, r.pool, countExpenseHistoryQuery, "expense", userID)
+}
 
-	query := `SELECT COUNT(*) FROM sales WHERE cashier_id = $1`
+func hasRelatedHistory(ctx context.Context, querier countHistoryQuerier, query string, historyName string, userID uuid.UUID) (bool, error) {
 	var count int
-	err = querier.QueryRow(ctx, query, userID).Scan(&count)
+	err := querier.QueryRow(ctx, query, userID).Scan(&count)
 	if err != nil {
-		return false, fmt.Errorf("failed to query sales history: %w", err)
+		return false, fmt.Errorf("failed to query %s history: %w", historyName, err)
 	}
 	return count > 0, nil
 }
@@ -74,7 +69,6 @@ func permanentDeleteTx(ctx context.Context, tx userCleanupTx, userID uuid.UUID) 
 		{name: "nullify permission grants", query: `UPDATE user_permissions SET granted_by = NULL WHERE granted_by = $1`},
 		{name: "delete refresh tokens", query: `DELETE FROM refresh_tokens WHERE user_id = $1`},
 		{name: "nullify audit logs", query: `UPDATE audit_logs SET user_id = NULL WHERE user_id = $1`},
-		{name: "nullify expenses", query: `UPDATE expenses SET created_by = NULL WHERE created_by = $1`},
 		{name: "nullify stock adjustments", query: `UPDATE stock_adjustments SET adjusted_by = NULL WHERE adjusted_by = $1`},
 		{name: "nullify payments", query: `UPDATE payments SET processed_by = NULL WHERE processed_by = $1`},
 		{name: "nullify sales voids", query: `UPDATE sales SET voided_by = NULL WHERE voided_by = $1`},

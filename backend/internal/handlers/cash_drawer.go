@@ -103,16 +103,25 @@ func (h *CashDrawerHandler) recordCashDrawerOperation(c *fiber.Ctx, opType model
 		return middleware.JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to record cash drawer operation")
 	}
 
-	label := "Pay-in"
-	if opType == models.CashDrawerOpPayOut {
-		label = "Pay-out"
+	label := cashDrawerOperationLabel(opType)
+	newValues := map[string]interface{}{
+		"type":   label,
+		"amount": amount.String(),
+		"reason": req.Reason,
 	}
-	audit.LogFromFiber(c, auditAction, models.AuditEntityShift, shift.ID.String(), fmt.Sprintf("%s: %s - %s", label, amount.String(), req.Reason))
+	audit.LogWithValues(c, auditAction, models.AuditEntityShift, shift.ID.String(), fmt.Sprintf("%s: %s - %s", label, amount.String(), req.Reason), nil, newValues)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message":   successMessage,
 		"operation": op,
 	})
+}
+
+func cashDrawerOperationLabel(opType models.CashDrawerOpType) string {
+	if opType == models.CashDrawerOpPayOut {
+		return "Pay-out"
+	}
+	return "Pay-in"
 }
 
 func parseCashDrawerRequest(c *fiber.Ctx) (*CashDrawerRequest, decimal.Decimal, error) {

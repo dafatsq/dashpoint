@@ -4,6 +4,7 @@ import type { Expense, ExpenseCategory, Product } from "@/types";
 
 import {
   buildExpenseRequest,
+  canSubmitExpenseForm,
   createEmptyExpenseFormData,
   deriveInventoryPurchaseAmount,
   deriveInventoryPurchaseDescription,
@@ -116,5 +117,51 @@ describe("expenses helpers", () => {
       description: "Beans x 3",
       expense_date: "2026-05-14",
     });
+  });
+
+  test("requires inventory purchase dialogs to keep a valid product selection before submit", () => {
+    expect(
+      canSubmitExpenseForm({
+        isSubmitting: false,
+        hasChanges: true,
+        categoryId: "category-1",
+        isInventoryPurchase: true,
+        productId: "",
+        quantity: "2",
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitExpenseForm({
+        isSubmitting: false,
+        hasChanges: true,
+        categoryId: "category-1",
+        isInventoryPurchase: true,
+        productId: "product-1",
+        quantity: "",
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitExpenseForm({
+        isSubmitting: false,
+        hasChanges: true,
+        categoryId: "category-1",
+        isInventoryPurchase: true,
+        productId: "product-1",
+        quantity: "2",
+      }),
+    ).toBe(true);
+
+    expect(
+      canSubmitExpenseForm({
+        isSubmitting: false,
+        hasChanges: true,
+        categoryId: "none",
+        isInventoryPurchase: false,
+        productId: "",
+        quantity: "",
+      }),
+    ).toBe(true);
   });
 });

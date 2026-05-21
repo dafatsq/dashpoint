@@ -33,9 +33,12 @@ export function AccountSwitcher({
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    // Refresh accounts when component mounts or refreshTrigger changes
+  const refreshAccounts = () => {
     setAccounts(AccountManager.getSavedAccounts());
+  };
+
+  useEffect(() => {
+    refreshAccounts();
   }, [refreshTrigger]);
 
   const visibleAccounts = filterSwitchableAccounts(accounts, excludeUserId);
@@ -79,6 +82,10 @@ export function AccountSwitcher({
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAccount) return;
+    if (!pin) {
+      setError('Enter your PIN before signing in');
+      return;
+    }
 
     setError('');
     setIsSubmitting(true);
@@ -104,7 +111,7 @@ export function AccountSwitcher({
   const handleRemoveAccount = (accountId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     AccountManager.removeAccount(accountId);
-    setAccounts(AccountManager.getSavedAccounts());
+    refreshAccounts();
     onAccountsChange?.();
   };
 
@@ -242,7 +249,7 @@ export function AccountSwitcher({
               <Button
                 type="submit"
                 className="flex-1"
-                disabled={isSubmitting || !pin}
+                disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <>

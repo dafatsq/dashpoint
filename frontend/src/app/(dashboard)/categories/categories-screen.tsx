@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ShieldAlert } from "lucide-react";
+import { Archive, ShieldAlert } from "lucide-react";
 
 import { Header } from "@/components/layout/header";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
+import { useGlobalError } from "@/contexts/error-context";
 import api from "@/lib/api";
 import type { Category, ExpenseCategory } from "@/types";
 
@@ -17,6 +18,7 @@ import {
   createEmptyCategoryFormData,
   filterCategories,
   hasCategoryFormChanges,
+  isSpecialExpenseCategory,
   mapCategoryToFormData,
   type CategoryFormData,
   type CategoryType,
@@ -53,7 +55,14 @@ export function CategoriesScreen() {
   const [editingCategory, setEditingCategory] = useState<CategoryTarget | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<CategoryTarget | null>(null);
   const [formData, setFormData] = useState<CategoryFormData>(createEmptyCategoryFormData());
-  const [dialogError, setDialogError] = useState<string | null>(null);
+  const { showError } = useGlobalError();
+  const resetCategoryLists = useCallback(() => {
+    if (activeTab === "product") {
+      setProductCategories([]);
+      return;
+    }
+    setExpenseCategories([]);
+  }, [activeTab]);
 
   const currentCategories = useMemo<ManagedCategory[]>(
     () => (activeTab === "product" ? productCategories : expenseCategories),
@@ -85,13 +94,9 @@ export function CategoriesScreen() {
   }, [activeTab, viewMode]);
 
   useEffect(() => {
-    if (activeTab === "product") {
-      setProductCategories([]);
-    } else {
-      setExpenseCategories([]);
-    }
+    resetCategoryLists();
     void fetchData();
-  }, [activeTab, fetchData, viewMode]);
+  }, [fetchData, resetCategoryLists, viewMode]);
 
   const filteredCategories = useMemo(
     () => filterCategories(currentCategories, searchQuery, viewMode),
@@ -101,8 +106,11 @@ export function CategoriesScreen() {
   const resetForm = useCallback(() => {
     setFormData(createEmptyCategoryFormData());
     setEditingCategory(null);
-    setDialogError(null);
   }, []);
+
+  const setDeleteTarget = useCallback((category: ManagedCategory) => {
+    setDeletingCategory({ id: category.id, name: category.name, type: activeTab });
+  }, [activeTab]);
 
   const openCreateDialog = useCallback(() => {
     if (!canCreateCategories) {
@@ -117,9 +125,11 @@ export function CategoriesScreen() {
       if (!canEditCategories) {
         return;
       }
+      if (isSpecialExpenseCategory(category, activeTab)) {
+        return;
+      }
       setEditingCategory({ id: category.id, name: category.name, type: activeTab });
       setFormData(mapCategoryToFormData(category));
-      setDialogError(null);
       setDialogOpen(true);
     },
     [activeTab, canEditCategories],
@@ -156,26 +166,29 @@ export function CategoriesScreen() {
   }, [editingCategory, formData.description, formData.name]);
 
   const handleSubmit = useCallback(async () => {
+    if (!hasChanges) {
+      showError("No Changes", "Make a change before saving.");
+      return;
+    }
     if (editingCategory && !canEditCategories) {
-      setDialogError("You do not have permission to edit categories");
+      showError("Permission Denied", "You do not have permission to edit categories");
       return;
     }
     if (!editingCategory && !canCreateCategories) {
-      setDialogError("You do not have permission to create categories");
+      showError("Permission Denied", "You do not have permission to create categories");
       return;
     }
     if (!formData.name.trim()) {
-      setDialogError("Category name is required");
+      showError("Name Required", "Category name is required");
       return;
     }
 
     setIsSubmitting(true);
-    setDialogError(null);
 
     try {
       const result = activeTab === "product" ? await submitProductCategory() : await submitExpenseCategory();
       if (result.error) {
-        setDialogError(result.error);
+        showError("Save Failed", result.error);
         return;
       }
 
@@ -192,7 +205,9 @@ export function CategoriesScreen() {
     editingCategory,
     fetchData,
     formData.name,
+    hasChanges,
     resetForm,
+    showError,
     submitExpenseCategory,
     submitProductCategory,
   ]);
@@ -203,7 +218,6 @@ export function CategoriesScreen() {
     }
 
     setIsSubmitting(true);
-    setDialogError(null);
 
     try {
       const result =
@@ -212,7 +226,7 @@ export function CategoriesScreen() {
           : await api.deleteExpenseCategory(deletingCategory.id);
 
       if (result.error) {
-        setDialogError(result.error);
+        showError("Archive Failed", result.error);
         return;
       }
 
@@ -222,7 +236,7 @@ export function CategoriesScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [canDeleteCategories, deletingCategory, fetchData]);
+  }, [canDeleteCategories, deletingCategory, fetchData, showError]);
 
   const handleRestore = useCallback(
     async (category: ManagedCategory) => {
@@ -257,7 +271,6 @@ export function CategoriesScreen() {
     }
 
     setIsSubmitting(true);
-    setDialogError(null);
 
     try {
       const result =
@@ -266,7 +279,7 @@ export function CategoriesScreen() {
           : await api.permanentDeleteExpenseCategory(deletingCategory.id);
 
       if (result.error) {
-        setDialogError(result.error);
+        showError("Delete Failed", result.error);
         return;
       }
 
@@ -276,7 +289,7 @@ export function CategoriesScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [canDeleteCategories, deletingCategory, fetchData]);
+  }, [canDeleteCategories, deletingCategory, fetchData, showError]);
 
   if (!canViewCategories) {
     return (
@@ -322,18 +335,13 @@ export function CategoriesScreen() {
 
           <Card className="border-none shadow-none bg-transparent">
             <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as CategoryViewMode)}>
-              <div className="flex items-center justify-between border-b mb-6">
-                <TabsList className="bg-transparent border-none p-0 h-auto">
-                  <TabsTrigger
-                    value="active"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent shadow-none h-10 px-4"
-                  >
+              <div className="flex items-center justify-between mb-6">
+                <TabsList className="w-fit">
+                  <TabsTrigger value="active" className="px-4">
                     Active
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="archived"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent shadow-none h-10 px-4"
-                  >
+                  <TabsTrigger value="archived" className="px-4 flex items-center gap-2">
+                    <Archive className="h-4 w-4" />
                     Archived
                   </TabsTrigger>
                 </TabsList>
@@ -348,14 +356,14 @@ export function CategoriesScreen() {
                 canDeleteCategories={canDeleteCategories}
                 onEdit={openEditDialog}
                 onArchive={(category) => {
-                  setDeletingCategory({ id: category.id, name: category.name, type: activeTab });
-                  setDialogError(null);
+                  if (isSpecialExpenseCategory(category, activeTab)) return;
+                  setDeleteTarget(category);
                   setDeleteDialogOpen(true);
                 }}
                 onRestore={handleRestore}
                 onPermanentDelete={(category) => {
-                  setDeletingCategory({ id: category.id, name: category.name, type: activeTab });
-                  setDialogError(null);
+                  if (isSpecialExpenseCategory(category, activeTab)) return;
+                  setDeleteTarget(category);
                   setPermanentDeleteDialogOpen(true);
                 }}
               />
@@ -369,9 +377,7 @@ export function CategoriesScreen() {
         activeTab={activeTab}
         editing={editingCategory !== null}
         formData={formData}
-        error={dialogError}
         isSubmitting={isSubmitting}
-        hasChanges={hasChanges}
         onOpenChange={setDialogOpen}
         onFormDataChange={setFormData}
         onSubmit={() => void handleSubmit()}
@@ -381,7 +387,6 @@ export function CategoriesScreen() {
         archiveOpen={deleteDialogOpen}
         permanentDeleteOpen={permanentDeleteDialogOpen}
         categoryName={deletingCategory?.name || ""}
-        error={dialogError}
         isSubmitting={isSubmitting}
         onArchiveOpenChange={setDeleteDialogOpen}
         onPermanentDeleteOpenChange={setPermanentDeleteDialogOpen}

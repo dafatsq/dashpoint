@@ -4,6 +4,19 @@ import type { ApiTransport } from "./transport";
 import type { OperationsApi, SalesResponse, ShiftsResponse } from "./types";
 
 export function createOperationsApi(transport: ApiTransport): OperationsApi {
+  const buildQuery = (params: Record<string, string | number | undefined>) => {
+    const searchParams = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    }
+
+    const query = searchParams.toString();
+    return query ? `?${query}` : "";
+  };
+
   return {
     async getCurrentShift() {
       const result = await transport.request<{ shift: Shift }>("/shifts/current");
@@ -35,18 +48,13 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
       return { data: result.data?.shift };
     },
     async getShifts(params) {
-      const searchParams = new URLSearchParams();
-      if (params?.user_id) searchParams.set("user_id", params.user_id);
-      if (params?.from) searchParams.set("from", params.from);
-      if (params?.to) searchParams.set("to", params.to);
-      if (params?.limit !== undefined) searchParams.set("limit", String(params.limit));
-      if (params?.offset !== undefined) {
-        searchParams.set("offset", String(params.offset));
-      }
-      const query = searchParams.toString();
-      const result = await transport.request<ShiftsResponse>(
-        `/shifts${query ? `?${query}` : ""}`,
-      );
+      const result = await transport.request<ShiftsResponse>(`/shifts${buildQuery({
+        user_id: params?.user_id,
+        from: params?.from,
+        to: params?.to,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`);
       if (result.error) return { error: result.error };
       return { data: result.data?.shifts || [], total: result.data?.total || 0 };
     },
@@ -88,19 +96,15 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
       return { data: result.data?.sale };
     },
     async getSalesPage(params) {
-      const searchParams = new URLSearchParams();
-      if (params?.from) searchParams.set("from", params.from);
-      if (params?.to) searchParams.set("to", params.to);
-      if (params?.user_id) searchParams.set("employee_id", params.user_id);
-      if (params?.status) searchParams.set("status", params.status);
-      if (params?.limit !== undefined) searchParams.set("limit", String(params.limit));
-      if (params?.offset !== undefined) {
-        searchParams.set("offset", String(params.offset));
-      }
-      const query = searchParams.toString();
-      const result = await transport.request<SalesResponse>(
-        `/sales${query ? `?${query}` : ""}`,
-      );
+      const result = await transport.request<SalesResponse>(`/sales${buildQuery({
+        from: params?.from,
+        to: params?.to,
+        employee_id: params?.user_id,
+        status: params?.status,
+        invoice_no: params?.invoice_no,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`);
       if (result.error) return { error: result.error };
       return {
         data: result.data?.sales || [],

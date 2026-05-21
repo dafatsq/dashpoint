@@ -48,23 +48,16 @@ export function getHasSavedAccounts(accounts: SavedAccount[]): boolean {
 }
 
 export function getEffectiveSaveAccountDecision(
-  isDeviceTrusted: boolean,
+  _isDeviceTrusted: boolean,
   saveLogin: boolean,
 ): boolean {
-  return isDeviceTrusted || saveLogin;
+  return saveLogin;
 }
 
 export function getSaveLoginControlState(
-  isDeviceTrusted: boolean,
+  _isDeviceTrusted: boolean,
   saveLogin: boolean,
 ): { checked: boolean; disabled: boolean } {
-  if (isDeviceTrusted) {
-    return {
-      checked: true,
-      disabled: true,
-    };
-  }
-
   return {
     checked: saveLogin,
     disabled: false,

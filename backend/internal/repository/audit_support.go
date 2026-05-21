@@ -3,11 +3,26 @@ package repository
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
 	"dashpoint/backend/internal/models"
 )
+
+var auditSearchReplacements = map[string]string{
+	"created":       "create",
+	"updated":       "update",
+	"deleted":       "delete",
+	"archived":      "archive",
+	"restored":      "restore",
+	"voided":        "void",
+	"started":       "start",
+	"closed":        "close",
+	"user login":    "login",
+	"user logout":   "logout",
+	"login attempt": "login",
+}
 
 type auditScanner interface {
 	Scan(dest ...interface{}) error
@@ -60,9 +75,13 @@ func buildAuditWhereClause(filter AuditFilter) (string, []interface{}, int) {
 		argIndex++
 	}
 	if filter.Search != nil && *filter.Search != "" {
-		whereClause += fmt.Sprintf(" AND (audit_logs.description ILIKE $%d OR audit_logs.user_email ILIKE $%d OR audit_logs.user_name ILIKE $%d OR u.name ILIKE $%d)", argIndex, argIndex, argIndex, argIndex)
-		args = append(args, "%"+*filter.Search+"%")
-		argIndex++
+		words := strings.Fields(normalizeAuditSearch(*filter.Search))
+		for _, word := range words {
+			whereClause += fmt.Sprintf(" AND (audit_logs.description ILIKE $%d OR audit_logs.entity_id ILIKE $%d OR audit_logs.user_email ILIKE $%d OR audit_logs.user_name ILIKE $%d OR u.name ILIKE $%d OR audit_logs.action ILIKE $%d OR audit_logs.entity_type ILIKE $%d OR audit_logs.new_values::text ILIKE $%d OR audit_logs.old_values::text ILIKE $%d)",
+				argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex)
+			args = append(args, "%"+word+"%")
+			argIndex++
+		}
 	}
 
 	return whereClause, args, argIndex
@@ -120,4 +139,12 @@ func decodeAuditJSONFields(logEntry *models.AuditLog, oldValuesJSON, newValuesJS
 		}
 	}
 	return nil
+}
+
+func normalizeAuditSearch(search string) string {
+	normalized := strings.ToLower(search)
+	for source, target := range auditSearchReplacements {
+		normalized = strings.ReplaceAll(normalized, source, target)
+	}
+	return normalized
 }
