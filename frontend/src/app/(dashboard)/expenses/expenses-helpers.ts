@@ -92,6 +92,33 @@ export function hasExpenseFormChanges(formData: CreateExpenseRequest, editingExp
   );
 }
 
+export function canSubmitExpenseForm(input: {
+  isSubmitting: boolean;
+  hasChanges: boolean;
+  categoryId: string | undefined;
+  isInventoryPurchase: boolean;
+  productId: string | undefined;
+  quantity: string | undefined;
+}): boolean {
+  if (input.isSubmitting || !input.hasChanges) {
+    return false;
+  }
+
+  if (!input.categoryId) {
+    return false;
+  }
+
+  if (input.isInventoryPurchase && !input.productId) {
+    return false;
+  }
+
+  if (input.isInventoryPurchase && !input.quantity) {
+    return false;
+  }
+
+  return true;
+}
+
 export function buildExpenseRequest(formData: CreateExpenseRequest): CreateExpenseRequest {
   return {
     ...formData,

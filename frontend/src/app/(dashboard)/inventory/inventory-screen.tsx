@@ -6,17 +6,20 @@ import { AlertTriangle, Boxes, Loader2, Package, TrendingDown } from "lucide-rea
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
+import { useGlobalError } from "@/contexts/error-context";
 import api from "@/lib/api";
-import type { LowStockItem, Product } from "@/types";
+import type { Category, LowStockItem, Product } from "@/types";
 
 import { InventoryAdjustDialog } from "./inventory-adjust-dialog";
 import { InventoryControls } from "./inventory-controls";
 import {
   buildInventoryAdjustmentRequest,
+  canSubmitInventoryAdjustment,
   createEmptyAdjustmentFormState,
   getInventoryProductPrice,
   getInventoryProductQuantity,
   getPermittedInventoryActions,
+  isInventoryActionAllowed,
   type AdjustmentFormState,
 } from "./inventory-helpers";
 import { InventoryList } from "./inventory-list";
@@ -31,13 +34,15 @@ export function InventoryScreen() {
   const canModifyStock = canAddStock || canRemoveStock || canAdjustStock;
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"all" | "low-stock">("all");
   const [pageError, setPageError] = useState<string | null>(null);
-  const [adjustmentError, setAdjustmentError] = useState<string | null>(null);
+  const { showError } = useGlobalError();
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [page, setPage] = useState(1);
   const [totalProducts, setTotalProducts] = useState(0);
@@ -60,6 +65,21 @@ export function InventoryScreen() {
     return () => clearTimeout(timeout);
   }, [searchQuery]);
 
+  const loadCategories = useCallback(async () => {
+    const result = await api.getCategories();
+    if (result.data) {
+      setCategories(result.data);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadCategories();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadCategories]);
+
   const fetchLowStock = useCallback(async () => {
     const result = await api.getLowStock();
     if (result.error) {
@@ -72,48 +92,72 @@ export function InventoryScreen() {
   }, []);
 
   const fetchProductsPage = useCallback(
-    async (pageToLoad: number, replace: boolean) => {
-      if (replace) {
+    async (pageToLoad: number, replace: boolean, silent = false) => {
+      if (replace && !silent) {
         setIsLoading(true);
-      } else {
+      } else if (!replace && !silent) {
         setIsFetchingMore(true);
       }
+
+      const fetchPage = silent ? 1 : pageToLoad;
+      const fetchPerPage = silent ? PAGE_SIZE * pageToLoad : PAGE_SIZE;
 
       const result = await api.getProductsPage({
         active: true,
         search: debouncedSearch || undefined,
-        page: pageToLoad,
-        per_page: PAGE_SIZE,
+        category_id: selectedCategory !== "all" ? selectedCategory : undefined,
+        page: fetchPage,
+        per_page: fetchPerPage,
       });
 
       if (result.error) {
-        setPageError(result.error);
+        if (!silent) setPageError(result.error);
       } else {
-        setPageError(null);
-        setProducts((prev) => (replace ? result.data || [] : [...prev, ...(result.data || [])]));
+        if (!silent) setPageError(null);
+        setProducts((prev) => {
+          if (silent || replace) return result.data || [];
+          return [...prev, ...(result.data || [])];
+        });
         setTotalProducts(result.total || 0);
-        if (result.total_pages !== undefined) {
-          setHasMore(pageToLoad < result.total_pages);
-        } else {
-          setHasMore((result.data || []).length === PAGE_SIZE);
-        }
-        setPage(pageToLoad);
+
+        const realTotalPages = Math.ceil((result.total || 0) / PAGE_SIZE);
+        setHasMore(pageToLoad < realTotalPages);
+
+        if (!silent) setPage(pageToLoad);
+        setLastRefreshed(new Date());
       }
 
-      if (replace) {
+      if (replace && !silent) {
         setIsLoading(false);
-      } else {
+      } else if (!replace && !silent) {
         setIsFetchingMore(false);
       }
     },
-    [debouncedSearch],
+    [debouncedSearch, selectedCategory],
   );
 
+  const resetProductPagination = useCallback(() => {
+    setProducts([]);
+    setPage(1);
+    setHasMore(true);
+  }, []);
+
   useEffect(() => {
+    let currentPage = 1;
     const timeout = window.setTimeout(() => {
-      void fetchProductsPage(1, true);
+      void fetchProductsPage(currentPage, true);
     }, 0);
-    return () => window.clearTimeout(timeout);
+    const interval = setInterval(() => {
+      setPage((p) => {
+        currentPage = p;
+        return p;
+      });
+      void fetchProductsPage(currentPage, false, true);
+    }, 5000);
+    return () => {
+      window.clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, [fetchProductsPage]);
 
   useEffect(() => {
@@ -122,7 +166,7 @@ export function InventoryScreen() {
     }, 0);
     const interval = setInterval(() => {
       void fetchLowStock();
-    }, 10000);
+    }, 5000);
     return () => {
       window.clearTimeout(timeout);
       clearInterval(interval);
@@ -157,7 +201,6 @@ export function InventoryScreen() {
       const defaultAction = allowedActions[0];
       setSelectedProduct(product);
       setAdjustmentForm(createEmptyAdjustmentFormState(defaultAction));
-      setAdjustmentError(null);
       setAdjustDialogOpen(true);
     },
     [allowedActions, canModifyStock],
@@ -184,7 +227,38 @@ export function InventoryScreen() {
   );
 
   const handleAdjustment = useCallback(async () => {
-    if (!selectedProduct || !adjustmentForm.quantity) {
+    if (!selectedProduct) {
+      showError("Product Required", "Select a product before saving.");
+      return;
+    }
+
+    if (isSubmitting) {
+      return;
+    }
+
+    if (allowedActions.length === 0) {
+      showError("Action Denied", "You do not have any inventory actions available.");
+      return;
+    }
+
+    if (!adjustmentForm.quantity) {
+      showError("Quantity Required", "Enter a quantity before saving.");
+      return;
+    }
+
+    if (
+      !canSubmitInventoryAdjustment({
+        allowedActions,
+        action: adjustmentForm.action,
+        quantity: adjustmentForm.quantity,
+        isSubmitting,
+      })
+    ) {
+      return;
+    }
+
+    if (!isInventoryActionAllowed(adjustmentForm.action, allowedActions)) {
+      showError("Permission Denied", "You do not have permission for that inventory action.");
       return;
     }
 
@@ -192,31 +266,30 @@ export function InventoryScreen() {
     const currentStock = getInventoryProductQuantity(selectedProduct);
 
     if (Number.isNaN(inputQuantity) || inputQuantity <= 0) {
-      setAdjustmentError("Quantity must be greater than zero");
+      showError("Invalid Quantity", "Quantity must be greater than zero");
       return;
     }
     if (adjustmentForm.adjustmentType === "count" && inputQuantity < 0) {
-      setAdjustmentError("Stock quantity cannot be negative");
+      showError("Invalid Quantity", "Stock quantity cannot be negative");
       return;
     }
     if (
       adjustmentForm.adjustmentType === "adjustment" &&
       adjustmentForm.action === "remove" &&
-      currentStock-inputQuantity < 0
+      currentStock - inputQuantity < 0
     ) {
-      setAdjustmentError(`Cannot remove ${inputQuantity} items. Only ${currentStock} available.`);
+      showError("Insufficient Stock", `Cannot remove ${inputQuantity} items. Only ${currentStock} available.`);
       return;
     }
     if (
       (adjustmentForm.adjustmentType === "damage" || adjustmentForm.adjustmentType === "loss") &&
       inputQuantity > currentStock
     ) {
-      setAdjustmentError(`Cannot remove ${inputQuantity} items. Only ${currentStock} available.`);
+      showError("Insufficient Stock", `Cannot remove ${inputQuantity} items. Only ${currentStock} available.`);
       return;
     }
 
     setIsSubmitting(true);
-    setAdjustmentError(null);
 
     const result = await api.adjustInventory(
       buildInventoryAdjustmentRequest({
@@ -230,19 +303,26 @@ export function InventoryScreen() {
     );
 
     if (result.error) {
-      setAdjustmentError(result.error);
+      showError("Adjustment Failed", result.error);
       setIsSubmitting(false);
       return;
     }
 
-    setProducts([]);
-    setPage(1);
-    setHasMore(true);
+    resetProductPagination();
     await Promise.all([fetchProductsPage(1, true), fetchLowStock()]);
     setAdjustDialogOpen(false);
     setSelectedProduct(null);
     setIsSubmitting(false);
-  }, [adjustmentForm, fetchLowStock, fetchProductsPage, selectedProduct]);
+  }, [
+    adjustmentForm,
+    allowedActions,
+    fetchLowStock,
+    fetchProductsPage,
+    isSubmitting,
+    resetProductPagination,
+    selectedProduct,
+    showError,
+  ]);
 
   const totalStock = products.reduce((sum, product) => sum + getInventoryProductQuantity(product), 0);
   const totalValue = products.reduce(
@@ -259,11 +339,11 @@ export function InventoryScreen() {
     }).format(amount);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       <Header title="Inventory" />
 
-      <div className="flex-1 p-6 overflow-auto">
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div className="flex-1 overflow-auto p-6">
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Total Products</CardTitle>
@@ -291,7 +371,7 @@ export function InventoryScreen() {
               <TrendingDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold truncate" title={formatCurrency(totalValue)}>
+              <div className="truncate text-xl font-bold sm:text-2xl" title={formatCurrency(totalValue)}>
                 {formatCurrency(totalValue)}
               </div>
             </CardContent>
@@ -300,10 +380,14 @@ export function InventoryScreen() {
           <Card className={lowStockCount > 0 ? "border-yellow-500" : ""}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-              <AlertTriangle className={`h-4 w-4 ${lowStockCount > 0 ? "text-yellow-500" : "text-muted-foreground"}`} />
+              <AlertTriangle
+                className={`h-4 w-4 ${lowStockCount > 0 ? "text-yellow-500" : "text-muted-foreground"}`}
+              />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${lowStockCount > 0 ? "text-yellow-600" : ""}`}>{lowStockCount}</div>
+              <div className={`text-2xl font-bold ${lowStockCount > 0 ? "text-yellow-600" : ""}`}>
+                {lowStockCount}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -312,23 +396,37 @@ export function InventoryScreen() {
           searchQuery={searchQuery}
           activeTab={activeTab}
           lowStockCount={lowStockCount}
+          categories={categories}
+          selectedCategory={selectedCategory}
           onSearchChange={setSearchQuery}
           onTabChange={setActiveTab}
+          onCategoryChange={setSelectedCategory}
         />
 
-        <div className="flex justify-between items-center mb-4 gap-3">
-          {pageError ? <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{pageError}</div> : <div />}
-          <div className="text-xs text-muted-foreground whitespace-nowrap">
-            Last updated: {lastRefreshed.toLocaleTimeString()} • Auto-refreshes every 10s
+        <div className="mb-4 flex items-center justify-between gap-3">
+          {pageError ? (
+            <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+              {pageError}
+            </div>
+          ) : (
+            <div />
+          )}
+          <div className="whitespace-nowrap text-xs text-muted-foreground">
+            Last updated: {lastRefreshed.toLocaleTimeString()} • Auto-refreshes every 5s
           </div>
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center h-64">
+          <div className="flex h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : activeTab === "low-stock" ? (
-          <InventoryLowStock items={lowStockItems} products={products} canModifyStock={canModifyStock} onAdjust={(id) => void openAdjustDialogFromLowStock(id)} />
+          <InventoryLowStock
+            items={lowStockItems}
+            products={products}
+            canModifyStock={canModifyStock}
+            onAdjust={(id) => void openAdjustDialogFromLowStock(id)}
+          />
         ) : (
           <InventoryList
             products={products}
@@ -347,13 +445,11 @@ export function InventoryScreen() {
         product={selectedProduct}
         formState={adjustmentForm}
         allowedActions={allowedActions}
-        error={adjustmentError}
         isSubmitting={isSubmitting}
         onOpenChange={(open) => {
           setAdjustDialogOpen(open);
           if (!open) {
             setSelectedProduct(null);
-            setAdjustmentError(null);
           }
         }}
         onActionChange={(action) =>

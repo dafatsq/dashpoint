@@ -55,12 +55,31 @@ interface UsersPermissionsDialogProps {
   permissionChanges: Record<string, boolean | null>;
   isLoadingPermissions: boolean;
   isSubmitting: boolean;
-  permissionSaveError: string | null;
+
   saveSuccess: boolean;
   onTogglePermission: (permission: Permission, enabled: boolean) => void;
   onSaveChanges: () => void;
   onCancel: () => void;
 }
+
+const nestedPermissionKeysByParent: Record<string, string[]> = {
+  can_create_user: [
+    "can_create_manager_users",
+    "can_create_cashier_users",
+  ],
+  can_edit_user: [
+    "can_edit_manager_users",
+    "can_edit_cashier_users",
+  ],
+  can_delete_user: [
+    "can_delete_manager_users",
+    "can_delete_cashier_users",
+  ],
+  can_manage_permissions: [
+    "can_manage_manager_permissions",
+    "can_manage_cashier_permissions",
+  ],
+};
 
 function getCategoryIcon(category: string) {
   switch (category) {
@@ -96,13 +115,17 @@ export function UsersPermissionsDialog({
   permissionChanges,
   isLoadingPermissions,
   isSubmitting,
-  permissionSaveError,
+
   saveSuccess,
   onTogglePermission,
   onSaveChanges,
   onCancel,
 }: UsersPermissionsDialogProps) {
-  const visibleChangesCount = getVisibleChangesCount(permissionChanges, allPermissions);
+  const visibleChangesCount = getVisibleChangesCount(
+    permissionChanges,
+    allPermissions,
+    permissionsUser,
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -211,29 +234,10 @@ export function UsersPermissionsDialog({
                                   </Badge>
                                 );
 
-                              const nestedPermissionKeys: Record<string, string[]> = {
-                                can_create_user: [
-                                  "can_create_manager_users",
-                                  "can_create_cashier_users",
-                                ],
-                                can_edit_user: [
-                                  "can_edit_manager_users",
-                                  "can_edit_cashier_users",
-                                ],
-                                can_delete_user: [
-                                  "can_delete_manager_users",
-                                  "can_delete_cashier_users",
-                                ],
-                                can_manage_permissions: [
-                                  "can_manage_manager_permissions",
-                                  "can_manage_cashier_permissions",
-                                ],
-                              };
-
                               const nestedPermissions =
                                 permissionsUser?.role_name === "manager"
                                   ? permissions.filter((entry) =>
-                                      (nestedPermissionKeys[permission.key] || []).includes(
+                                      (nestedPermissionKeysByParent[permission.key] || []).includes(
                                         entry.key,
                                       ),
                                     )
@@ -424,12 +428,7 @@ export function UsersPermissionsDialog({
 
         <DialogFooter className="flex-shrink-0 flex items-center justify-between gap-2 pt-4 border-t bg-background">
           <div className="text-sm">
-            {permissionSaveError ? (
-              <span className="text-red-600 flex items-center gap-1.5">
-                <ShieldAlert className="h-3.5 w-3.5 flex-shrink-0" />
-                {permissionSaveError}
-              </span>
-            ) : saveSuccess ? (
+            {saveSuccess ? (
               <span className="text-green-600 flex items-center gap-1.5 font-medium animate-in fade-in zoom-in duration-300">
                 <CheckCircle className="h-4 w-4 flex-shrink-0" />
                 Permissions saved successfully!
@@ -446,7 +445,7 @@ export function UsersPermissionsDialog({
             </Button>
             <Button
               onClick={onSaveChanges}
-              disabled={isSubmitting || Object.keys(permissionChanges).length === 0}
+              disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>

@@ -12,13 +12,24 @@ export interface SettingsProfileForm {
   pin: string;
 }
 
-export function buildSettingsPreferences(savedPreference: string | null, hasSavedAccount: boolean): SettingsPreferences {
-  const rememberMe = savedPreference !== "false";
+export function normalizeSettingsPreferences(
+  preferences: SettingsPreferences,
+): SettingsPreferences {
+  if (preferences.rememberMe) {
+    return {
+      rememberMe: true,
+      quickAccess: true,
+    };
+  }
 
-  return {
-    rememberMe,
+  return preferences;
+}
+
+export function buildSettingsPreferences(savedPreference: string | null, hasSavedAccount: boolean): SettingsPreferences {
+  return normalizeSettingsPreferences({
+    rememberMe: savedPreference !== "false",
     quickAccess: hasSavedAccount,
-  };
+  });
 }
 
 export function hasSettingsPreferenceChanges(

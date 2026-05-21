@@ -42,6 +42,27 @@ export const REPLACEMENT_PARENT_TOGGLES: Record<
   Array<{ label: string; description: string }>
 > = {};
 
+export const USER_PERMISSION_CASCADE: Record<string, string[]> = {
+  can_create_user: ["can_create_manager_users", "can_create_cashier_users"],
+  can_edit_user: ["can_edit_manager_users", "can_edit_cashier_users"],
+  can_delete_user: ["can_delete_manager_users", "can_delete_cashier_users"],
+  can_manage_permissions: [
+    "can_manage_manager_permissions",
+    "can_manage_cashier_permissions",
+  ],
+};
+
+const MANAGER_USER_ACTION_KEYS = new Set([
+  "can_create_manager_users",
+  "can_create_cashier_users",
+  "can_edit_manager_users",
+  "can_edit_cashier_users",
+  "can_delete_manager_users",
+  "can_delete_cashier_users",
+  "can_manage_manager_permissions",
+  "can_manage_cashier_permissions",
+]);
+
 const FEATURE_NAME_BY_RESOURCE: Record<string, string> = {
   sale: "Sales",
   sales: "Sales",
@@ -79,6 +100,13 @@ export interface UserDeletePolicyInput extends UserActionPolicyInput {
 
 export interface UserPermissionPolicyInput extends UserActionPolicyInput {
   canManagePermissions: boolean;
+}
+
+export interface AssignableUserRolesInput {
+  currentUser: User | null;
+  isOwner: boolean;
+  hasPermission: (permission: string) => boolean;
+  editingUser?: User | null;
 }
 
 export interface PermissionChangeSetInput {
@@ -223,6 +251,43 @@ export function canManageUserPermissions({
   return true;
 }
 
+export function getAssignableUserRoles({
+  currentUser,
+  isOwner,
+  hasPermission,
+  editingUser = null,
+}: AssignableUserRolesInput): UserRole[] {
+  const availableRoles: UserRole[] = [];
+  const currentUserRole = (currentUser?.role_name || "cashier") as UserRole;
+  const isEditing = Boolean(editingUser);
+
+  if (roleHierarchy[currentUserRole] >= roleHierarchy.owner) {
+    availableRoles.push("owner");
+  }
+
+  if (
+    roleHierarchy[currentUserRole] >= roleHierarchy.manager &&
+    (isOwner ||
+      hasPermission(
+        isEditing ? "can_edit_manager_users" : "can_create_manager_users",
+      ))
+  ) {
+    availableRoles.push("manager");
+  }
+
+  if (
+    isOwner ||
+    currentUser?.role_name === "cashier" ||
+    hasPermission(
+      isEditing ? "can_edit_cashier_users" : "can_create_cashier_users",
+    )
+  ) {
+    availableRoles.push("cashier");
+  }
+
+  return availableRoles;
+}
+
 export function getPermissionOverride(
   permissionId: string,
   overrides: PermissionOverride[],
@@ -334,13 +399,6 @@ export function createPermissionChangeSet({
   }
 
   const nextChanges = { ...permissionChanges };
-  const parentOverride = getPermissionOverride(permission.id, userOverrides);
-  const parentInitialState =
-    parentOverride !== undefined
-      ? parentOverride.allowed
-      : userEffectivePermissions.includes(permission.key);
-  const isParentRestored = enabled === parentInitialState;
-
   const setChange = (nextPermission: Permission, value: boolean) => {
     const override = getPermissionOverride(nextPermission.id, userOverrides);
     const initialState =
@@ -366,10 +424,6 @@ export function createPermissionChangeSet({
   };
 
   const cascadeHiddenChange = (nextPermission: Permission, value: boolean) => {
-    if (isParentRestored) {
-      delete nextChanges[nextPermission.id];
-      return;
-    }
     trySetChange(nextPermission, value);
   };
 
@@ -410,30 +464,6 @@ export function createPermissionChangeSet({
       for (const childPermission of allPermissions.users || []) {
         if (childKeysToDisable.includes(childPermission.key)) {
           cascadeHiddenChange(childPermission, false);
-        }
-      }
-    }
-  } else {
-    for (const [category, permissions] of Object.entries(allPermissions)) {
-      const viewPermission = getViewPermissionForCategory(category, permissions);
-      if (!viewPermission || viewPermission.id !== permission.id) continue;
-
-      for (const childPermission of permissions) {
-        if (
-          childPermission.id !== permission.id &&
-          HIDDEN_PERMS.includes(childPermission.key)
-        ) {
-          cascadeHiddenChange(childPermission, true);
-        }
-      }
-      break;
-    }
-
-    const childKeysToEnable = userManagementCascade[permission.key];
-    if (childKeysToEnable) {
-      for (const childPermission of allPermissions.users || []) {
-        if (childKeysToEnable.includes(childPermission.key)) {
-          cascadeHiddenChange(childPermission, true);
         }
       }
     }
@@ -525,12 +555,19 @@ export function getPermissionDisplayName(
 export function getVisibleChangesCount(
   permissionChanges: Record<string, boolean | null>,
   allPermissions: Record<string, Permission[]>,
+  permissionsUser: User | null,
 ): number {
   return Object.keys(permissionChanges).filter((id) => {
     const permission = Object.values(allPermissions)
       .flat()
       .find((entry) => entry.id === id);
-    return permission ? !HIDDEN_PERMS.includes(permission.key) : true;
+    if (!permission) return true;
+
+    if (permissionsUser?.role_name === "manager") {
+      if (MANAGER_USER_ACTION_KEYS.has(permission.key)) return true;
+    }
+
+    return !HIDDEN_PERMS.includes(permission.key);
   }).length;
 }
 

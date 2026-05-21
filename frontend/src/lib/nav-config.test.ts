@@ -5,6 +5,7 @@ import {
   hasRouteAccess,
   navItems,
   filterVisibleNavItems,
+  routePermissions,
 } from "./nav-config";
 
 describe("nav config helpers", () => {
@@ -17,18 +18,24 @@ describe("nav config helpers", () => {
   });
 
   test("checks multi-permission routes through hasAnyPermission", () => {
-    expect(
-      hasRouteAccess("/shifts", {
-        hasPermission: () => false,
-        hasAnyPermission: (permissions) => permissions.includes("can_view_sales"),
-      }),
-    ).toBe(true);
-    expect(
-      hasRouteAccess("/shifts", {
-        hasPermission: () => false,
-        hasAnyPermission: () => false,
-      }),
-    ).toBe(false);
+    routePermissions["/test-multi"] = ["can_view_sales", "can_view_products"];
+    try {
+      expect(
+        hasRouteAccess("/test-multi", {
+          hasPermission: () => false,
+          hasAnyPermission: (permissions) =>
+            permissions.includes("can_view_sales"),
+        }),
+      ).toBe(true);
+      expect(
+        hasRouteAccess("/test-multi", {
+          hasPermission: () => false,
+          hasAnyPermission: () => false,
+        }),
+      ).toBe(false);
+    } finally {
+      delete routePermissions["/test-multi"];
+    }
   });
 
   test("filters visible nav items from the shared config", () => {

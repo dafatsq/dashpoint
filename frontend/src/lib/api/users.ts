@@ -3,23 +3,34 @@ import type { User } from "@/types";
 import type { ApiTransport } from "./transport";
 import type { UserApi, UsersResponse } from "./types";
 
+function buildUsersPageQuery(params: {
+  role?: string;
+  active?: boolean;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}): string {
+  const searchParams = new URLSearchParams();
+
+  if (params.role && params.role !== "all") searchParams.set("role", params.role);
+  if (params.active !== undefined) {
+    searchParams.set("active_only", String(params.active));
+  }
+  if (params.search) searchParams.set("search", params.search);
+  if (params.page !== undefined) searchParams.set("page", String(params.page));
+  if (params.per_page !== undefined) {
+    searchParams.set("per_page", String(params.per_page));
+  }
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
 export function createUserApi(transport: ApiTransport): UserApi {
   return {
     async getUsersPage(params) {
-      const searchParams = new URLSearchParams();
-      if (params?.role && params.role !== "all") searchParams.set("role", params.role);
-      if (params?.active !== undefined) {
-        searchParams.set("active_only", String(params.active));
-      }
-      if (params?.search) searchParams.set("search", params.search);
-      if (params?.page !== undefined) searchParams.set("page", String(params.page));
-      if (params?.per_page !== undefined) {
-        searchParams.set("per_page", String(params.per_page));
-      }
-
-      const query = searchParams.toString();
       const result = await transport.request<UsersResponse>(
-        `/users${query ? `?${query}` : ""}`,
+        `/users${buildUsersPageQuery(params || {})}`,
       );
       if (result.error) return { error: result.error };
 
@@ -39,6 +50,11 @@ export function createUserApi(transport: ApiTransport): UserApi {
       });
       if (result.error) return { error: result.error };
       return { data: result.data || [] };
+    },
+    async getBasicUsers() {
+      const result = await transport.request<{ data: { id: string; name: string }[] }>("/users/basic");
+      if (result.error) return { error: result.error };
+      return { data: result.data?.data || [] };
     },
     async getUser(id) {
       const result = await transport.request<{ user: User }>(`/users/${id}`);

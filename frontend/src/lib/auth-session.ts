@@ -64,17 +64,34 @@ function shouldPreserveSavedAccount(userId: string): boolean {
   return AccountManager.getAccount(userId) !== null;
 }
 
+function resolveSaveAccountPreference(
+  user: User,
+  requestedSaveAccount?: boolean,
+): boolean {
+  if (requestedSaveAccount !== undefined) {
+    return requestedSaveAccount;
+  }
+
+  return shouldPreserveSavedAccount(user.id);
+}
+
 export function persistAuthUser(
   apiUser: ApiUserPayload | User,
   options: { saveAccount?: boolean } = {},
 ): User {
   const user = normalizeUser(apiUser);
+  const shouldSaveAccount = resolveSaveAccountPreference(
+    user,
+    options.saveAccount,
+  );
 
   persistUserSession(user);
   syncRememberMePreference(user.id);
 
-  if (options.saveAccount !== false) {
+  if (shouldSaveAccount) {
     syncSavedAccount(user);
+  } else {
+    AccountManager.removeAccount(user.id);
   }
 
   return user;

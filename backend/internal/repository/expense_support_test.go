@@ -1,25 +1,18 @@
 package repository
 
 import (
+	"strings"
 	"testing"
-	"time"
-
-	"github.com/google/uuid"
 )
 
-func TestBuildExpenseListBaseQueryIncludesFilters(t *testing.T) {
-	categoryID := uuid.New()
-	startDate := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	endDate := time.Date(2026, 5, 31, 0, 0, 0, 0, time.UTC)
+func TestExpenseSelectQueryIncludesFromClause(t *testing.T) {
+	query := expenseSelectQuery(" WHERE e.id = $1")
 
-	query, args, argNum := buildExpenseListBaseQuery(&categoryID, &startDate, &endDate)
-	if argNum != 4 {
-		t.Fatalf("expected next arg index 4, got %d", argNum)
+	if !strings.Contains(query, "FROM expenses e") {
+		t.Fatalf("expected expense select query to include FROM clause, got %q", query)
 	}
-	if len(args) != 3 {
-		t.Fatalf("expected 3 args, got %d", len(args))
-	}
-	if query == "" {
-		t.Fatal("expected non-empty query")
+
+	if !strings.Contains(query, "WHERE e.id = $1") {
+		t.Fatalf("expected expense select query to include where clause, got %q", query)
 	}
 }

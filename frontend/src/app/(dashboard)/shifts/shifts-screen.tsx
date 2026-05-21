@@ -1,13 +1,11 @@
-'use client';
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 
 import { Header } from "@/components/layout/header";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DataTableContainer } from "@/components/shared/data-table-container";
 import api from "@/lib/api";
-import type { Shift, User } from "@/types";
+import type { Shift } from "@/types";
 
 import { buildShiftQueryParams } from "./shifts-helpers";
 import { ShiftsFilters } from "./shifts-filters";
@@ -21,31 +19,32 @@ export function ShiftsScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [limit, setLimit] = useState(10);
   const [total, setTotal] = useState(0);
-  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
+    start: "",
+    end: "",
+  });
   const [selectedUser, setSelectedUser] = useState<string>("all");
-  const [users, setUsers] = useState<User[]>([]);
-  const [usersError, setUsersError] = useState<string | null>(null);
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
 
-  const fetchUsers = useCallback(async () => {
-    setUsersError(null);
-    const result = await api.getUsers();
-    if (result.error) {
-      setUsersError("Could not load employees");
-      return;
-    }
+  const resetToFirstPage = useCallback(() => {
+    setPage(1);
+  }, []);
 
-    if (result.data) {
-      setUsers(result.data);
+  const loadUsers = useCallback(async () => {
+    const result = await api.getBasicUsers();
+    if (!result.error && result.data) {
+      setUsers([...result.data].sort((a, b) => a.name.localeCompare(b.name)));
     }
   }, []);
 
+  // Fetch active employees for filter (no permission gate, active users only)
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void fetchUsers();
+      void loadUsers();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [fetchUsers]);
+  }, [loadUsers]);
 
   const fetchShifts = useCallback(async () => {
     setIsLoading(true);
@@ -85,71 +84,41 @@ export function ShiftsScreen() {
 
       <div className="flex-1 p-6 overflow-auto">
         <div className="mx-auto w-full">
-          {usersError ? (
-            <div className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-              <div className="flex items-center justify-between gap-3">
-                <span>{usersError}</span>
-                <Button variant="outline" size="sm" onClick={() => void fetchUsers()}>
-                  Retry
-                </Button>
-              </div>
-            </div>
-          ) : null}
-
           <ShiftsFilters
             dateRange={dateRange}
             selectedUser={selectedUser}
             users={users}
             onDateRangeChange={(newRange) => {
               setDateRange(newRange);
-              setPage(1);
+              resetToFirstPage();
             }}
             onSelectedUserChange={(value) => {
               setSelectedUser(value);
-              setPage(1);
+              resetToFirstPage();
             }}
           />
 
-          <Card className="flex flex-col border-0 shadow-none bg-transparent md:border md:shadow md:bg-card">
-            <CardContent className="flex-1 px-0 py-0 md:p-6">
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Show</span>
-                  <Select
-                    value={String(limit)}
-                    onValueChange={(value) => {
-                      setLimit(Number(value));
-                      setPage(1);
-                    }}
-                  >
-                    <SelectTrigger className="w-[80px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span className="text-sm text-muted-foreground">entries</span>
-                </div>
-                {total > 0 ? <span className="text-sm text-muted-foreground">{Math.min(shifts.length, limit)} entries of {total}</span> : null}
-              </div>
-
-              <ShiftsList
-                shifts={shifts}
-                isLoading={isLoading}
-                error={fetchError}
-                page={page}
-                limit={limit}
-                total={total}
-                hasMore={hasMore}
-                onRetry={() => void fetchShifts()}
-                onPageChange={setPage}
-              />
-            </CardContent>
-          </Card>
+          <DataTableContainer
+            limit={limit}
+            onLimitChange={(value) => {
+              setLimit(value);
+              resetToFirstPage();
+            }}
+            total={total}
+            currentCount={shifts.length}
+          >
+            <ShiftsList
+              shifts={shifts}
+              isLoading={isLoading}
+              error={fetchError}
+              page={page}
+              limit={limit}
+              total={total}
+              hasMore={hasMore}
+              onRetry={() => void fetchShifts()}
+              onPageChange={setPage}
+            />
+          </DataTableContainer>
         </div>
       </div>
     </div>

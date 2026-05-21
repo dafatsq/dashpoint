@@ -17,6 +17,7 @@ type categoryHandlerStore interface {
 	PermanentDelete(context.Context, uuid.UUID) error
 	GetProductCount(context.Context, uuid.UUID) (int, error)
 	GetProductCounts(context.Context, []uuid.UUID) (map[uuid.UUID]int, error)
+	DuplicateSiblingExists(context.Context, string, *uuid.UUID, *uuid.UUID) (bool, error)
 }
 
 type CategoryHandler struct {

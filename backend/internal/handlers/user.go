@@ -163,8 +163,14 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 	} else if exists {
 		return userConflict(c, "EMAIL_EXISTS", "Email is already in use")
 	}
-	if err := h.requireActionPermission(c, role.Name, userActionCreate); err != nil {
-		return err
+	if exists, err := h.userRepo.NameExists(c.Context(), req.Name, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to check name")
+		return userInternalError(c, "Failed to validate name")
+	} else if exists {
+		return userConflict(c, "NAME_EXISTS", "A user with this name already exists. Please use an initial (e.g., 'John S.')")
+	}
+	if !h.requireActionPermission(c, role.Name, userActionCreate) {
+		return nil
 	}
 
 	user := &models.User{Email: normalizeEmail(req.Email), Name: req.Name, RoleID: roleID, IsActive: true}
@@ -186,18 +192,10 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 		return userInternalError(c, "Failed to create user")
 	}
 
-	createdUser, _ := h.userRepo.GetByID(c.Context(), user.ID)
-	if createdUser != nil {
+	if createdUser, _ := h.userRepo.GetByID(c.Context(), user.ID); createdUser != nil {
 		user = createdUser
 	}
-
-	newValues := map[string]interface{}{"affected_user": user.Name, "name": user.Name}
-	if user.Role != nil {
-		newValues["role"] = user.Role.Name
-	}
-	if user.Email != nil {
-		newValues["email"] = *user.Email
-	}
+	newValues := baseUserAuditValues(user)
 	audit.LogWithValues(c, models.AuditActionUserCreate, models.AuditEntityUser, user.ID.String(), "Created user: "+user.Name, nil, newValues)
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "User created successfully", "user": h.toUserDetailResponse(user)})
 }
@@ -224,21 +222,13 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 		}
 	}
 
-	targetRoleName := ""
-	if user.Role != nil {
-		targetRoleName = user.Role.Name
-	}
-	if err := h.enforceTargetUserAction(c, targetRoleName, userActionEdit); err != nil {
-		return err
+	targetRoleName := roleNameOfUser(user)
+	if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
+		return nil
 	}
 
-	oldValues := map[string]interface{}{"affected_user": user.Name, "name": user.Name, "is_active": user.IsActive}
-	if user.Role != nil {
-		oldValues["role"] = user.Role.Name
-	}
-	if user.Email != nil {
-		oldValues["email"] = *user.Email
-	}
+	oldValues := baseUserAuditValues(user)
+	oldValues["is_active"] = user.IsActive
 
 	var req UpdateUserRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -246,6 +236,14 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 	}
 
 	if req.Name != nil {
+		if *req.Name != "" {
+			if exists, err := h.userRepo.NameExists(c.Context(), *req.Name, &id); err != nil {
+				log.Error().Err(err).Msg("Failed to check name")
+				return userInternalError(c, "Failed to validate name")
+			} else if exists {
+				return userConflict(c, "NAME_EXISTS", "A user with this name already exists. Please use an initial (e.g., 'John S.')")
+			}
+		}
 		user.Name = *req.Name
 	}
 	if req.Email != nil {
@@ -320,12 +318,10 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 	}
 
 	updatedForAudit, _ := h.userRepo.GetByID(c.Context(), id)
-	newValues := map[string]interface{}{"affected_user": user.Name, "name": user.Name, "is_active": user.IsActive}
+	newValues := baseUserAuditValues(user)
+	newValues["is_active"] = user.IsActive
 	if updatedForAudit != nil && updatedForAudit.Role != nil {
 		newValues["role"] = updatedForAudit.Role.Name
-	}
-	if user.Email != nil {
-		newValues["email"] = *user.Email
 	}
 	if req.PIN != nil {
 		oldValues["pin"] = "[set]"
@@ -376,12 +372,12 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 }
 
 func getRoleLevel(roleName string) int {
-	switch strings.ToLower(roleName) {
-	case "owner":
+	switch {
+	case isRoleName(roleName, roleOwner):
 		return 3
-	case "manager":
+	case isRoleName(roleName, roleManager):
 		return 2
-	case "cashier":
+	case isRoleName(roleName, roleCashier):
 		return 1
 	default:
 		return 0

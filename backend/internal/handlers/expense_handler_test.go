@@ -21,6 +21,11 @@ type fakeExpenseStore struct{}
 func (f *fakeExpenseStore) ListCategories(context.Context, string) ([]models.ExpenseCategory, error) {
 	return nil, nil
 }
+
+func (f *fakeExpenseStore) CategoryNameExists(context.Context, string, *uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 func (f *fakeExpenseStore) CreateCategory(context.Context, string, *string) (*models.ExpenseCategory, error) {
 	return nil, nil
 }

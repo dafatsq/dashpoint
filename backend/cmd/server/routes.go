@@ -1,10 +1,47 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"dashpoint/backend/internal/middleware"
+)
+
+var categoryMetadataPermissions = []string{
+	"can_view_categories",
+	"can_view_products",
+	"can_create_product",
+	"can_edit_product",
+	"can_view_pos",
+}
+
+var (
+	userCreatePermissions = []string{
+		"can_create_user",
+		"can_create_manager_users",
+		"can_create_cashier_users",
+	}
+	userEditPermissions = []string{
+		"can_edit_user",
+		"can_edit_manager_users",
+		"can_edit_cashier_users",
+	}
+	userDeletePermissions = []string{
+		"can_delete_user",
+		"can_delete_manager_users",
+		"can_delete_cashier_users",
+	}
+	userPermissionManagementPermissions = []string{
+		"can_manage_permissions",
+		"can_manage_manager_permissions",
+		"can_manage_cashier_permissions",
+	}
+	expenseCategoryReadPermissions = []string{
+		"can_view_expenses",
+		"can_view_categories",
+	}
 )
 
 func registerRoutes(app *fiber.App, deps *serverDependencies) {
@@ -26,9 +63,9 @@ func registerPublicRoutes(api fiber.Router, deps *serverDependencies) {
 	api.Get("/ping", deps.healthHandler.Ping)
 
 	authGroup := api.Group("/auth")
-	authGroup.Post("/login", deps.authHandler.Login)
-	authGroup.Post("/pin-login", deps.authHandler.PINLogin)
-	authGroup.Post("/refresh", deps.authHandler.Refresh)
+	authGroup.Post("/login", middleware.AuthRateLimit(), deps.authHandler.Login)
+	authGroup.Post("/pin-login", middleware.AuthRateLimit(), deps.authHandler.PINLogin)
+	authGroup.Post("/refresh", middleware.AuthRateLimit(), deps.authHandler.Refresh)
 	authGroup.Post("/logout", deps.authHandler.Logout)
 
 	api.Get("/events/subscribe", deps.eventsHandler.Subscribe)
@@ -54,27 +91,44 @@ func registerProtectedRoutes(api fiber.Router, deps *serverDependencies) {
 
 func registerUserRoutes(protected fiber.Router, deps *serverDependencies) {
 	users := protected.Group("/users")
+	users.Get("/basic", deps.userHandler.ListBasic)
 	users.Get("/", middleware.RequirePermission(deps.permissionChecker, "can_view_users"), deps.userHandler.List)
 	users.Get("/:id", middleware.RequirePermission(deps.permissionChecker, "can_view_users"), deps.userHandler.Get)
-	users.Post("/", middleware.RequireAnyPermission(deps.permissionChecker, "can_create_user", "can_create_manager_users", "can_create_cashier_users"), deps.userHandler.Create)
-	users.Patch("/:id", middleware.RequireAnyPermission(deps.permissionChecker, "can_edit_user", "can_edit_manager_users", "can_edit_cashier_users"), deps.userHandler.Update)
-	users.Patch("/:id/password", middleware.RequireAnyPermission(deps.permissionChecker, "can_edit_user", "can_edit_manager_users", "can_edit_cashier_users"), deps.userHandler.UpdatePassword)
-	users.Patch("/:id/pin", middleware.RequireAnyPermission(deps.permissionChecker, "can_edit_user", "can_edit_manager_users", "can_edit_cashier_users"), deps.userHandler.UpdatePIN)
-	users.Delete("/:id", middleware.RequireAnyPermission(deps.permissionChecker, "can_delete_user", "can_delete_manager_users", "can_delete_cashier_users"), deps.userHandler.Delete)
-	users.Delete("/:id/permanent", middleware.RequireAnyPermission(deps.permissionChecker, "can_delete_user", "can_delete_manager_users", "can_delete_cashier_users"), deps.userHandler.PermanentDelete)
-	users.Get("/:id/permissions", middleware.RequireAnyPermission(deps.permissionChecker, "can_manage_permissions", "can_manage_manager_permissions", "can_manage_cashier_permissions"), deps.userHandler.GetPermissions)
-	users.Patch("/:id/permissions", middleware.RequireAnyPermission(deps.permissionChecker, "can_manage_permissions", "can_manage_manager_permissions", "can_manage_cashier_permissions"), deps.userHandler.SetPermissions)
+	users.Post("/", middleware.RequireAnyPermission(deps.permissionChecker, userCreatePermissions...), deps.userHandler.Create)
+	users.Patch("/:id", middleware.RequireAnyPermission(deps.permissionChecker, userEditPermissions...), deps.userHandler.Update)
+	users.Patch("/:id/password", middleware.RequireAnyPermission(deps.permissionChecker, userEditPermissions...), deps.userHandler.UpdatePassword)
+	users.Patch("/:id/pin", middleware.RequireAnyPermission(deps.permissionChecker, userEditPermissions...), deps.userHandler.UpdatePIN)
+	users.Delete("/:id", middleware.RequireAnyPermission(deps.permissionChecker, userDeletePermissions...), deps.userHandler.Delete)
+	users.Delete("/:id/permanent", middleware.RequireAnyPermission(deps.permissionChecker, userDeletePermissions...), deps.userHandler.PermanentDelete)
+	users.Get("/:id/permissions", middleware.RequireAnyPermission(deps.permissionChecker, userPermissionManagementPermissions...), deps.userHandler.GetPermissions)
+	users.Patch("/:id/permissions", middleware.RequireAnyPermission(deps.permissionChecker, userPermissionManagementPermissions...), deps.userHandler.SetPermissions)
 }
 
 func registerCatalogRoutes(protected fiber.Router, deps *serverDependencies) {
+	registerCategoryRoutes(protected, deps)
+	registerProductRoutes(protected, deps)
+	registerInventoryRoutes(protected, deps)
+}
+
+func registerCategoryRoutes(protected fiber.Router, deps *serverDependencies) {
 	categories := protected.Group("/categories")
-	categories.Get("/", middleware.RequirePermission(deps.permissionChecker, "can_view_categories"), deps.categoryHandler.List)
-	categories.Get("/:id", middleware.RequirePermission(deps.permissionChecker, "can_view_categories"), deps.categoryHandler.Get)
+	categories.Get(
+		"/",
+		middleware.RequireAnyPermission(deps.permissionChecker, categoryMetadataPermissions...),
+		deps.categoryHandler.List,
+	)
+	categories.Get(
+		"/:id",
+		middleware.RequireAnyPermission(deps.permissionChecker, categoryMetadataPermissions...),
+		deps.categoryHandler.Get,
+	)
 	categories.Post("/", middleware.RequirePermission(deps.permissionChecker, "can_create_categories"), deps.categoryHandler.Create)
 	categories.Patch("/:id", middleware.RequirePermission(deps.permissionChecker, "can_edit_categories"), deps.categoryHandler.Update)
 	categories.Delete("/:id", middleware.RequirePermission(deps.permissionChecker, "can_delete_categories"), deps.categoryHandler.Delete)
 	categories.Delete("/:id/permanent", middleware.RequirePermission(deps.permissionChecker, "can_delete_categories"), deps.categoryHandler.PermanentDelete)
+}
 
+func registerProductRoutes(protected fiber.Router, deps *serverDependencies) {
 	products := protected.Group("/products")
 	products.Get("/", deps.productHandler.List)
 	products.Get("/lookup", deps.productHandler.Lookup)
@@ -84,13 +138,20 @@ func registerCatalogRoutes(protected fiber.Router, deps *serverDependencies) {
 	products.Patch("/:id", middleware.RequirePermission(deps.permissionChecker, "can_edit_product"), deps.productHandler.Update)
 	products.Delete("/:id", middleware.RequirePermission(deps.permissionChecker, "can_delete_product"), deps.productHandler.Delete)
 	products.Delete("/:id/permanent", middleware.RequirePermission(deps.permissionChecker, "can_delete_product"), deps.productHandler.PermanentDelete)
+}
 
+func registerInventoryRoutes(protected fiber.Router, deps *serverDependencies) {
 	inventory := protected.Group("/inventory")
 	inventory.Get("/low-stock", deps.productHandler.GetLowStock)
 	inventory.Post("/adjust", requireInventoryAdjustmentPermission(deps.permissionChecker), deps.productHandler.AdjustStock)
 }
 
 func registerOperationsRoutes(protected fiber.Router, deps *serverDependencies) {
+	registerShiftRoutes(protected, deps)
+	registerSalesRoutes(protected, deps)
+}
+
+func registerShiftRoutes(protected fiber.Router, deps *serverDependencies) {
 	shifts := protected.Group("/shifts")
 	shifts.Get("/current", deps.shiftHandler.GetCurrentShift)
 	shifts.Post("/start", deps.shiftHandler.StartShift)
@@ -100,7 +161,9 @@ func registerOperationsRoutes(protected fiber.Router, deps *serverDependencies) 
 	shifts.Get("/", deps.shiftHandler.ListShifts)
 	shifts.Get("/:id", deps.shiftHandler.GetShift)
 	shifts.Get("/:id/operations", deps.cashDrawerHandler.ListOperations)
+}
 
+func registerSalesRoutes(protected fiber.Router, deps *serverDependencies) {
 	sales := protected.Group("/sales")
 	sales.Post("/", middleware.RequirePermission(deps.permissionChecker, "can_create_sale"), deps.saleHandler.CreateSale)
 	sales.Get("/", middleware.RequirePermission(deps.permissionChecker, "can_view_sales"), deps.saleHandler.ListSales)
@@ -128,9 +191,9 @@ func registerReportsRoutes(protected fiber.Router, deps *serverDependencies) {
 func registerExpenseRoutes(protected fiber.Router, deps *serverDependencies) {
 	expenses := protected.Group("/expenses")
 	expenses.Get("/", middleware.RequirePermission(deps.permissionChecker, "can_view_expenses"), deps.expenseHandler.List)
-	expenses.Get("/categories", middleware.RequireAnyPermission(deps.permissionChecker, "can_view_expenses", "can_view_categories"), deps.expenseHandler.ListCategories)
+	expenses.Get("/categories", middleware.RequireAnyPermission(deps.permissionChecker, expenseCategoryReadPermissions...), deps.expenseHandler.ListCategories)
 	expenses.Post("/categories", middleware.RequirePermission(deps.permissionChecker, "can_create_categories"), deps.expenseHandler.CreateCategory)
-	expenses.Get("/categories/:id", middleware.RequireAnyPermission(deps.permissionChecker, "can_view_expenses", "can_view_categories"), deps.expenseHandler.GetCategory)
+	expenses.Get("/categories/:id", middleware.RequireAnyPermission(deps.permissionChecker, expenseCategoryReadPermissions...), deps.expenseHandler.GetCategory)
 	expenses.Patch("/categories/:id", middleware.RequirePermission(deps.permissionChecker, "can_edit_categories"), deps.expenseHandler.UpdateCategory)
 	expenses.Delete("/categories/:id", middleware.RequirePermission(deps.permissionChecker, "can_delete_categories"), deps.expenseHandler.DeleteCategory)
 	expenses.Delete("/categories/:id/permanent", middleware.RequirePermission(deps.permissionChecker, "can_delete_categories"), deps.expenseHandler.PermanentDeleteCategory)
@@ -166,24 +229,15 @@ func registerUploadRoutes(protected fiber.Router, deps *serverDependencies) {
 }
 
 func requireInventoryAdjustmentPermission(checker middleware.PermissionChecker) fiber.Handler {
-	type inventoryAdjustmentRequest struct {
-		AdjustmentType string `json:"adjustment_type"`
-	}
-
 	return func(c *fiber.Ctx) error {
 		userID := middleware.GetUserID(c)
 		if userID == uuid.Nil {
 			return middleware.JSONError(c, fiber.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
 		}
 
-		var req inventoryAdjustmentRequest
-		if err := c.BodyParser(&req); err != nil {
-			return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
-		}
-
-		requiredPermission, ok := adjustmentPermission(req.AdjustmentType)
-		if !ok {
-			return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_ADJUSTMENT_TYPE", "Invalid adjustment type")
+		requiredPermission, err := parseRequiredInventoryPermission(c)
+		if err != nil {
+			return err
 		}
 
 		hasPermission, err := checker(c, userID, requiredPermission)
@@ -198,8 +252,26 @@ func requireInventoryAdjustmentPermission(checker middleware.PermissionChecker) 
 	}
 }
 
+func parseRequiredInventoryPermission(c *fiber.Ctx) (string, error) {
+	type inventoryAdjustmentRequest struct {
+		AdjustmentType string `json:"adjustment_type"`
+	}
+
+	var req inventoryAdjustmentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return "", middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	}
+
+	requiredPermission, ok := adjustmentPermission(req.AdjustmentType)
+	if !ok {
+		return "", middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_ADJUSTMENT_TYPE", "Invalid adjustment type")
+	}
+
+	return requiredPermission, nil
+}
+
 func adjustmentPermission(adjustmentType string) (string, bool) {
-	switch adjustmentType {
+	switch strings.ToLower(strings.TrimSpace(adjustmentType)) {
 	case "purchase":
 		return "can_add_stock", true
 	case "damage", "loss":

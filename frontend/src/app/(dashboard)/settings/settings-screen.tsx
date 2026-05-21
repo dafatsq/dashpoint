@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
@@ -7,6 +7,7 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { getRememberMeKey, migrateSession } from "@/lib/session";
 import { useAuth } from "@/contexts/auth-context";
+import { useGlobalError } from "@/contexts/error-context";
 import { AccountManager } from "@/lib/account-manager";
 import api from "@/lib/api";
 
@@ -16,12 +17,23 @@ import {
   buildProfileUpdatePayload,
   buildSettingsPreferences,
   hasSettingsPreferenceChanges,
+  normalizeSettingsPreferences,
   profileHasChanges,
   type SettingsPreferences,
   type SettingsProfileForm,
 } from "./settings-helpers";
 import { SettingsProfileCard } from "./settings-profile-card";
 import { SettingsVerifyPasswordDialog } from "./settings-verify-password-dialog";
+
+function preferencesAreEqual(
+  left: SettingsPreferences,
+  right: SettingsPreferences,
+) {
+  return (
+    left.rememberMe === right.rememberMe &&
+    left.quickAccess === right.quickAccess
+  );
+}
 
 export function SettingsScreen() {
   const { user, login, refreshUser } = useAuth();
@@ -30,14 +42,15 @@ export function SettingsScreen() {
     rememberMe: true,
     quickAccess: false,
   });
-  const [initialPreferences, setInitialPreferences] = useState<SettingsPreferences>({
-    rememberMe: true,
-    quickAccess: false,
-  });
+  const [initialPreferences, setInitialPreferences] =
+    useState<SettingsPreferences>({
+      rememberMe: true,
+      quickAccess: false,
+    });
   const [verifyPasswordOpen, setVerifyPasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [passwordEntry, setPasswordEntry] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const { showError } = useGlobalError();
   const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
   const [editForm, setEditForm] = useState<SettingsProfileForm>({
     name: "",
@@ -45,7 +58,6 @@ export function SettingsScreen() {
     password: "",
     pin: "",
   });
-  const [editError, setEditError] = useState("");
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
   useEffect(() => {
@@ -57,14 +69,25 @@ export function SettingsScreen() {
         localStorage.getItem(preferenceKey),
         AccountManager.getAccount(user.id) !== null,
       );
-      setPreferences(nextPreferences);
-      setInitialPreferences(nextPreferences);
+      setPreferences((current) =>
+        preferencesAreEqual(current, nextPreferences)
+          ? current
+          : nextPreferences,
+      );
+      setInitialPreferences((current) =>
+        preferencesAreEqual(current, nextPreferences)
+          ? current
+          : nextPreferences,
+      );
     }, 0);
 
     return () => window.clearTimeout(timer);
   }, [user]);
 
-  const hasPreferenceChanges = hasSettingsPreferenceChanges(preferences, initialPreferences);
+  const hasPreferenceChanges = hasSettingsPreferenceChanges(
+    preferences,
+    initialPreferences,
+  );
 
   const hasProfileEditChanges = useMemo(() => {
     if (!user) return false;
@@ -76,12 +99,16 @@ export function SettingsScreen() {
 
     setIsSaving(true);
 
-    const preferenceKey = getRememberMeKey(user.id);
-    localStorage.setItem(preferenceKey, preferences.rememberMe ? "true" : "false");
-    migrateSession(preferences.rememberMe);
+    const nextPreferences = normalizeSettingsPreferences(preferences);
 
-    const shouldSaveQuickAccess = preferences.rememberMe || preferences.quickAccess;
-    if (shouldSaveQuickAccess) {
+    const preferenceKey = getRememberMeKey(user.id);
+    localStorage.setItem(
+      preferenceKey,
+      nextPreferences.rememberMe ? "true" : "false",
+    );
+    migrateSession(nextPreferences.rememberMe);
+
+    if (nextPreferences.quickAccess) {
       AccountManager.saveAccount({
         id: user.id,
         name: user.name,
@@ -89,11 +116,14 @@ export function SettingsScreen() {
         role_name: user.role_name,
         has_pin: user.has_pin,
       });
+      localStorage.setItem("dashpoint_device_trusted", "true");
     } else {
       AccountManager.removeAccount(user.id);
+      localStorage.removeItem("dashpoint_device_trusted");
     }
 
-    setInitialPreferences(preferences);
+    setPreferences(nextPreferences);
+    setInitialPreferences(nextPreferences);
 
     await new Promise((resolve) => setTimeout(resolve, 500));
     setIsSaving(false);
@@ -101,15 +131,17 @@ export function SettingsScreen() {
 
   const handleOpenEditProfile = () => {
     setPasswordEntry("");
-    setPasswordError("");
     setVerifyPasswordOpen(true);
   };
 
   const handleVerifyPassword = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!user) return;
+    if (!passwordEntry) {
+      showError("Password Required", "Enter your password before verifying.");
+      return;
+    }
 
-    setPasswordError("");
     setIsVerifyingPassword(true);
 
     try {
@@ -122,13 +154,12 @@ export function SettingsScreen() {
           password: "",
           pin: "",
         });
-        setEditError("");
         setEditProfileOpen(true);
       } else {
-        setPasswordError(result.error || "Invalid Password");
+        showError("Verification Failed", result.error || "Invalid Password");
       }
     } catch {
-      setPasswordError("An unexpected error occurred");
+      showError("Verification Error", "An unexpected error occurred");
     } finally {
       setIsVerifyingPassword(false);
     }
@@ -136,21 +167,31 @@ export function SettingsScreen() {
 
   const handleUpdateProfile = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!user || !editForm.name) return;
+    if (!user) return;
+    if (!editForm.name) {
+      showError("Name Required", "Name is required.");
+      return;
+    }
+    if (!hasProfileEditChanges) {
+      showError("No Changes", "Make a change before saving.");
+      return;
+    }
 
-    setEditError("");
     setIsUpdatingProfile(true);
 
     try {
-      const result = await api.updateUser(user.id, buildProfileUpdatePayload(user, editForm));
+      const result = await api.updateUser(
+        user.id,
+        buildProfileUpdatePayload(user, editForm),
+      );
       if (result.error) {
-        setEditError(result.error);
+        showError("Update Failed", result.error);
       } else {
         await refreshUser();
         setEditProfileOpen(false);
       }
     } catch {
-      setEditError("Failed to update profile. Please try again.");
+      showError("Update Error", "Failed to update profile. Please try again.");
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -170,7 +211,11 @@ export function SettingsScreen() {
           />
 
           <div className="flex justify-end pt-2">
-            <Button onClick={handleSave} disabled={isSaving || !hasPreferenceChanges} className="w-full sm:w-auto">
+            <Button
+              onClick={handleSave}
+              disabled={isSaving || !hasPreferenceChanges}
+              className="w-full sm:w-auto"
+            >
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -190,7 +235,6 @@ export function SettingsScreen() {
       <SettingsVerifyPasswordDialog
         open={verifyPasswordOpen}
         password={passwordEntry}
-        error={passwordError}
         isSubmitting={isVerifyingPassword}
         onOpenChange={setVerifyPasswordOpen}
         onPasswordChange={setPasswordEntry}
@@ -200,9 +244,7 @@ export function SettingsScreen() {
       <SettingsEditProfileDialog
         open={editProfileOpen}
         form={editForm}
-        error={editError}
         isSubmitting={isUpdatingProfile}
-        hasChanges={hasProfileEditChanges}
         onOpenChange={setEditProfileOpen}
         onFormChange={setEditForm}
         onSubmit={handleUpdateProfile}

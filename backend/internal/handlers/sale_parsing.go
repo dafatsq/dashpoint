@@ -13,29 +13,45 @@ import (
 	"dashpoint/backend/internal/repository"
 )
 
+func saleValidationAPIError(code, message string) error {
+	return &apiError{status: fiber.StatusBadRequest, code: code, message: message}
+}
+
+func parseRequiredPositiveDecimal(raw, code, message string) (decimal.Decimal, error) {
+	value, err := decimal.NewFromString(raw)
+	if err != nil || value.LessThanOrEqual(decimal.Zero) {
+		return decimal.Zero, saleValidationAPIError(code, message)
+	}
+	return value, nil
+}
+
 func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 	if len(req.Items) == 0 {
-		return nil, &apiError{status: fiber.StatusBadRequest, code: "NO_ITEMS", message: "At least one item is required"}
+		return nil, saleValidationAPIError("NO_ITEMS", "At least one item is required")
 	}
 	if len(req.Payments) == 0 {
-		return nil, &apiError{status: fiber.StatusBadRequest, code: "NO_PAYMENTS", message: "At least one payment is required"}
+		return nil, saleValidationAPIError("NO_PAYMENTS", "At least one payment is required")
 	}
 
 	items := make([]repository.CreateSaleItemRequest, 0, len(req.Items))
 	for i, itemReq := range req.Items {
 		productID, err := uuid.Parse(itemReq.ProductID)
 		if err != nil {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_PRODUCT_ID", message: fmt.Sprintf("Invalid product ID at item %d", i+1)}
+			return nil, saleValidationAPIError("INVALID_PRODUCT_ID", fmt.Sprintf("Invalid product ID at item %d", i+1))
 		}
 
-		quantity, err := decimal.NewFromString(itemReq.Quantity)
-		if err != nil || quantity.LessThanOrEqual(decimal.Zero) {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_QUANTITY", message: fmt.Sprintf("Invalid quantity at item %d", i+1)}
+		quantity, err := parseRequiredPositiveDecimal(
+			itemReq.Quantity,
+			"INVALID_QUANTITY",
+			fmt.Sprintf("Invalid quantity at item %d", i+1),
+		)
+		if err != nil {
+			return nil, err
 		}
 
 		unitPrice, err := decimal.NewFromString(itemReq.UnitPrice)
 		if err != nil || unitPrice.LessThan(decimal.Zero) {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_PRICE", message: fmt.Sprintf("Invalid unit price at item %d", i+1)}
+			return nil, saleValidationAPIError("INVALID_PRICE", fmt.Sprintf("Invalid unit price at item %d", i+1))
 		}
 
 		discountValue, err := parseOptionalSaleDecimal(itemReq.DiscountValue, fmt.Sprintf("discount_value at item %d", i+1))
@@ -59,14 +75,18 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 
 	payments := make([]repository.CreatePaymentRequest, 0, len(req.Payments))
 	for i, paymentReq := range req.Payments {
-		amount, err := decimal.NewFromString(paymentReq.Amount)
-		if err != nil || amount.LessThanOrEqual(decimal.Zero) {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_PAYMENT_AMOUNT", message: fmt.Sprintf("Invalid payment amount at payment %d", i+1)}
+		amount, err := parseRequiredPositiveDecimal(
+			paymentReq.Amount,
+			"INVALID_PAYMENT_AMOUNT",
+			fmt.Sprintf("Invalid payment amount at payment %d", i+1),
+		)
+		if err != nil {
+			return nil, err
 		}
 
 		method := models.PaymentMethod(paymentReq.PaymentMethod)
 		if !isValidPaymentMethod(method) {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_PAYMENT_METHOD", message: fmt.Sprintf("Invalid payment method at payment %d", i+1)}
+			return nil, saleValidationAPIError("INVALID_PAYMENT_METHOD", fmt.Sprintf("Invalid payment method at payment %d", i+1))
 		}
 
 		payment := repository.CreatePaymentRequest{
@@ -84,14 +104,14 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 		if paymentReq.AmountTendered != nil {
 			tendered, err := decimal.NewFromString(*paymentReq.AmountTendered)
 			if err != nil {
-				return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_PAYMENT_AMOUNT", message: fmt.Sprintf("Invalid amount_tendered at payment %d", i+1)}
+				return nil, saleValidationAPIError("INVALID_PAYMENT_AMOUNT", fmt.Sprintf("Invalid amount_tendered at payment %d", i+1))
 			}
 			payment.AmountTendered = &tendered
 		}
 		if paymentReq.ChangeGiven != nil {
 			change, err := decimal.NewFromString(*paymentReq.ChangeGiven)
 			if err != nil {
-				return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_PAYMENT_AMOUNT", message: fmt.Sprintf("Invalid change_given at payment %d", i+1)}
+				return nil, saleValidationAPIError("INVALID_PAYMENT_AMOUNT", fmt.Sprintf("Invalid change_given at payment %d", i+1))
 			}
 			payment.ChangeGiven = &change
 		}
@@ -131,34 +151,37 @@ func parseSaleFilter(c *fiber.Ctx) (*repository.SaleFilter, error) {
 	if employeeID := c.Query("employee_id"); employeeID != "" {
 		id, err := uuid.Parse(employeeID)
 		if err != nil {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_EMPLOYEE_ID", message: "Invalid employee ID format"}
+			return nil, saleValidationAPIError("INVALID_EMPLOYEE_ID", "Invalid employee ID format")
 		}
 		filter.EmployeeID = &id
 	}
 	if shiftID := c.Query("shift_id"); shiftID != "" {
 		id, err := uuid.Parse(shiftID)
 		if err != nil {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_SHIFT_ID", message: "Invalid shift ID format"}
+			return nil, saleValidationAPIError("INVALID_SHIFT_ID", "Invalid shift ID format")
 		}
 		filter.ShiftID = &id
 	}
 	if status := c.Query("status"); status != "" {
 		filter.Status = &status
 	}
-	if startStr := c.Query("start_date"); startStr != "" {
+	if startStr := c.Query("from"); startStr != "" {
 		startDate, err := time.Parse("2006-01-02", startStr)
 		if err != nil {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_START_DATE", message: "Invalid start_date format. Use YYYY-MM-DD"}
+			return nil, saleValidationAPIError("INVALID_START_DATE", "Invalid from format. Use YYYY-MM-DD")
 		}
 		filter.StartDate = &startDate
 	}
-	if endStr := c.Query("end_date"); endStr != "" {
+	if endStr := c.Query("to"); endStr != "" {
 		endDate, err := time.Parse("2006-01-02", endStr)
 		if err != nil {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_END_DATE", message: "Invalid end_date format. Use YYYY-MM-DD"}
+			return nil, saleValidationAPIError("INVALID_END_DATE", "Invalid to format. Use YYYY-MM-DD")
 		}
 		endOfDay := endDate.Add(24*time.Hour - time.Second)
 		filter.EndDate = &endOfDay
+	}
+	if invoiceSearch := c.Query("invoice_no"); invoiceSearch != "" {
+		filter.InvoiceSearch = &invoiceSearch
 	}
 
 	return filter, nil
@@ -170,7 +193,7 @@ func parseOptionalSaleDecimal(raw string, field string) (decimal.Decimal, error)
 	}
 	value, err := decimal.NewFromString(raw)
 	if err != nil {
-		return decimal.Zero, &apiError{status: fiber.StatusBadRequest, code: "VALIDATION_ERROR", message: fmt.Sprintf("Invalid %s", field)}
+		return decimal.Zero, saleValidationAPIError("VALIDATION_ERROR", fmt.Sprintf("Invalid %s", field))
 	}
 	return value, nil
 }
@@ -181,7 +204,7 @@ func parseOptionalSaleDecimalPointer(raw *string, field string) (*decimal.Decima
 	}
 	value, err := decimal.NewFromString(*raw)
 	if err != nil {
-		return nil, &apiError{status: fiber.StatusBadRequest, code: "VALIDATION_ERROR", message: fmt.Sprintf("Invalid %s", field)}
+		return nil, saleValidationAPIError("VALIDATION_ERROR", fmt.Sprintf("Invalid %s", field))
 	}
 	return &value, nil
 }

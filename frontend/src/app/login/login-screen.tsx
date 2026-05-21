@@ -79,6 +79,7 @@ export function LoginScreen() {
   const handleDeviceTrustedChange = useCallback(
     (checked: boolean) => {
       setIsDeviceTrusted(checked);
+      setSaveLogin(checked);
 
       if (checked) {
         localStorage.setItem("dashpoint_device_trusted", "true");
@@ -115,9 +116,11 @@ export function LoginScreen() {
 
   useEffect(() => {
     setIsClient(true);
-    setIsDeviceTrusted(
-      isStoredPreferenceEnabled(localStorage.getItem("dashpoint_device_trusted")),
+    const trustedDeviceEnabled = isStoredPreferenceEnabled(
+      localStorage.getItem("dashpoint_device_trusted"),
     );
+    setIsDeviceTrusted(trustedDeviceEnabled);
+    setSaveLogin(trustedDeviceEnabled);
     setShowDemoAccess(
       getShowDemoAccessPreference(
         process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS === "true",

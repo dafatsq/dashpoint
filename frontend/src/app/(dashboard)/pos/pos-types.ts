@@ -2,11 +2,6 @@ import type { RefObject } from "react";
 
 import type { CartItem, CashDrawerOperation, PaymentMethod, Product, Shift } from "@/types";
 
-export interface PosErrorState {
-  title: string;
-  message: string;
-}
-
 export interface PosCartViewProps {
   cartItems: CartItem[];
   subtotal: number;

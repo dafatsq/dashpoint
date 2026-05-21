@@ -30,7 +30,6 @@ interface ProductsFormDialogProps {
   formData: ProductFormData;
   formErrors: { name?: string; price?: string; sku?: string; barcode?: string; general?: string };
   isSubmitting: boolean;
-  hasChanges: boolean;
   onOpenChange: (open: boolean) => void;
   onFormDataChange: (value: ProductFormData) => void;
   onFormErrorsChange: (
@@ -46,12 +45,15 @@ export function ProductsFormDialog({
   formData,
   formErrors,
   isSubmitting,
-  hasChanges,
   onOpenChange,
   onFormDataChange,
   onFormErrorsChange,
   onSubmit,
 }: ProductsFormDialogProps) {
+  const updateFormData = (patch: Partial<ProductFormData>) => {
+    onFormDataChange({ ...formData, ...patch });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -75,15 +77,13 @@ export function ProductsFormDialog({
               id="name"
               value={formData.name}
               onChange={(event) => {
-                onFormDataChange({ ...formData, name: event.target.value });
+                updateFormData({ name: event.target.value });
                 if (formErrors.name) {
                   onFormErrorsChange({ ...formErrors, name: undefined });
                 }
               }}
               placeholder="Product name"
-              className={formErrors.name ? "border-destructive" : ""}
             />
-            {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
           </div>
 
           <div className="grid gap-2">
@@ -91,7 +91,7 @@ export function ProductsFormDialog({
             <Input
               id="description"
               value={formData.description}
-              onChange={(event) => onFormDataChange({ ...formData, description: event.target.value })}
+              onChange={(event) => updateFormData({ description: event.target.value })}
               placeholder="Product description"
             />
           </div>
@@ -103,15 +103,13 @@ export function ProductsFormDialog({
                 id="sku"
                 value={formData.sku}
                 onChange={(event) => {
-                  onFormDataChange({ ...formData, sku: event.target.value });
+                  updateFormData({ sku: event.target.value });
                   if (formErrors.sku) {
                     onFormErrorsChange({ ...formErrors, sku: undefined });
                   }
                 }}
                 placeholder="SKU-001"
-                className={formErrors.sku ? "border-destructive" : ""}
               />
-              {formErrors.sku && <p className="text-sm text-destructive">{formErrors.sku}</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="barcode">Barcode</Label>
@@ -119,15 +117,13 @@ export function ProductsFormDialog({
                 id="barcode"
                 value={formData.barcode}
                 onChange={(event) => {
-                  onFormDataChange({ ...formData, barcode: event.target.value });
+                  updateFormData({ barcode: event.target.value });
                   if (formErrors.barcode) {
                     onFormErrorsChange({ ...formErrors, barcode: undefined });
                   }
                 }}
                 placeholder="8901234567890"
-                className={formErrors.barcode ? "border-destructive" : ""}
               />
-              {formErrors.barcode && <p className="text-sm text-destructive">{formErrors.barcode}</p>}
             </div>
           </div>
 
@@ -139,15 +135,13 @@ export function ProductsFormDialog({
                 type="number"
                 value={formData.price}
                 onChange={(event) => {
-                  onFormDataChange({ ...formData, price: event.target.value });
+                  updateFormData({ price: event.target.value });
                   if (formErrors.price) {
                     onFormErrorsChange({ ...formErrors, price: undefined });
                   }
                 }}
                 placeholder="10000"
-                className={formErrors.price ? "border-destructive" : ""}
               />
-              {formErrors.price && <p className="text-sm text-destructive">{formErrors.price}</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="cost">Cost (IDR)</Label>
@@ -155,7 +149,7 @@ export function ProductsFormDialog({
                 id="cost"
                 type="number"
                 value={formData.cost}
-                onChange={(event) => onFormDataChange({ ...formData, cost: event.target.value })}
+                onChange={(event) => updateFormData({ cost: event.target.value })}
                 placeholder="8000"
               />
             </div>
@@ -166,7 +160,7 @@ export function ProductsFormDialog({
                 type="number"
                 step="0.01"
                 value={formData.tax_rate}
-                onChange={(event) => onFormDataChange({ ...formData, tax_rate: event.target.value })}
+                onChange={(event) => updateFormData({ tax_rate: event.target.value })}
                 placeholder="11"
               />
             </div>
@@ -180,7 +174,7 @@ export function ProductsFormDialog({
                   id="initial_quantity"
                   type="number"
                   value={formData.initial_quantity}
-                  onChange={(event) => onFormDataChange({ ...formData, initial_quantity: event.target.value })}
+                  onChange={(event) => updateFormData({ initial_quantity: event.target.value })}
                   placeholder="100"
                 />
               </div>
@@ -190,7 +184,7 @@ export function ProductsFormDialog({
                   id="low_stock_threshold"
                   type="number"
                   value={formData.low_stock_threshold}
-                  onChange={(event) => onFormDataChange({ ...formData, low_stock_threshold: event.target.value })}
+                  onChange={(event) => updateFormData({ low_stock_threshold: event.target.value })}
                   placeholder="5"
                 />
               </div>
@@ -201,7 +195,7 @@ export function ProductsFormDialog({
             <Label htmlFor="category">Category</Label>
             <Select
               value={formData.category_id || "none"}
-              onValueChange={(value) => onFormDataChange({ ...formData, category_id: value === "none" ? "" : value })}
+              onValueChange={(value) => updateFormData({ category_id: value === "none" ? "" : value })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select category" />
@@ -219,7 +213,7 @@ export function ProductsFormDialog({
 
           <div className="grid gap-2">
             <Label>Product Image</Label>
-            <ImageUpload value={formData.image_url} onChange={(url) => onFormDataChange({ ...formData, image_url: url })} />
+            <ImageUpload value={formData.image_url} onChange={(url) => updateFormData({ image_url: url })} />
           </div>
         </div>
 
@@ -227,7 +221,7 @@ export function ProductsFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting || (editingProduct ? !hasChanges : false)}>
+          <Button onClick={onSubmit} disabled={isSubmitting}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

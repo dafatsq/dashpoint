@@ -5,6 +5,8 @@ import type { CartItem, Product } from "@/types";
 import {
   addCartItem,
   buildSaleRequest,
+  canSubmitEndShift,
+  canSubmitStartShift,
   calculateCartTotals,
   classifyStock,
   getProductMinQuantity,
@@ -136,5 +138,62 @@ describe("POS helpers", () => {
       isOutOfStock: false,
       isLowStock: true,
     });
+  });
+
+  test("requires live permission and required input before starting a shift", () => {
+    expect(
+      canSubmitStartShift({
+        canStartShift: false,
+        startingCash: "100000",
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitStartShift({
+        canStartShift: true,
+        startingCash: "",
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitStartShift({
+        canStartShift: true,
+        startingCash: "100000",
+      }),
+    ).toBe(true);
+  });
+
+  test("requires live permission, input, and idle state before ending a shift", () => {
+    expect(
+      canSubmitEndShift({
+        canEndShift: false,
+        endingCash: "100000",
+        isProcessing: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitEndShift({
+        canEndShift: true,
+        endingCash: "",
+        isProcessing: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitEndShift({
+        canEndShift: true,
+        endingCash: "100000",
+        isProcessing: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitEndShift({
+        canEndShift: true,
+        endingCash: "100000",
+        isProcessing: false,
+      }),
+    ).toBe(true);
   });
 });

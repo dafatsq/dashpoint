@@ -9,12 +9,13 @@ import (
 	"dashpoint/backend/internal/models"
 )
 
+const categorySelectColumns = `
+	SELECT id, name, description, parent_id, sort_order, is_active, created_at, updated_at
+	FROM categories
+`
+
 func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Category, error) {
-	query := `
-		SELECT id, name, description, parent_id, sort_order, is_active, created_at, updated_at
-		FROM categories
-		WHERE id = $1
-	`
+	query := categorySelectColumns + ` WHERE id = $1`
 
 	category, err := scanCategoryRow(r.pool.QueryRow(ctx, query, id))
 	if err != nil {
@@ -29,11 +30,7 @@ func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 func (r *CategoryRepository) List(ctx context.Context, status string) ([]*models.Category, error) {
 	status = normalizeCategoryStatus(status)
 
-	query := `
-		SELECT id, name, description, parent_id, sort_order, is_active, created_at, updated_at
-		FROM categories
-	`
-	args := []interface{}{}
+	query := categorySelectColumns
 	switch status {
 	case "active":
 		query += ` WHERE is_active = true`
@@ -42,7 +39,7 @@ func (r *CategoryRepository) List(ctx context.Context, status string) ([]*models
 	}
 	query += ` ORDER BY sort_order ASC, name ASC`
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list categories: %w", err)
 	}
@@ -112,4 +109,28 @@ func (r *CategoryRepository) GetProductCounts(ctx context.Context, ids []uuid.UU
 	}
 
 	return counts, nil
+}
+
+// DuplicateSiblingExists checks if a category with the same name already exists under the same parent (case-insensitive)
+func (r *CategoryRepository) DuplicateSiblingExists(ctx context.Context, name string, parentID *uuid.UUID, excludeID *uuid.UUID) (bool, error) {
+	query := `SELECT COUNT(*) FROM categories WHERE name ILIKE $1 AND is_active = true`
+	args := []interface{}{name}
+
+	if parentID != nil {
+		query += ` AND parent_id = $2`
+		args = append(args, *parentID)
+	} else {
+		query += ` AND parent_id IS NULL`
+	}
+
+	if excludeID != nil {
+		query += fmt.Sprintf(` AND id != $%d`, len(args)+1)
+		args = append(args, *excludeID)
+	}
+
+	var count int
+	if err := r.pool.QueryRow(ctx, query, args...).Scan(&count); err != nil {
+		return false, fmt.Errorf("failed to check duplicate category: %w", err)
+	}
+	return count > 0, nil
 }

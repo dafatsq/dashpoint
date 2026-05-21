@@ -13,6 +13,8 @@ export interface ActivityFieldChange {
   newVal: unknown;
 }
 
+type ActivityValues = Record<string, unknown>;
+
 export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   login: "Login",
   login_failed: "Login Failed",
@@ -82,13 +84,37 @@ const ACTIVITY_SKIP_FIELDS = new Set([
   "product_id",
 ]);
 
+const ACTIVITY_UPDATE_VERBS = new Set(["update", "close", "restore"]);
+const ACTIVITY_CREATE_LIKE_VERBS = new Set([
+  "create",
+  "start",
+  "adjust",
+  "count",
+  "void",
+]);
+const ACTIVITY_DELETE_LIKE_VERBS = new Set(["delete", "archive"]);
+
+function getActivityValues(log: AuditLog): {
+  oldVals: ActivityValues;
+  newVals: ActivityValues;
+} {
+  return {
+    oldVals: log.old_values || {},
+    newVals: log.new_values || {},
+  };
+}
+
 export function getActivityActionVerb(action: string): string {
   const parts = action.split(".");
   return parts[parts.length - 1];
 }
 
 export function getActivityActionLabel(action: string): string {
-  return ACTIVITY_ACTION_LABELS[action] || ACTIVITY_ACTION_LABELS[getActivityActionVerb(action)] || action;
+  return (
+    ACTIVITY_ACTION_LABELS[action] ||
+    ACTIVITY_ACTION_LABELS[getActivityActionVerb(action)] ||
+    action
+  );
 }
 
 export function getActivityEntityLabel(entityType: string): string {
@@ -172,7 +198,8 @@ export function formatActivityFieldValue(key: string, value: unknown): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "object") return JSON.stringify(value);
   if (key === "tax_rate") return `${String(value)}%`;
-  if (key === "total" || key === "amount") return formatActivityCurrency(Number(value));
+  if (key === "total" || key === "amount")
+    return formatActivityCurrency(Number(value));
 
   return String(value);
 }
@@ -181,9 +208,10 @@ export function isActivityImageField(key: string): boolean {
   return key === "image_url";
 }
 
-export function buildActivityFieldChanges(log: AuditLog): ActivityFieldChange[] {
-  const oldVals = log.old_values || {};
-  const newVals = log.new_values || {};
+export function buildActivityFieldChanges(
+  log: AuditLog,
+): ActivityFieldChange[] {
+  const { oldVals, newVals } = getActivityValues(log);
   const verb = getActivityActionVerb(log.action);
   const allKeys = new Set([...Object.keys(oldVals), ...Object.keys(newVals)]);
   const changes: ActivityFieldChange[] = [];
@@ -194,21 +222,26 @@ export function buildActivityFieldChanges(log: AuditLog): ActivityFieldChange[] 
     const oldVal = oldVals[key];
     const newVal = newVals[key];
 
-    if (verb === "update" || verb === "close" || verb === "restore") {
+    if (ACTIVITY_UPDATE_VERBS.has(verb)) {
       if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
         changes.push({ key, oldVal, newVal });
       }
       return;
     }
 
-    if (verb === "create" || verb === "start" || verb === "adjust" || verb === "count" || verb === "void") {
+    if (ACTIVITY_CREATE_LIKE_VERBS.has(verb)) {
       if (newVal !== undefined && newVal !== null && newVal !== "") {
         changes.push({ key, oldVal: undefined, newVal });
       }
       return;
     }
 
-    if ((verb === "delete" || verb === "archive") && oldVal !== undefined && oldVal !== null && oldVal !== "") {
+    if (
+      ACTIVITY_DELETE_LIKE_VERBS.has(verb) &&
+      oldVal !== undefined &&
+      oldVal !== null &&
+      oldVal !== ""
+    ) {
       changes.push({ key, oldVal, newVal: undefined });
     }
   });
@@ -217,17 +250,27 @@ export function buildActivityFieldChanges(log: AuditLog): ActivityFieldChange[] 
 }
 
 export function buildActivityDescription(log: AuditLog): string {
-  const newVals = log.new_values || {};
-  const oldVals = log.old_values || {};
+  const { oldVals, newVals } = getActivityValues(log);
   const verb = getActivityActionVerb(log.action);
 
   if (log.entity_type === "product") {
-    const name = String(newVals.name || oldVals.name || "");
-    if (verb === "create") return name || "New product";
-    if (verb === "update") return name || "Updated product";
-    if (verb === "archive") return name || "Archived product";
-    if (verb === "restore") return name || "Restored product";
-    if (verb === "delete") return name || "Deleted product";
+    const name = String(
+      newVals.name ||
+        oldVals.name ||
+        newVals.affected_product ||
+        oldVals.affected_product ||
+        "",
+    );
+    if (verb === "create")
+      return name ? `Created product: ${name}` : "New product";
+    if (verb === "update")
+      return name ? `Updated product: ${name}` : "Updated product";
+    if (verb === "archive")
+      return name ? `Archived product: ${name}` : "Archived product";
+    if (verb === "restore")
+      return name ? `Restored product: ${name}` : "Restored product";
+    if (verb === "delete")
+      return name ? `Deleted product: ${name}` : "Deleted product";
   }
 
   if (log.entity_type === "inventory") {
@@ -245,10 +288,10 @@ export function buildActivityDescription(log: AuditLog): string {
       : "Adjusted";
 
     if (productName && quantity !== undefined && newQuantity !== undefined) {
-      return `${adjustmentLabel}: ${productName} -> ${newQuantity} (Δ${quantity})`;
+      return `${adjustmentLabel} stock: ${productName} -> ${newQuantity} (Δ${quantity})`;
     }
     if (productName && quantity !== undefined) {
-      return `${adjustmentLabel} ${productName}: ${quantity}`;
+      return `${adjustmentLabel} stock for ${productName}: ${quantity}`;
     }
     if (productName) {
       return `Stock change: ${productName}`;
@@ -257,32 +300,116 @@ export function buildActivityDescription(log: AuditLog): string {
   }
 
   if (log.entity_type === "sale") {
-    const invoice = String(newVals.invoice_no || "");
-    if (verb === "create") return invoice || "New sale created";
-    if (verb === "void") return invoice || "Voided sale";
-    if (verb === "delete") return invoice || "Deleted sale";
+    const invoice = String(
+      newVals.invoice_no ||
+        oldVals.invoice_no ||
+        newVals.affected_sale ||
+        oldVals.affected_sale ||
+        "",
+    );
+    if (verb === "create")
+      return invoice ? `Created sale: ${invoice}` : "New sale created";
+    if (verb === "void")
+      return invoice ? `Voided sale: ${invoice}` : "Voided sale";
+    if (verb === "delete")
+      return invoice ? `Deleted sale: ${invoice}` : "Deleted sale";
   }
 
   if (log.entity_type === "expense") {
-    const description = String(newVals.description || newVals.affected_expense || oldVals.affected_expense || "");
-    const amount = newVals.amount;
+    const description = String(
+      newVals.description ||
+        oldVals.description ||
+        newVals.affected_expense ||
+        oldVals.affected_expense ||
+        "",
+    );
+    const amount = newVals.amount || oldVals.amount;
     if (verb === "create") {
-      return `${description}${amount ? ` — ${formatActivityCurrency(Number(amount))}` : ""}`;
+      return description
+        ? `Created expense: ${description}${amount ? ` — ${formatActivityCurrency(Number(amount))}` : ""}`
+        : "New expense";
     }
-    if (verb === "update") return description || "Updated expense";
-    if (verb === "delete") return description || "Deleted expense";
+    if (verb === "update")
+      return description
+        ? `Updated expense: ${description}`
+        : "Updated expense";
+    if (verb === "archive")
+      return description
+        ? `Archived expense: ${description}`
+        : "Archived expense";
+    if (verb === "restore")
+      return description
+        ? `Restored expense: ${description}`
+        : "Restored expense";
+    if (verb === "delete")
+      return description
+        ? `Deleted expense: ${description}`
+        : "Deleted expense";
   }
 
   if (log.entity_type === "user") {
-    const name = String(newVals.name || oldVals.name || oldVals.affected_user || newVals.affected_user || "");
-    if (verb === "create") return name || "New user";
-    if (verb === "update") return name || "Updated user";
-    if (verb === "archive") return name || "Archived user";
-    if (verb === "restore") return name || "Restored user";
-    if (verb === "delete") return name || "Deleted user";
+    const name = String(
+      newVals.name ||
+        oldVals.name ||
+        oldVals.affected_user ||
+        newVals.affected_user ||
+        "",
+    );
+    if (verb === "create") return name ? `Created user: ${name}` : "New user";
+    if (verb === "update")
+      return name ? `Updated user: ${name}` : "Updated user";
+    if (verb === "archive")
+      return name ? `Archived user: ${name}` : "Archived user";
+    if (verb === "restore")
+      return name ? `Restored user: ${name}` : "Restored user";
+    if (verb === "delete")
+      return name ? `Deleted user: ${name}` : "Deleted user";
   }
 
-  return `${ACTIVITY_ACTION_LABELS[verb] || verb} ${log.entity_type}`;
+  if (log.entity_type === "category") {
+    const name = String(
+      newVals.name ||
+        oldVals.name ||
+        oldVals.affected_category ||
+        newVals.affected_category ||
+        "",
+    );
+    if (verb === "create")
+      return name ? `Created category: ${name}` : "New category";
+    if (verb === "update")
+      return name ? `Updated category: ${name}` : "Updated category";
+    if (verb === "archive")
+      return name ? `Archived category: ${name}` : "Archived category";
+    if (verb === "restore")
+      return name ? `Restored category: ${name}` : "Restored category";
+    if (verb === "delete")
+      return name ? `Deleted category: ${name}` : "Deleted category";
+  }
+
+  if (log.entity_type === "auth") {
+    if (verb === "login") return "User login";
+    if (verb === "pin_login") return "User PIN login";
+    if (verb === "login_failed") return "Failed login attempt";
+    if (verb === "logout") return "User logout";
+    return "Authentication event";
+  }
+
+  if (log.entity_type === "shift") {
+    if (verb === "start") return "Started shift";
+    if (verb === "close") return "Closed shift";
+    if (verb === "pay_in" || verb === "pay_out") {
+      const type = newVals.type || "";
+      const amount = newVals.amount || "";
+      const reason = newVals.reason || "";
+      if (type && amount) return `${type}: ${amount} - ${reason}`;
+    }
+    return log.description || "Shift event";
+  }
+
+  return (
+    log.description ||
+    `${ACTIVITY_ACTION_LABELS[verb] || verb} ${log.entity_type}`
+  );
 }
 
 export function buildAuditLogParams(input: {
@@ -291,12 +418,14 @@ export function buildAuditLogParams(input: {
   selectedAction: string;
   selectedEntity: string;
   dateRange: ActivityDateRange;
+  searchQuery?: string;
 }) {
   const params: {
     action?: string;
     entity_type?: string;
     from?: string;
     to?: string;
+    search?: string;
     limit: number;
     offset: number;
   } = {
@@ -308,6 +437,8 @@ export function buildAuditLogParams(input: {
   if (input.selectedEntity !== "all") params.entity_type = input.selectedEntity;
   if (input.dateRange.start) params.from = input.dateRange.start;
   if (input.dateRange.end) params.to = input.dateRange.end;
+  if (input.searchQuery && input.searchQuery.trim() !== "")
+    params.search = input.searchQuery.trim();
 
   return params;
 }

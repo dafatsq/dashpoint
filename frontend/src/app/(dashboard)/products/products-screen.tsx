@@ -6,10 +6,11 @@ import { Header } from "@/components/layout/header";
 import api from "@/lib/api";
 import { buildBackendUrl } from "@/lib/config";
 import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
+import { useGlobalError } from "@/contexts/error-context";
 import { Category, Product } from "@/types";
 
 import { ProductsControls } from "./products-controls";
-import { ProductsDeleteDialogs } from "./products-delete-dialogs";
+import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
 import { ProductsFormDialog } from "./products-form-dialog";
 import {
   buildProductCreateRequest,
@@ -39,7 +40,6 @@ export function ProductsScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"active" | "archived">("active");
   const [page, setPage] = useState(1);
-  const [totalProducts, setTotalProducts] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -50,7 +50,7 @@ export function ProductsScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { showError } = useGlobalError();
   const [formData, setFormData] = useState<ProductFormData>(createEmptyProductFormData());
   const [formErrors, setFormErrors] = useState<{
     name?: string;
@@ -67,21 +67,25 @@ export function ProductsScreen() {
     return () => clearTimeout(timeout);
   }, [searchQuery]);
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      const result = await api.getCategories();
-      if (result.error) {
-        setCategoryError(result.error);
-        return;
-      }
-      if (result.data) {
-        setCategoryError(null);
-        setCategories(result.data);
-      }
-    };
-
-    void fetchCategories();
+  const loadCategories = useCallback(async () => {
+    const result = await api.getCategories();
+    if (result.error) {
+      setCategoryError(result.error);
+      return;
+    }
+    if (result.data) {
+      setCategoryError(null);
+      setCategories(result.data);
+    }
   }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadCategories();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadCategories]);
 
   const fetchProductsPage = useCallback(
     async (pageToLoad: number, replace: boolean) => {
@@ -104,7 +108,6 @@ export function ProductsScreen() {
       } else if (result.data) {
         setProductsError(null);
         setProducts((prev) => (replace ? result.data! : [...prev, ...result.data!]));
-        setTotalProducts(result.total || 0);
         if (result.total_pages !== undefined) {
           setHasMore(pageToLoad < result.total_pages);
         } else {
@@ -122,12 +125,21 @@ export function ProductsScreen() {
     [debouncedSearch, selectedCategory, viewMode],
   );
 
-  useEffect(() => {
+  const resetPagination = useCallback(() => {
     setProducts([]);
     setPage(1);
     setHasMore(true);
-    void fetchProductsPage(1, true);
-  }, [fetchProductsPage]);
+  }, []);
+
+  useEffect(() => {
+    resetPagination();
+
+    const timeoutId = window.setTimeout(() => {
+      void fetchProductsPage(1, true);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [fetchProductsPage, resetPagination]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
@@ -169,15 +181,17 @@ export function ProductsScreen() {
   const hasChanges = useMemo(() => hasProductFormChanges(formData, editingProduct), [editingProduct, formData]);
 
   const handleSubmit = async () => {
-    const errors: typeof formErrors = {};
+    if (editingProduct && !hasChanges) {
+      showError("No Changes", "Make a change before saving.");
+      return;
+    }
+
     if (!formData.name.trim()) {
-      errors.name = "Product name is required";
+      showError("Name Required", "Product name is required");
+      return;
     }
     if (!formData.price || parseFloat(formData.price) <= 0) {
-      errors.price = "Valid price is required";
-    }
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+      showError("Price Required", "Valid price is required");
       return;
     }
 
@@ -189,11 +203,11 @@ export function ProductsScreen() {
         const result = await api.updateProduct(editingProduct.id, buildProductUpdateRequest(formData));
         if (result.error) {
           if (result.error.includes("SKU")) {
-            setFormErrors({ sku: result.error });
+            showError("SKU Error", result.error);
           } else if (result.error.includes("Barcode") || result.error.includes("barcode")) {
-            setFormErrors({ barcode: result.error });
+            showError("Barcode Error", result.error);
           } else {
-            setFormErrors({ general: result.error });
+            showError("Save Failed", result.error);
           }
           return;
         }
@@ -204,17 +218,16 @@ export function ProductsScreen() {
         const result = await api.createProduct(buildProductCreateRequest(formData));
         if (result.error) {
           if (result.error.includes("SKU")) {
-            setFormErrors({ sku: result.error });
+            showError("SKU Error", result.error);
           } else if (result.error.includes("Barcode") || result.error.includes("barcode")) {
-            setFormErrors({ barcode: result.error });
+            showError("Barcode Error", result.error);
           } else {
-            setFormErrors({ general: result.error });
+            showError("Create Failed", result.error);
           }
           return;
         }
         if (result.data) {
           setProducts((prev) => [result.data!, ...prev]);
-          setTotalProducts((prev) => prev + 1);
         }
       }
 
@@ -222,7 +235,7 @@ export function ProductsScreen() {
       resetForm();
       void fetchProductsPage(1, true);
     } catch {
-      setFormErrors({ general: "Failed to save product. Please try again." });
+      showError("Save Error", "Failed to save product. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -232,14 +245,12 @@ export function ProductsScreen() {
     if (!deletingProduct) {
       return;
     }
-    setIsSubmitting(true);
     const result = await api.deleteProduct(deletingProduct.id);
     if (result.error) {
-      setProductsError(result.error);
+      showError("Archive Failed", result.error);
     } else {
       setProductsError(null);
       setProducts((prev) => prev.filter((product) => product.id !== deletingProduct.id));
-      setTotalProducts((prev) => Math.max(0, prev - 1));
       setDeleteDialogOpen(false);
       setDeletingProduct(null);
       void fetchProductsPage(1, true);
@@ -248,14 +259,12 @@ export function ProductsScreen() {
   };
 
   const handleRestore = async (product: Product) => {
-    setIsSubmitting(true);
     const result = await api.updateProduct(product.id, { is_active: true });
     if (result.error) {
-      setProductsError(result.error);
+      showError("Restore Failed", result.error);
     } else if (result.data) {
       setProductsError(null);
       setProducts((prev) => prev.filter((item) => item.id !== product.id));
-      setTotalProducts((prev) => Math.max(0, prev - 1));
       void fetchProductsPage(1, true);
     }
     setIsSubmitting(false);
@@ -266,14 +275,12 @@ export function ProductsScreen() {
       return;
     }
     setIsSubmitting(true);
-    setDeleteError(null);
     const result = await api.permanentDeleteProduct(deletingProduct.id);
     if (result.error) {
-      setDeleteError(result.error);
+      showError("Delete Failed", result.error);
     } else {
       setProductsError(null);
       setProducts((prev) => prev.filter((product) => product.id !== deletingProduct.id));
-      setTotalProducts((prev) => Math.max(0, prev - 1));
       setPermanentDeleteDialogOpen(false);
       setDeletingProduct(null);
       void fetchProductsPage(1, true);
@@ -319,7 +326,6 @@ export function ProductsScreen() {
           canEdit={canEdit}
           canDelete={canDelete}
           products={products}
-          totalProducts={totalProducts}
           viewMode={viewMode}
           isLoading={isLoading}
           isFetchingMore={isFetchingMore}
@@ -349,24 +355,33 @@ export function ProductsScreen() {
         formData={formData}
         formErrors={formErrors}
         isSubmitting={isSubmitting}
-        hasChanges={hasChanges}
         onOpenChange={setDialogOpen}
         onFormDataChange={setFormData}
         onFormErrorsChange={setFormErrors}
         onSubmit={handleSubmit}
       />
 
-      <ProductsDeleteDialogs
-        deletingProduct={deletingProduct}
-        deleteDialogOpen={deleteDialogOpen}
-        permanentDeleteDialogOpen={permanentDeleteDialogOpen}
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Archive Product"
+        description={`Are you sure you want to archive "${deletingProduct?.name}"? The product will be moved to the Archived tab and can be restored later.`}
+        confirmText="Archive"
         isSubmitting={isSubmitting}
-        deleteError={deleteError}
-        onDeleteDialogOpenChange={setDeleteDialogOpen}
-        onPermanentDeleteDialogOpenChange={setPermanentDeleteDialogOpen}
-        onArchive={handleDelete}
-        onPermanentDelete={handlePermanentDelete}
-        onClearDeleteError={() => setDeleteError(null)}
+        loadingText="Archiving..."
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmationDialog
+        open={permanentDeleteDialogOpen}
+        onOpenChange={setPermanentDeleteDialogOpen}
+        title="Permanently Delete Product"
+        description={`Are you sure you want to permanently delete "${deletingProduct?.name}"? This action cannot be undone. All data associated with this product will be lost.`}
+        confirmText="Delete Permanently"
+        confirmVariant="destructive"
+        isSubmitting={isSubmitting}
+        loadingText="Deleting..."
+        onConfirm={handlePermanentDelete}
       />
     </div>
   );

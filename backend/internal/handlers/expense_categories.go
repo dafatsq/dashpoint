@@ -4,8 +4,33 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"dashpoint/backend/internal/audit"
+	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 )
+
+const inventoryPurchaseCategoryName = "Inventory Purchase"
+
+func expenseCategoryAuditValues(category *models.ExpenseCategory) map[string]interface{} {
+	if category == nil {
+		return nil
+	}
+
+	values := map[string]interface{}{
+		"name":      category.Name,
+		"is_active": category.IsActive,
+	}
+	if category.Description != nil {
+		values["description"] = *category.Description
+	}
+	return values
+}
+
+func expenseCategoryName(category *models.ExpenseCategory) string {
+	if category == nil {
+		return "Unknown"
+	}
+	return category.Name
+}
 
 // ListCategories handles GET /api/v1/expenses/categories
 func (h *ExpenseHandler) ListCategories(c *fiber.Ctx) error {
@@ -37,6 +62,14 @@ func (h *ExpenseHandler) CreateCategory(c *fiber.Ctx) error {
 	}
 	if req.Name == "" {
 		return expenseMessage(c, fiber.StatusBadRequest, "Category name is required")
+	}
+
+	exists, repoErr := h.repo.CategoryNameExists(c.Context(), req.Name, nil)
+	if repoErr != nil {
+		return expenseInternalError(c, repoErr, "Failed to validate category name")
+	}
+	if exists {
+		return middleware.JSONError(c, fiber.StatusConflict, "NAME_EXISTS", "Expense category with this name already exists")
 	}
 
 	category, err := h.repo.CreateCategory(c.Context(), req.Name, req.Description)
@@ -98,6 +131,11 @@ func (h *ExpenseHandler) UpdateCategory(c *fiber.Ctx) error {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense category not found")
 	}
 
+	// Inventory Purchase is a system-managed special category — it cannot be modified.
+	if category.Name == inventoryPurchaseCategoryName {
+		return expenseMessage(c, fiber.StatusForbidden, "The 'Inventory Purchase' category is a system category and cannot be edited")
+	}
+
 	oldValues := map[string]interface{}{
 		"affected_category": category.Name,
 		"name":              category.Name,
@@ -108,6 +146,13 @@ func (h *ExpenseHandler) UpdateCategory(c *fiber.Ctx) error {
 	}
 
 	if req.Name != nil {
+		exists, err := h.repo.CategoryNameExists(c.Context(), *req.Name, &id)
+		if err != nil {
+			return expenseInternalError(c, err, "Failed to validate category name")
+		}
+		if exists {
+			return middleware.JSONError(c, fiber.StatusConflict, "NAME_EXISTS", "Expense category with this name already exists")
+		}
 		category.Name = *req.Name
 	}
 	if req.Description != nil {
@@ -143,18 +188,24 @@ func (h *ExpenseHandler) DeleteCategory(c *fiber.Ctx) error {
 	}
 
 	category, _ := h.repo.GetCategoryByID(c.Context(), id)
-	categoryName := "Unknown"
-	if category != nil {
-		categoryName = category.Name
+	categoryName := expenseCategoryName(category)
+
+	// Inventory Purchase is a system-managed special category — it cannot be archived.
+	if categoryName == inventoryPurchaseCategoryName {
+		return expenseMessage(c, fiber.StatusForbidden, "The 'Inventory Purchase' category is a system category and cannot be archived")
 	}
 
 	if repoErr := h.repo.DeleteCategory(c.Context(), id); repoErr != nil {
 		return expenseInternalError(c, repoErr, "Failed to delete expense category")
 	}
 
-	audit.LogWithValues(c, models.AuditActionCategoryArchive, models.AuditEntityCategory, id.String(), "Archived expense category: "+categoryName, map[string]interface{}{
-		"affected_category": categoryName,
-	}, nil)
+	oldValues := expenseCategoryAuditValues(category)
+	if oldValues == nil {
+		oldValues = map[string]interface{}{"name": categoryName}
+	}
+	newValues := map[string]interface{}{"deleted": true}
+
+	audit.LogWithValues(c, models.AuditActionCategoryArchive, models.AuditEntityCategory, id.String(), "Archived expense category: "+categoryName, oldValues, newValues)
 
 	return c.JSON(fiber.Map{"message": "Expense category archived successfully"})
 }
@@ -167,18 +218,24 @@ func (h *ExpenseHandler) PermanentDeleteCategory(c *fiber.Ctx) error {
 	}
 
 	category, _ := h.repo.GetCategoryByID(c.Context(), id)
-	categoryName := "Unknown"
-	if category != nil {
-		categoryName = category.Name
+	categoryName := expenseCategoryName(category)
+
+	// Inventory Purchase is a system-managed special category — it cannot be deleted.
+	if categoryName == inventoryPurchaseCategoryName {
+		return expenseMessage(c, fiber.StatusForbidden, "The 'Inventory Purchase' category is a system category and cannot be deleted")
 	}
 
 	if repoErr := h.repo.PermanentDeleteCategory(c.Context(), id); repoErr != nil {
 		return expenseMessage(c, fiber.StatusBadRequest, repoErr.Error())
 	}
 
-	audit.LogWithValues(c, models.AuditActionCategoryDelete, models.AuditEntityCategory, id.String(), "Permanently deleted expense category: "+categoryName, map[string]interface{}{
-		"affected_category": categoryName,
-	}, nil)
+	oldValues := expenseCategoryAuditValues(category)
+	if oldValues == nil {
+		oldValues = map[string]interface{}{"name": categoryName}
+	}
+	newValues := map[string]interface{}{"deleted_permanently": true}
+
+	audit.LogWithValues(c, models.AuditActionCategoryDelete, models.AuditEntityCategory, id.String(), "Permanently deleted expense category: "+categoryName, oldValues, newValues)
 
 	return c.JSON(fiber.Map{"message": "Expense category permanently deleted successfully"})
 }

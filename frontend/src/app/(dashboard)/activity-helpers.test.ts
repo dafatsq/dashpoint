@@ -42,7 +42,9 @@ describe("activity helpers", () => {
 
   test("maps entity labels and badge colors", () => {
     expect(getActivityEntityLabel("auth")).toBe("Authentication");
-    expect(getActivityBadgeColor("category.archive")).toContain("bg-orange-500");
+    expect(getActivityBadgeColor("category.archive")).toContain(
+      "bg-orange-500",
+    );
     expect(getActivityBadgeColor("sale.void")).toContain("bg-orange-600");
   });
 
@@ -59,7 +61,7 @@ describe("activity helpers", () => {
           new_quantity: 12,
         },
       }),
-    ).toBe("Restock: Milk -> 12 (Δ5)");
+    ).toBe("Restock stock: Milk -> 12 (Δ5)");
 
     expect(
       buildActivityDescription({
@@ -71,7 +73,7 @@ describe("activity helpers", () => {
           amount: "15000",
         },
       }),
-    ).toBe("Delivery — Rp 15.000");
+    ).toBe("Created expense: Delivery — Rp 15.000");
   });
 
   test("builds filtered field changes", () => {
@@ -91,15 +93,23 @@ describe("activity helpers", () => {
 
     expect(changes).toEqual([
       { key: "name", oldVal: "Old Name", newVal: "New Name" },
-      { key: "image_url", oldVal: "/uploads/old.jpg", newVal: "/uploads/new.jpg" },
+      {
+        key: "image_url",
+        oldVal: "/uploads/old.jpg",
+        newVal: "/uploads/new.jpg",
+      },
     ]);
   });
 
   test("formats activity field values consistently", () => {
-    expect(normalizeCurrency(formatActivityFieldValue("amount", "15000"))).toBe("Rp15.000");
+    expect(normalizeCurrency(formatActivityFieldValue("amount", "15000"))).toBe(
+      "Rp15.000",
+    );
     expect(formatActivityFieldValue("tax_rate", 11)).toBe("11%");
     expect(formatActivityFieldValue("is_active", true)).toBe("Yes");
-    expect(formatActivityFieldValue("metadata", { foo: "bar" })).toBe('{"foo":"bar"}');
+    expect(formatActivityFieldValue("metadata", { foo: "bar" })).toBe(
+      '{"foo":"bar"}',
+    );
   });
 
   test("builds typed audit and dashboard change params", () => {

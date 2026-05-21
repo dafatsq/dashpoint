@@ -22,20 +22,16 @@ import {
 } from "@/components/ui/select";
 import type { CreateUserRequest, User, UserRole } from "@/types";
 
-import { roleHierarchy } from "./users-helpers";
-
 interface UsersFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingUser: User | null;
   currentUser: User | null;
+  availableRoles: UserRole[];
   formData: CreateUserRequest;
   setFormData: React.Dispatch<React.SetStateAction<CreateUserRequest>>;
   formErrors: { general?: string };
   isSubmitting: boolean;
-  hasChanges: boolean;
-  isOwner: boolean;
-  hasPermission: (permission: string) => boolean;
   onSubmit: () => void;
 }
 
@@ -44,13 +40,11 @@ export function UsersFormDialog({
   onOpenChange,
   editingUser,
   currentUser,
+  availableRoles,
   formData,
   setFormData,
   formErrors,
   isSubmitting,
-  hasChanges,
-  isOwner,
-  hasPermission,
   onSubmit,
 }: UsersFormDialogProps) {
   return (
@@ -140,9 +134,14 @@ export function UsersFormDialog({
                 You cannot change your own role.
               </p>
             )}
+            {!editingUser && availableRoles.length === 0 && (
+              <p className="text-xs text-muted-foreground -mt-1">
+                No user roles are currently assignable with your permissions.
+              </p>
+            )}
             <Select
               value={formData.role}
-              disabled={editingUser?.id === currentUser?.id}
+              disabled={editingUser?.id === currentUser?.id || availableRoles.length === 0}
               onValueChange={(value: UserRole) =>
                 setFormData((current) => ({ ...current, role: value }))
               }
@@ -151,7 +150,7 @@ export function UsersFormDialog({
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
-                {roleHierarchy[(currentUser?.role_name || "cashier") as UserRole] >= 3 && (
+                {availableRoles.includes("owner") && (
                   <SelectItem value="owner">
                     <div className="flex items-center gap-2">
                       <ShieldAlert className="h-4 w-4" />
@@ -159,23 +158,15 @@ export function UsersFormDialog({
                     </div>
                   </SelectItem>
                 )}
-                {roleHierarchy[(currentUser?.role_name || "cashier") as UserRole] >= 2 &&
-                  (isOwner ||
-                    hasPermission(
-                      editingUser ? "can_edit_manager_users" : "can_create_manager_users",
-                    )) && (
-                    <SelectItem value="manager">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4" />
-                        Manager - Most access
-                      </div>
-                    </SelectItem>
-                  )}
-                {(isOwner ||
-                  currentUser?.role_name === "cashier" ||
-                  hasPermission(
-                    editingUser ? "can_edit_cashier_users" : "can_create_cashier_users",
-                  )) && (
+                {availableRoles.includes("manager") && (
+                  <SelectItem value="manager">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Manager - Most access
+                    </div>
+                  </SelectItem>
+                )}
+                {availableRoles.includes("cashier") && (
                   <SelectItem value="cashier">
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4" />
@@ -192,7 +183,10 @@ export function UsersFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting || !hasChanges}>
+          <Button
+            onClick={onSubmit}
+            disabled={isSubmitting}
+          >
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

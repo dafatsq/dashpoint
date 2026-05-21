@@ -6,7 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
-import type { SettingsPreferences } from "./settings-helpers";
+import {
+  normalizeSettingsPreferences,
+  type SettingsPreferences,
+} from "./settings-helpers";
 
 interface SettingsAuthCardProps {
   preferences: SettingsPreferences;
@@ -36,10 +39,10 @@ export function SettingsAuthCard({ preferences, onPreferencesChange }: SettingsA
           <Switch
             checked={preferences.rememberMe}
             onCheckedChange={(checked) => {
-              onPreferencesChange({
+              onPreferencesChange(normalizeSettingsPreferences({
                 rememberMe: checked,
-                quickAccess: checked ? true : preferences.quickAccess,
-              });
+                quickAccess: preferences.quickAccess,
+              }));
             }}
           />
         </div>
@@ -52,14 +55,14 @@ export function SettingsAuthCard({ preferences, onPreferencesChange }: SettingsA
             </p>
           </div>
           <Switch
-            checked={preferences.rememberMe ? true : preferences.quickAccess}
+            checked={preferences.quickAccess}
+            disabled={preferences.rememberMe}
             onCheckedChange={(checked) => {
-              onPreferencesChange({
+              onPreferencesChange(normalizeSettingsPreferences({
                 ...preferences,
                 quickAccess: checked,
-              });
+              }));
             }}
-            disabled={preferences.rememberMe}
           />
         </div>
       </CardContent>

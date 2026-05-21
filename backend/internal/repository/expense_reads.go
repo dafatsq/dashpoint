@@ -13,12 +13,12 @@ import (
 
 // GetByIDWithTx retrieves an expense by ID within a transaction.
 func (r *ExpenseRepository) GetByIDWithTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*models.Expense, error) {
-	return scanExpense(tx.QueryRow(ctx, expenseSelectColumns+" WHERE e.id = $1", id))
+	return scanExpense(tx.QueryRow(ctx, expenseSelectQuery(" WHERE e.id = $1"), id))
 }
 
 // GetByID retrieves an expense by ID.
 func (r *ExpenseRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Expense, error) {
-	return scanExpense(r.pool.QueryRow(ctx, expenseSelectColumns+" WHERE e.id = $1", id))
+	return scanExpense(r.pool.QueryRow(ctx, expenseSelectQuery(" WHERE e.id = $1"), id))
 }
 
 // List retrieves expenses with optional filtering.
@@ -39,13 +39,9 @@ func (r *ExpenseRepository) List(ctx context.Context, categoryID *uuid.UUID, sta
 	}
 	defer rows.Close()
 
-	expenses := make([]models.Expense, 0)
-	for rows.Next() {
-		expense, scanErr := scanExpense(rows)
-		if scanErr != nil {
-			return nil, 0, scanErr
-		}
-		expenses = append(expenses, *expense)
+	expenses, err := collectExpenses(rows)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return expenses, total, nil
@@ -86,6 +82,9 @@ func (r *ExpenseRepository) GetSummary(ctx context.Context, startDate, endDate t
 			return nil, fmt.Errorf("failed to scan category summary: %w", err)
 		}
 		summary.ByCategory = append(summary.ByCategory, categorySummary)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate category summary: %w", err)
 	}
 
 	return &summary, nil

@@ -38,7 +38,7 @@ describe("login helpers", () => {
   test("computes the effective save-account decision from trust and checkbox state", () => {
     expect(getEffectiveSaveAccountDecision(false, false)).toBe(false);
     expect(getEffectiveSaveAccountDecision(false, true)).toBe(true);
-    expect(getEffectiveSaveAccountDecision(true, false)).toBe(true);
+    expect(getEffectiveSaveAccountDecision(true, false)).toBe(false);
     expect(getEffectiveSaveAccountDecision(true, true)).toBe(true);
   });
 
@@ -52,12 +52,12 @@ describe("login helpers", () => {
       disabled: false,
     });
     expect(getSaveLoginControlState(true, false)).toEqual({
-      checked: true,
-      disabled: true,
+      checked: false,
+      disabled: false,
     });
     expect(getSaveLoginControlState(true, true)).toEqual({
       checked: true,
-      disabled: true,
+      disabled: false,
     });
   });
 });

@@ -1,6 +1,12 @@
-'use client';
+"use client";
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { AuditLog } from "@/types";
 
 import { ActivityFieldChanges } from "../activity-field-changes";
@@ -8,6 +14,7 @@ import {
   formatActivityDateTime,
   getActivityActionLabel,
   getActivityEntityLabel,
+  buildActivityDescription,
 } from "../activity-helpers";
 
 interface AuditDetailDialogProps {
@@ -16,44 +23,63 @@ interface AuditDetailDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function AuditDetailDialog({ open, log, onOpenChange }: AuditDetailDialogProps) {
+export function AuditDetailDialog({
+  open,
+  log,
+  onOpenChange,
+}: AuditDetailDialogProps) {
+  const detailItems = log
+    ? [
+        { label: "User", value: log.user_name || "System" },
+        { label: "Action", value: getActivityActionLabel(log.action) },
+        {
+          label: "Entity Type",
+          value: getActivityEntityLabel(log.entity_type),
+        },
+        {
+          label: "Entity ID",
+          value: log.entity_id || "-",
+          valueClassName: "font-mono text-xs font-medium",
+        },
+        {
+          label: "Description",
+          value: buildActivityDescription(log),
+          wrapperClassName: "col-span-2",
+        },
+        { label: "IP Address", value: log.ip_address || "-" },
+        {
+          label: "User Agent",
+          value: log.user_agent || "-",
+          valueClassName: "truncate text-xs font-medium",
+          title: log.user_agent,
+        },
+      ]
+    : [];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Log Details</DialogTitle>
-          <DialogDescription>{log ? formatActivityDateTime(log.created_at) : ""}</DialogDescription>
+          <DialogDescription>
+            {log ? formatActivityDateTime(log.created_at) : ""}
+          </DialogDescription>
         </DialogHeader>
 
         {log ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">User:</span>
-                <p className="font-medium">{log.user_name || "System"}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Action:</span>
-                <p className="font-medium">{getActivityActionLabel(log.action)}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Entity Type:</span>
-                <p className="font-medium">{getActivityEntityLabel(log.entity_type)}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Entity ID:</span>
-                <p className="font-mono text-xs font-medium">{log.entity_id || "-"}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">IP Address:</span>
-                <p className="font-medium">{log.ip_address || "-"}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">User Agent:</span>
-                <p className="truncate text-xs font-medium" title={log.user_agent}>
-                  {log.user_agent || "-"}
-                </p>
-              </div>
+              {detailItems.map((item) => (
+                <div key={item.label} className={item.wrapperClassName}>
+                  <span className="text-muted-foreground">{item.label}:</span>
+                  <p
+                    className={item.valueClassName ?? "font-medium"}
+                    title={item.title}
+                  >
+                    {item.value}
+                  </p>
+                </div>
+              ))}
             </div>
 
             <div className="border-t pt-4">

@@ -22,11 +22,13 @@ type userRepository interface {
 	Deactivate(context.Context, uuid.UUID) error
 	PermanentDelete(context.Context, uuid.UUID) error
 	HasSalesHistory(context.Context, uuid.UUID) (bool, error)
+	HasExpenseHistory(context.Context, uuid.UUID) (bool, error)
 	EmailExists(context.Context, string, *uuid.UUID) (bool, error)
 	GetUserPermissions(context.Context, uuid.UUID) ([]string, error)
 	GetUserPermissionOverrides(context.Context, uuid.UUID) ([]*models.UserPermission, error)
 	ClearUserPermissionOverrides(context.Context, uuid.UUID) error
 	SetUserPermission(context.Context, uuid.UUID, uuid.UUID, bool, *uuid.UUID) error
+	NameExists(context.Context, string, *uuid.UUID) (bool, error)
 }
 
 type roleReader interface {
@@ -45,6 +47,10 @@ type userEventBroadcaster interface {
 type userAction string
 
 const (
+	roleOwner   = "owner"
+	roleManager = "manager"
+	roleCashier = "cashier"
+
 	userActionCreate            userAction = "create"
 	userActionEdit              userAction = "edit"
 	userActionDelete            userAction = "delete"
@@ -116,38 +122,73 @@ func (h *UserHandler) currentUserPermissionSet(c *fiber.Ctx) (map[string]bool, e
 	return permissionSet, nil
 }
 
-func (h *UserHandler) requireRoleHierarchy(c *fiber.Ctx, targetRoleName string) error {
-	currentRoleName := middleware.GetRoleName(c)
-	if getRoleLevel(currentRoleName) < getRoleLevel(targetRoleName) {
-		return userForbidden(c, "You do not have permission to modify a user with a higher role level.")
+func roleNameOfUser(user *models.User) string {
+	if user != nil && user.Role != nil {
+		return user.Role.Name
 	}
-	return nil
+	return ""
 }
 
-func (h *UserHandler) requireActionPermission(c *fiber.Ctx, targetRoleName string, action userAction) error {
-	if strings.ToLower(middleware.GetRoleName(c)) != "manager" {
-		return nil
+func userNameOrUnknown(user *models.User) string {
+	if user != nil && user.Name != "" {
+		return user.Name
+	}
+	return "Unknown"
+}
+
+func baseUserAuditValues(user *models.User) map[string]interface{} {
+	values := map[string]interface{}{
+		"affected_user": user.Name,
+		"name":          user.Name,
+	}
+	if user.Role != nil {
+		values["role"] = user.Role.Name
+	}
+	if user.Email != nil {
+		values["email"] = *user.Email
+	}
+	return values
+}
+
+func isRoleName(roleName, expected string) bool {
+	return strings.EqualFold(roleName, expected)
+}
+
+func (h *UserHandler) requireRoleHierarchy(c *fiber.Ctx, targetRoleName string) bool {
+	currentRoleName := middleware.GetRoleName(c)
+	if getRoleLevel(currentRoleName) < getRoleLevel(targetRoleName) {
+		_ = userForbidden(c, "You do not have permission to modify a user with a higher role level.")
+		return false
+	}
+	return true
+}
+
+func (h *UserHandler) requireActionPermission(c *fiber.Ctx, targetRoleName string, action userAction) bool {
+	if !isRoleName(middleware.GetRoleName(c), roleManager) {
+		return true
 	}
 
 	permissionSet, err := h.currentUserPermissionSet(c)
 	if err != nil {
-		return userInternalError(c, "Failed to validate permissions")
+		_ = userInternalError(c, "Failed to validate permissions")
+		return false
 	}
 
 	permissionKey, message, ok := managerPermissionForAction(action, targetRoleName)
 	if !ok {
-		return nil
+		return true
 	}
 	if permissionSet[permissionKey] {
-		return nil
+		return true
 	}
 
-	return userForbidden(c, message)
+	_ = userForbidden(c, message)
+	return false
 }
 
 func managerPermissionForAction(action userAction, targetRoleName string) (string, string, bool) {
-	switch strings.ToLower(targetRoleName) {
-	case "manager":
+	switch {
+	case isRoleName(targetRoleName, roleManager):
 		switch action {
 		case userActionCreate:
 			return "can_create_manager_users", "You do not have permission to create Managers", true
@@ -158,7 +199,7 @@ func managerPermissionForAction(action userAction, targetRoleName string) (strin
 		case userActionManagePermissions:
 			return "can_manage_manager_permissions", "You do not have permission to manage Managers", true
 		}
-	case "cashier":
+	case isRoleName(targetRoleName, roleCashier):
 		switch action {
 		case userActionCreate:
 			return "can_create_cashier_users", "You do not have permission to create Cashiers", true
@@ -174,9 +215,9 @@ func managerPermissionForAction(action userAction, targetRoleName string) (strin
 	return "", "", false
 }
 
-func (h *UserHandler) enforceTargetUserAction(c *fiber.Ctx, targetRoleName string, action userAction) error {
-	if err := h.requireRoleHierarchy(c, targetRoleName); err != nil {
-		return err
+func (h *UserHandler) enforceTargetUserAction(c *fiber.Ctx, targetRoleName string, action userAction) bool {
+	if !h.requireRoleHierarchy(c, targetRoleName) {
+		return false
 	}
 	return h.requireActionPermission(c, targetRoleName, action)
 }

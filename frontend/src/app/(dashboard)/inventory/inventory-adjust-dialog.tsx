@@ -28,7 +28,7 @@ interface InventoryAdjustDialogProps {
   product: Product | null;
   formState: AdjustmentFormState;
   allowedActions: InventoryAction[];
-  error: string | null;
+
   isSubmitting: boolean;
   onOpenChange: (open: boolean) => void;
   onActionChange: (action: InventoryAction) => void;
@@ -41,7 +41,7 @@ export function InventoryAdjustDialog({
   product,
   formState,
   allowedActions,
-  error,
+
   isSubmitting,
   onOpenChange,
   onActionChange,
@@ -85,10 +85,15 @@ export function InventoryAdjustDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {error ? <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
+
 
           <div className="grid gap-2">
             <Label htmlFor="actionType">Action</Label>
+            {allowedActions.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No inventory actions are currently available with your permissions.
+              </p>
+            ) : null}
             <Select value={formState.action} onValueChange={(value) => onActionChange(value as InventoryAction)}>
               <SelectTrigger>
                 <SelectValue />
@@ -166,7 +171,11 @@ export function InventoryAdjustDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting || !formState.quantity} variant={formState.action === "remove" ? "destructive" : "default"}>
+          <Button
+            onClick={onSubmit}
+            disabled={isSubmitting}
+            variant={formState.action === "remove" ? "destructive" : "default"}
+          >
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

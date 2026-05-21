@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,9 +21,8 @@ interface CategoriesFormDialogProps {
   activeTab: CategoryType;
   editing: boolean;
   formData: CategoryFormData;
-  error: string | null;
+
   isSubmitting: boolean;
-  hasChanges: boolean;
   onOpenChange: (open: boolean) => void;
   onFormDataChange: (formData: CategoryFormData) => void;
   onSubmit: () => void;
@@ -34,13 +33,15 @@ export function CategoriesFormDialog({
   activeTab,
   editing,
   formData,
-  error,
   isSubmitting,
-  hasChanges,
   onOpenChange,
   onFormDataChange,
   onSubmit,
 }: CategoriesFormDialogProps) {
+  const updateFormField = (field: keyof CategoryFormData, value: string) => {
+    onFormDataChange({ ...formData, [field]: value });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -54,12 +55,6 @@ export function CategoriesFormDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {error ? (
-            <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 text-destructive text-sm border border-destructive/20">
-              <AlertCircle className="h-4 w-4" />
-              {error}
-            </div>
-          ) : null}
           <div className="grid gap-2">
             <Label htmlFor="name">
               Name <span className="text-destructive">*</span>
@@ -67,7 +62,7 @@ export function CategoriesFormDialog({
             <Input
               id="name"
               value={formData.name}
-              onChange={(event) => onFormDataChange({ ...formData, name: event.target.value })}
+              onChange={(event) => updateFormField("name", event.target.value)}
               placeholder="Category name"
             />
           </div>
@@ -76,7 +71,7 @@ export function CategoriesFormDialog({
             <Input
               id="description"
               value={formData.description}
-              onChange={(event) => onFormDataChange({ ...formData, description: event.target.value })}
+              onChange={(event) => updateFormField("description", event.target.value)}
               placeholder="Brief description"
             />
           </div>
@@ -86,7 +81,7 @@ export function CategoriesFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting || !hasChanges}>
+          <Button onClick={onSubmit} disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             {editing ? "Update" : "Create"} Category
           </Button>

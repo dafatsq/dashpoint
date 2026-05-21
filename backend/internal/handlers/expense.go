@@ -30,6 +30,7 @@ type expenseStore interface {
 	DeleteWithTx(context.Context, pgx.Tx, uuid.UUID) error
 	GetSummary(context.Context, time.Time, time.Time) (*models.ExpenseSummary, error)
 	GetMonthlyTotals(context.Context, int) ([]map[string]interface{}, error)
+	CategoryNameExists(context.Context, string, *uuid.UUID) (bool, error)
 }
 
 type expenseInventoryStore interface {

@@ -2,11 +2,23 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 
 	"dashpoint/backend/internal/models"
 )
+
+func (h *ProductHandler) ensureProductNameAvailable(c *fiber.Ctx, name string, excludeID *uuid.UUID) error {
+	exists, repoErr := h.productRepo.NameExists(c.Context(), name, excludeID)
+	if repoErr != nil {
+		return productInternalError(c, repoErr, "Failed to check product name", "Failed to validate name")
+	}
+	if exists {
+		return productJSONError(c, fiber.StatusConflict, "NAME_EXISTS", "A product with this name already exists")
+	}
+	return nil
+}
 
 // Create handles POST /api/v1/products
 func (h *ProductHandler) Create(c *fiber.Ctx) error {
@@ -18,6 +30,12 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 	input, err := parseCreateProductInput(req)
 	if err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+	}
+
+	if req.Name != "" {
+		if err := h.ensureProductNameAvailable(c, req.Name, nil); err != nil {
+			return err
+		}
 	}
 
 	if req.SKU != nil && *req.SKU != "" {
@@ -101,6 +119,12 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	var req UpdateProductRequest
 	if err := c.BodyParser(&req); err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	}
+
+	if req.Name != nil && *req.Name != "" {
+		if err := h.ensureProductNameAvailable(c, *req.Name, &id); err != nil {
+			return err
+		}
 	}
 
 	if req.SKU != nil {

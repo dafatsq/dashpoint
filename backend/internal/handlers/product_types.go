@@ -23,6 +23,7 @@ type productStore interface {
 	GetByBarcodeIncludingInactive(context.Context, string) (*models.Product, error)
 	SKUExists(context.Context, string, *uuid.UUID) (bool, error)
 	BarcodeExists(context.Context, string, *uuid.UUID) (bool, error)
+	NameExists(context.Context, string, *uuid.UUID) (bool, error)
 }
 
 type inventoryStore interface {

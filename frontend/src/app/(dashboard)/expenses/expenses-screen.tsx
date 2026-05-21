@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { DataTableContainer } from "@/components/shared/data-table-container";
+import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
 import { Header } from "@/components/layout/header";
 import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
+import { useGlobalError } from "@/contexts/error-context";
 import api from "@/lib/api";
 import { CreateExpenseRequest, Expense, ExpenseCategory, ExpenseSummary, Product } from "@/types";
 
 import {
   buildExpenseRequest,
+  canSubmitExpenseForm,
   createEmptyExpenseFormData,
   deriveInventoryPurchaseAmount,
   deriveInventoryPurchaseDescription,
@@ -18,7 +22,6 @@ import {
   mapExpenseToFormData,
   todayDateString,
 } from "./expenses-helpers";
-import { ExpensesDeleteDialog } from "./expenses-delete-dialog";
 import { ExpensesFormDialog } from "./expenses-form-dialog";
 import { ExpensesList } from "./expenses-list";
 import { ExpensesSummaryCards } from "./expenses-summary";
@@ -51,7 +54,7 @@ export function ExpensesScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { showError } = useGlobalError();
   const [formData, setFormData] = useState<CreateExpenseRequest>(createEmptyExpenseFormData());
   const [formErrors, setFormErrors] = useState<{ amount?: string; description?: string; general?: string }>({});
   const [isManualAmount, setIsManualAmount] = useState(false);
@@ -77,48 +80,56 @@ export function ExpensesScreen() {
     }
   }, [dateRange.end, dateRange.start]);
 
+  const loadExpensesData = useCallback(async () => {
+    setIsLoading(true);
+    const [expensesResult, categoriesResult, productsResult, summaryResult] = await Promise.all([
+      api.getExpenses({
+        category_id: selectedCategory !== "all" ? selectedCategory : undefined,
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+        limit,
+        offset: (page - 1) * limit,
+      }),
+      api.getExpenseCategories(),
+      api.getProducts({ active: true }),
+      api.getExpenseSummary({
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      }),
+    ]);
+
+    const firstError =
+      expensesResult.error || categoriesResult.error || productsResult.error || summaryResult.error || null;
+    setPageError(firstError);
+
+    if (expensesResult.data) {
+      setExpenses(expensesResult.data.expenses);
+      setTotal(expensesResult.data.total || 0);
+      setHasMore(expensesResult.data.expenses.length === limit);
+    }
+    if (categoriesResult.data) {
+      setCategories(categoriesResult.data);
+    }
+    if (productsResult.data) {
+      setProducts(productsResult.data);
+    }
+    if (summaryResult.data) {
+      setSummary(summaryResult.data);
+    }
+    setIsLoading(false);
+  }, [dateRange.end, dateRange.start, limit, page, selectedCategory]);
+
+  const resetToFirstPage = useCallback(() => {
+    setPage(1);
+  }, []);
+
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      const [expensesResult, categoriesResult, productsResult, summaryResult] = await Promise.all([
-        api.getExpenses({
-          category_id: selectedCategory !== "all" ? selectedCategory : undefined,
-          start_date: dateRange.start,
-          end_date: dateRange.end,
-          limit,
-          offset: (page - 1) * limit,
-        }),
-        api.getExpenseCategories(),
-        api.getProducts({ active: true }),
-        api.getExpenseSummary({
-          start_date: dateRange.start,
-          end_date: dateRange.end,
-        }),
-      ]);
+    const timeoutId = window.setTimeout(() => {
+      void loadExpensesData();
+    }, 0);
 
-      const firstError =
-        expensesResult.error || categoriesResult.error || productsResult.error || summaryResult.error || null;
-      setPageError(firstError);
-
-      if (expensesResult.data) {
-        setExpenses(expensesResult.data.expenses);
-        setTotal(expensesResult.data.total || 0);
-        setHasMore(expensesResult.data.expenses.length === limit);
-      }
-      if (categoriesResult.data) {
-        setCategories(categoriesResult.data);
-      }
-      if (productsResult.data) {
-        setProducts(productsResult.data);
-      }
-      if (summaryResult.data) {
-        setSummary(summaryResult.data);
-      }
-      setIsLoading(false);
-    };
-
-    void fetchData();
-  }, [dateRange, limit, page, selectedCategory]);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadExpensesData]);
 
   const filteredExpenses = useMemo(
     () =>
@@ -188,26 +199,56 @@ export function ExpensesScreen() {
   );
 
   const hasChanges = useMemo(() => hasExpenseFormChanges(formData, editingExpense), [editingExpense, formData]);
+  const canSubmitForm = useMemo(
+    () =>
+      canSubmitExpenseForm({
+        isSubmitting,
+        hasChanges,
+        categoryId: formData.category_id,
+        isInventoryPurchase: inventoryPurchase,
+        productId: formData.product_id,
+        quantity: formData.quantity,
+      }),
+    [
+      formData.category_id,
+      formData.product_id,
+      formData.quantity,
+      hasChanges,
+      inventoryPurchase,
+      isSubmitting,
+    ],
+  );
 
   const handleSubmit = async () => {
     if (editingExpense && !canEditExpense) {
-      setFormErrors({ general: "You do not have permission to edit expenses" });
+      showError("Permission Denied", "You do not have permission to edit expenses");
       return;
     }
     if (!editingExpense && !canCreateExpense) {
-      setFormErrors({ general: "You do not have permission to create expenses" });
+      showError("Permission Denied", "You do not have permission to create expenses");
+      return;
+    }
+    if (!hasChanges) {
+      showError("No Changes", "Make a change before saving.");
+      return;
+    }
+    if (!canSubmitForm) {
+      if (inventoryPurchase && !formData.product_id) {
+        showError("Product Required", "Select a product before saving this inventory purchase.");
+      } else if (inventoryPurchase && !formData.quantity) {
+        showError("Quantity Required", "Enter a quantity before saving this inventory purchase.");
+      } else if (!formData.category_id) {
+        showError("Category Required", "Select a category before saving.");
+      }
       return;
     }
 
-    const errors: { amount?: string; description?: string; general?: string } = {};
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      errors.amount = "Valid amount is required";
-    }
     if (!formData.description.trim()) {
-      errors.description = "Description is required";
+      showError("Description Required", "Please provide a description for this expense.");
+      return;
     }
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      showError("Amount Required", "Please provide a valid amount greater than 0.");
       return;
     }
 
@@ -219,7 +260,7 @@ export function ExpensesScreen() {
       if (editingExpense) {
         const result = await api.updateExpense(editingExpense.id, expenseData);
         if (result.error) {
-          setFormErrors({ general: result.error });
+          showError("Save Failed", result.error);
           return;
         }
         if (result.data) {
@@ -228,7 +269,7 @@ export function ExpensesScreen() {
       } else {
         const result = await api.createExpense(expenseData);
         if (result.error) {
-          setFormErrors({ general: result.error });
+          showError("Create Failed", result.error);
           return;
         }
         if (result.data) {
@@ -240,7 +281,7 @@ export function ExpensesScreen() {
       setDialogOpen(false);
       resetForm();
     } catch {
-      setFormErrors({ general: "Failed to save expense. Please try again." });
+      showError("Save Error", "Failed to save expense. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -252,10 +293,9 @@ export function ExpensesScreen() {
     }
 
     setIsSubmitting(true);
-    setDeleteError(null);
     const result = await api.deleteExpense(deletingExpense.id);
     if (result.error) {
-      setDeleteError(result.error);
+      showError("Delete Failed", result.error);
       setIsSubmitting(false);
       return;
     }
@@ -308,45 +348,48 @@ export function ExpensesScreen() {
           onCreate={openCreateDialog}
           onSearchChange={(value) => {
             setSearchQuery(value);
-            setPage(1);
+            resetToFirstPage();
           }}
           onCategoryChange={(value) => {
             setSelectedCategory(value);
-            setPage(1);
+            resetToFirstPage();
           }}
           onDateRangeChange={(range) => {
             setDateRange(range);
-            setPage(1);
+            resetToFirstPage();
           }}
         />
 
-        <ExpensesList
-          expenses={filteredExpenses}
-          isLoading={isLoading}
-          canCreateExpense={canCreateExpense}
-          canEditExpense={canEditExpense}
-          canDeleteExpense={canDeleteExpense}
-          canManageAnyExpense={canManageAnyExpense}
-          page={page}
+        <DataTableContainer
           limit={limit}
-          total={total}
-          hasMore={hasMore}
-          onCreate={openCreateDialog}
-          onEdit={openEditDialog}
-          onDelete={(expense) => {
-            setDeletingExpense(expense);
-            setDeleteError(null);
-            setDeleteDialogOpen(true);
-          }}
-          onPreviousPage={() => setPage((prev) => Math.max(1, prev - 1))}
-          onNextPage={() => setPage((prev) => prev + 1)}
           onLimitChange={(value) => {
             setLimit(value);
-            setPage(1);
+            resetToFirstPage();
           }}
-          formatCurrency={formatCurrency}
-          formatDate={formatDate}
-        />
+          total={total}
+          currentCount={expenses.length}
+        >
+          <ExpensesList
+            expenses={filteredExpenses}
+            isLoading={isLoading}
+            canCreateExpense={canCreateExpense}
+            canEditExpense={canEditExpense}
+            canDeleteExpense={canDeleteExpense}
+            canManageAnyExpense={canManageAnyExpense}
+            page={page}
+            hasMore={hasMore}
+            onCreate={openCreateDialog}
+            onEdit={openEditDialog}
+            onDelete={(expense) => {
+              setDeletingExpense(expense);
+              setDeleteDialogOpen(true);
+            }}
+            onPreviousPage={() => setPage((prev) => Math.max(1, prev - 1))}
+            onNextPage={() => setPage((prev) => prev + 1)}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+          />
+        </DataTableContainer>
       </div>
 
       <ExpensesFormDialog
@@ -357,7 +400,6 @@ export function ExpensesScreen() {
         formData={formData}
         formErrors={formErrors}
         isSubmitting={isSubmitting}
-        hasChanges={hasChanges}
         isInventoryPurchase={inventoryPurchase}
         isManualAmount={isManualAmount}
         isManualDescription={isManualDescription}
@@ -370,17 +412,15 @@ export function ExpensesScreen() {
         formatCurrency={formatCurrency}
       />
 
-      <ExpensesDeleteDialog
+      <ConfirmationDialog
         open={deleteDialogOpen}
-        deleteError={deleteError}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Expense"
+        description="Are you sure you want to delete this expense? This action cannot be undone."
+        confirmText="Delete"
         isSubmitting={isSubmitting}
-        onOpenChange={(open) => {
-          setDeleteDialogOpen(open);
-          if (!open) {
-            setDeleteError(null);
-          }
-        }}
-        onDelete={handleDelete}
+        loadingText="Deleting..."
+        onConfirm={handleDelete}
       />
     </div>
   );

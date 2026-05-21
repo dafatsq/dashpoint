@@ -6,6 +6,7 @@ import {
   buildProfileUpdatePayload,
   buildSettingsPreferences,
   hasSettingsPreferenceChanges,
+  normalizeSettingsPreferences,
   profileHasChanges,
 } from "./settings-helpers";
 
@@ -31,6 +32,28 @@ describe("settings helpers", () => {
     expect(buildSettingsPreferences("false", false)).toEqual({
       rememberMe: false,
       quickAccess: false,
+    });
+  });
+
+  test("normalizes quick access on when remember me is enabled", () => {
+    expect(
+      normalizeSettingsPreferences({
+        rememberMe: true,
+        quickAccess: false,
+      }),
+    ).toEqual({
+      rememberMe: true,
+      quickAccess: true,
+    });
+
+    expect(
+      normalizeSettingsPreferences({
+        rememberMe: false,
+        quickAccess: true,
+      }),
+    ).toEqual({
+      rememberMe: false,
+      quickAccess: true,
     });
   });
 

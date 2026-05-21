@@ -1,37 +1,51 @@
 import type { AuditApi, AuditLogsResponse } from "./types";
 import type { ApiTransport } from "./transport";
 
+function appendIfPresent(
+  searchParams: URLSearchParams,
+  key: string,
+  value: string | number | undefined,
+) {
+  if (value !== undefined && value !== "") {
+    searchParams.set(key, String(value));
+  }
+}
+
+function buildAuditQuery(params?: {
+  user_id?: string;
+  action?: string;
+  entity_type?: string;
+  from?: string;
+  to?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const searchParams = new URLSearchParams();
+  appendIfPresent(searchParams, "user_id", params?.user_id);
+  appendIfPresent(searchParams, "action", params?.action);
+  appendIfPresent(searchParams, "entity_type", params?.entity_type);
+  appendIfPresent(searchParams, "start_date", params?.from);
+  appendIfPresent(searchParams, "end_date", params?.to);
+  appendIfPresent(searchParams, "search", params?.search);
+  appendIfPresent(searchParams, "limit", params?.limit);
+  appendIfPresent(searchParams, "offset", params?.offset);
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
 export function createAuditApi(transport: ApiTransport): AuditApi {
   return {
     async getAuditLogs(params) {
-      const searchParams = new URLSearchParams();
-      if (params?.user_id) searchParams.set("user_id", params.user_id);
-      if (params?.action) searchParams.set("action", params.action);
-      if (params?.entity_type) searchParams.set("entity_type", params.entity_type);
-      if (params?.from) searchParams.set("start_date", params.from);
-      if (params?.to) searchParams.set("end_date", params.to);
-      if (params?.limit) searchParams.set("limit", String(params.limit));
-      if (params?.offset) searchParams.set("offset", String(params.offset));
-      const query = searchParams.toString();
       const result = await transport.request<AuditLogsResponse>(
-        `/logs${query ? `?${query}` : ""}`,
+        `/logs${buildAuditQuery(params)}`,
       );
       if (result.error) return { error: result.error };
-      return { data: result.data?.logs || [] };
+      return { data: result.data?.logs || [], total: result.data?.total || 0 };
     },
     async getDashboardChanges(params) {
-      const searchParams = new URLSearchParams();
-      if (params?.entity_type) searchParams.set("entity_type", params.entity_type);
-      if (params?.limit !== undefined) searchParams.set("limit", String(params.limit));
-      if (params?.offset !== undefined) {
-        searchParams.set("offset", String(params.offset));
-      }
-      if (params?.user_id) searchParams.set("user_id", params.user_id);
-      if (params?.from) searchParams.set("start_date", params.from);
-      if (params?.to) searchParams.set("end_date", params.to);
-      const query = searchParams.toString();
       const result = await transport.request<AuditLogsResponse>(
-        `/dashboard/changes${query ? `?${query}` : ""}`,
+        `/dashboard/changes${buildAuditQuery(params)}`,
       );
       if (result.error) return { error: result.error };
       return { data: result.data?.logs || [], total: result.data?.total || 0 };

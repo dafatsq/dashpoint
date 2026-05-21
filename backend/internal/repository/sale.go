@@ -65,11 +65,12 @@ type CreatePaymentRequest struct {
 
 // SaleFilter contains sales listing filters.
 type SaleFilter struct {
-	EmployeeID *uuid.UUID
-	ShiftID    *uuid.UUID
-	Status     *string
-	StartDate  *time.Time
-	EndDate    *time.Time
-	Limit      int
-	Offset     int
+	EmployeeID    *uuid.UUID
+	ShiftID       *uuid.UUID
+	Status        *string
+	StartDate     *time.Time
+	EndDate       *time.Time
+	InvoiceSearch *string
+	Limit         int
+	Offset        int
 }

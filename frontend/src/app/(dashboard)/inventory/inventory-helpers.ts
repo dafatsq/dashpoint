@@ -65,6 +65,34 @@ export function getPermittedInventoryActions(permissions: {
   return actions;
 }
 
+export function isInventoryActionAllowed(
+  action: InventoryAction,
+  allowedActions: InventoryAction[],
+): boolean {
+  return allowedActions.includes(action);
+}
+
+export function canSubmitInventoryAdjustment(input: {
+  allowedActions: InventoryAction[];
+  action: InventoryAction;
+  quantity: string;
+  isSubmitting: boolean;
+}): boolean {
+  if (input.isSubmitting) {
+    return false;
+  }
+
+  if (!input.quantity) {
+    return false;
+  }
+
+  if (input.allowedActions.length === 0) {
+    return false;
+  }
+
+  return isInventoryActionAllowed(input.action, input.allowedActions);
+}
+
 export function getDefaultAdjustmentType(action: InventoryAction): AdjustmentType {
   if (action === "add") {
     return "purchase";

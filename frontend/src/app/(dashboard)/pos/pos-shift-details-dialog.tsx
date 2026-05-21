@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowDownCircle, ArrowUpCircle, CheckCircle } from "lucide-react";
 import type { CashDrawerOperation, Shift } from "@/types";
 
-import { formatCurrency } from "./pos-helpers";
+import { formatCurrency, parseNumericInput } from "./pos-helpers";
 
 interface PosShiftDetailsDialogProps {
   open: boolean;
@@ -52,6 +52,26 @@ export function PosShiftDetailsDialog({
   onSubmit,
   onDone,
 }: PosShiftDetailsDialogProps) {
+  const closedOpeningCash = formatCurrency(
+    parseNumericInput(closedShiftData?.opening_cash || "0"),
+  );
+  const closedClosingCash = formatCurrency(
+    parseNumericInput(closedShiftData?.closing_cash || "0"),
+  );
+  const closedTotalSales = formatCurrency(
+    parseNumericInput(closedShiftData?.total_sales || "0"),
+  );
+  const closedCashSales = formatCurrency(
+    parseNumericInput(closedShiftData?.total_cash_sales || "0"),
+  );
+  const closedRefunds = formatCurrency(
+    parseNumericInput(closedShiftData?.total_refunds || "0"),
+  );
+  const closedExpectedCash = formatCurrency(
+    parseNumericInput(closedShiftData?.expected_cash || "0"),
+  );
+  const cashDifference = parseNumericInput(closedShiftData?.cash_difference || "0");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -70,54 +90,42 @@ export function PosShiftDetailsDialog({
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-muted-foreground block text-xs">Opening Cash</span>
-                  <span className="font-medium">
-                    {formatCurrency(parseFloat(closedShiftData.opening_cash) || 0)}
-                  </span>
+                  <span className="font-medium">{closedOpeningCash}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Closing Cash</span>
-                  <span className="font-medium">
-                    {formatCurrency(parseFloat(closedShiftData.closing_cash || "0"))}
-                  </span>
+                  <span className="font-medium">{closedClosingCash}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">
                     Total Sales ({closedShiftData.transaction_count} txn)
                   </span>
-                  <span className="font-medium text-green-600">
-                    +{formatCurrency(parseFloat(closedShiftData.total_sales) || 0)}
-                  </span>
+                  <span className="font-medium text-green-600">+{closedTotalSales}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Total Cash Sales</span>
-                  <span className="font-medium text-blue-600">
-                    +{formatCurrency(parseFloat(closedShiftData.total_cash_sales) || 0)}
-                  </span>
+                  <span className="font-medium text-blue-600">+{closedCashSales}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">
                     Total Refunds ({closedShiftData.refund_count})
                   </span>
-                  <span className="font-medium text-red-600">
-                    -{formatCurrency(parseFloat(closedShiftData.total_refunds) || 0)}
-                  </span>
+                  <span className="font-medium text-red-600">-{closedRefunds}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Expected Cash</span>
-                  <span className="font-bold">
-                    {formatCurrency(parseFloat(closedShiftData.expected_cash || "0"))}
-                  </span>
+                  <span className="font-bold">{closedExpectedCash}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Difference</span>
                   <span
                     className={`font-bold ${
-                      parseFloat(closedShiftData.cash_difference || "0") >= 0
+                      cashDifference >= 0
                         ? "text-green-600"
                         : "text-red-600"
                     }`}
                   >
-                    {formatCurrency(parseFloat(closedShiftData.cash_difference || "0"))}
+                    {formatCurrency(cashDifference)}
                   </span>
                 </div>
               </div>
@@ -174,17 +182,17 @@ export function PosShiftDetailsDialog({
                             }
                           >
                             {operation.type === "pay_in" ? "+" : "-"}
-                            {formatCurrency(parseFloat(operation.amount))}
+                            {formatCurrency(parseNumericInput(operation.amount))}
                           </span>
                         </div>
                       ))}
                     </div>
                     <div className="flex justify-between text-xs mt-2 pt-2 border-t">
                       <span className="text-green-600">
-                        Pay-In: +{formatCurrency(parseFloat(cashDrawerTotals.pay_in_total))}
+                        Pay-In: +{formatCurrency(parseNumericInput(cashDrawerTotals.pay_in_total))}
                       </span>
                       <span className="text-red-600">
-                        Pay-Out: -{formatCurrency(parseFloat(cashDrawerTotals.pay_out_total))}
+                        Pay-Out: -{formatCurrency(parseNumericInput(cashDrawerTotals.pay_out_total))}
                       </span>
                     </div>
                   </div>
@@ -222,7 +230,11 @@ export function PosShiftDetailsDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={() => void onSubmit()} disabled={!endingCash || isProcessing}>
+              <Button
+                variant="destructive"
+                onClick={() => void onSubmit()}
+                disabled={isProcessing}
+              >
                 {isProcessing ? "Ending Shift..." : "End Shift"}
               </Button>
             </DialogFooter>
