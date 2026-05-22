@@ -100,3 +100,4 @@ SDD.md
 deploy_clients.sh
 PROJECT_DISSECTION.md
 DEPLOY_NEW_CLIENT.md
+.kiro/*
