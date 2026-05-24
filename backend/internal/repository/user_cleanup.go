@@ -65,8 +65,6 @@ func (r *UserRepository) PermanentDelete(ctx context.Context, userID uuid.UUID) 
 
 func permanentDeleteTx(ctx context.Context, tx userCleanupTx, userID uuid.UUID) error {
 	queries := []namedCleanupQuery{
-		{name: "delete user permissions", query: `DELETE FROM user_permissions WHERE user_id = $1`},
-		{name: "nullify permission grants", query: `UPDATE user_permissions SET granted_by = NULL WHERE granted_by = $1`},
 		{name: "delete refresh tokens", query: `DELETE FROM refresh_tokens WHERE user_id = $1`},
 		{name: "nullify audit logs", query: `UPDATE audit_logs SET user_id = NULL WHERE user_id = $1`},
 		{name: "nullify stock adjustments", query: `UPDATE stock_adjustments SET adjusted_by = NULL WHERE adjusted_by = $1`},

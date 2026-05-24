@@ -25,15 +25,14 @@ func normalizeEmail(email *string) *string {
 
 // UserHandler handles user management endpoints.
 type UserHandler struct {
-	userRepo       userRepository
-	roleRepo       roleReader
-	permissionRepo permissionReader
-	eventsHandler  userEventBroadcaster
+	userRepo      userRepository
+	roleRepo      roleReader
+	eventsHandler userEventBroadcaster
 }
 
 // NewUserHandler creates a new user handler.
-func NewUserHandler(userRepo *repository.UserRepository, roleRepo *repository.RoleRepository, permissionRepo *repository.PermissionRepository) *UserHandler {
-	return &UserHandler{userRepo: userRepo, roleRepo: roleRepo, permissionRepo: permissionRepo}
+func NewUserHandler(userRepo *repository.UserRepository, roleRepo *repository.RoleRepository) *UserHandler {
+	return &UserHandler{userRepo: userRepo, roleRepo: roleRepo}
 }
 
 // SetEventsHandler sets the events handler for broadcasting user updates.
@@ -108,15 +107,6 @@ type UpdatePasswordRequest struct {
 
 type UpdatePINRequest struct {
 	PIN *string `json:"pin"`
-}
-
-type SetPermissionsRequest struct {
-	Permissions []PermissionOverride `json:"permissions"`
-}
-
-type PermissionOverride struct {
-	PermissionID string `json:"permission_id"`
-	Allowed      bool   `json:"allowed"`
 }
 
 // Create handles POST /api/v1/users.
@@ -275,9 +265,6 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 			}
 			if !canAssignRole(middleware.GetRoleName(c), role.Name) {
 				return userForbidden(c, "You cannot assign the "+role.Name+" role")
-			}
-			if err := h.userRepo.ClearUserPermissionOverrides(c.Context(), id); err != nil {
-				log.Error().Err(err).Msg("Failed to clear permission overrides")
 			}
 			user.RoleID = roleID
 		}

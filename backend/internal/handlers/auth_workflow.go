@@ -9,6 +9,7 @@ import (
 
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/auth"
+	"dashpoint/backend/internal/authz"
 	"dashpoint/backend/internal/models"
 )
 
@@ -97,12 +98,6 @@ func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, token
 		}
 	}
 
-	permissions, err := w.userRepo.GetUserPermissionsForRole(c.Context(), user.ID, user.RoleID)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get user permissions")
-		permissions = []string{}
-	}
-
 	if !isRefresh {
 		email := ""
 		if user.Email != nil {
@@ -117,7 +112,7 @@ func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, token
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.AccessTokenExpiresAt,
-		User:         authUserResponse(user, permissions, false),
+		User:         authUserResponse(user, authz.PermissionsForRole(roleNameOfUser(user)), false),
 	})
 }
 

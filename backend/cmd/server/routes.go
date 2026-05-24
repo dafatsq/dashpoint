@@ -33,11 +33,6 @@ var (
 		"can_delete_manager_users",
 		"can_delete_cashier_users",
 	}
-	userPermissionManagementPermissions = []string{
-		"can_manage_permissions",
-		"can_manage_manager_permissions",
-		"can_manage_cashier_permissions",
-	}
 	expenseCategoryReadPermissions = []string{
 		"can_view_expenses",
 		"can_view_categories",
@@ -78,7 +73,6 @@ func registerProtectedRoutes(api fiber.Router, deps *serverDependencies) {
 	protected.Get("/me", deps.authHandler.Me)
 	protected.Get("/roles", deps.roleHandler.ListRoles)
 	protected.Get("/roles/:id", deps.roleHandler.GetRole)
-	protected.Get("/permissions", deps.roleHandler.ListPermissions)
 
 	registerUserRoutes(protected, deps)
 	registerCatalogRoutes(protected, deps)
@@ -100,8 +94,6 @@ func registerUserRoutes(protected fiber.Router, deps *serverDependencies) {
 	users.Patch("/:id/pin", middleware.RequireAnyPermission(deps.permissionChecker, userEditPermissions...), deps.userHandler.UpdatePIN)
 	users.Delete("/:id", middleware.RequireAnyPermission(deps.permissionChecker, userDeletePermissions...), deps.userHandler.Delete)
 	users.Delete("/:id/permanent", middleware.RequireAnyPermission(deps.permissionChecker, userDeletePermissions...), deps.userHandler.PermanentDelete)
-	users.Get("/:id/permissions", middleware.RequireAnyPermission(deps.permissionChecker, userPermissionManagementPermissions...), deps.userHandler.GetPermissions)
-	users.Patch("/:id/permissions", middleware.RequireAnyPermission(deps.permissionChecker, userPermissionManagementPermissions...), deps.userHandler.SetPermissions)
 }
 
 func registerCatalogRoutes(protected fiber.Router, deps *serverDependencies) {

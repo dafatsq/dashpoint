@@ -171,7 +171,7 @@ func TestPermanentDeleteTxReturnsNamedCleanupStep(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if !strings.Contains(err.Error(), "failed to nullify audit logs during permanent delete") {
+	if !strings.Contains(err.Error(), "failed to nullify payments during permanent delete") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if tx.commitCalled {

@@ -11,6 +11,7 @@ import (
 
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/auth"
+	"dashpoint/backend/internal/authz"
 	"dashpoint/backend/internal/config"
 	"dashpoint/backend/internal/database"
 	"dashpoint/backend/internal/handlers"
@@ -47,7 +48,6 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 	userRepo := repository.NewUserRepository(db.Pool)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(db.Pool)
 	roleRepo := repository.NewRoleRepository(db.Pool)
-	permissionRepo := repository.NewPermissionRepository(db.Pool)
 	productRepo := repository.NewProductRepository(db.Pool)
 	inventoryRepo := repository.NewInventoryRepository(db.Pool)
 	categoryRepo := repository.NewCategoryRepository(db.Pool)
@@ -67,7 +67,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 	healthHandler := handlers.NewHealthHandler(db)
 	authHandler := handlers.NewAuthHandler(userRepo, refreshTokenRepo, jwtManager)
 	eventsHandler := handlers.NewEventsHandler(jwtManager, cfg.CORSOrigins)
-	userHandler := handlers.NewUserHandler(userRepo, roleRepo, permissionRepo)
+	userHandler := handlers.NewUserHandler(userRepo, roleRepo)
 	userHandler.SetEventsHandler(eventsHandler)
 
 	deps := &serverDependencies{
@@ -78,7 +78,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 		authHandler:       authHandler,
 		eventsHandler:     eventsHandler,
 		userHandler:       userHandler,
-		roleHandler:       handlers.NewRoleHandler(roleRepo, permissionRepo),
+		roleHandler:       handlers.NewRoleHandler(roleRepo),
 		productHandler:    handlers.NewProductHandler(productRepo, inventoryRepo, categoryRepo, uploadDirectory),
 		categoryHandler:   handlers.NewCategoryHandler(categoryRepo),
 		shiftHandler:      handlers.NewShiftHandler(shiftRepo),
@@ -96,18 +96,9 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 
 func newPermissionChecker(userRepo *repository.UserRepository) middleware.PermissionChecker {
 	return func(c *fiber.Ctx, userID uuid.UUID, permission string) (bool, error) {
-		permissions, err := userRepo.GetUserPermissions(c.Context(), userID)
-		if err != nil {
-			return false, err
-		}
-
-		for _, perm := range permissions {
-			if perm == permission {
-				return true, nil
-			}
-		}
-
-		return false, nil
+		_ = userRepo
+		_ = userID
+		return authz.HasPermission(middleware.GetRoleName(c), permission), nil
 	}
 }
 

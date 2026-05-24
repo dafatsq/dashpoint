@@ -90,33 +90,5 @@ export function createUserApi(transport: ApiTransport): UserApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.roles || [] };
     },
-    async getPermissions(grouped) {
-      const ts = Date.now();
-      const result = await transport.request<{
-        permissions: import("@/types").Permission[] | Record<string, import("@/types").Permission[]>;
-      }>(`/permissions${grouped ? "?grouped=true&" : "?"}t=${ts}`);
-      if (result.error) return { error: result.error };
-      return { data: result.data?.permissions };
-    },
-    async getUserPermissions(userId) {
-      const result = await transport.request<{
-        effective_permissions: string[];
-        overrides: import("@/types").PermissionOverride[];
-      }>(`/users/${userId}/permissions`);
-      if (result.error) return { error: result.error };
-      return { data: result.data };
-    },
-    async setUserPermissions(userId, permissions) {
-      const result = await transport.request<{
-        message: string;
-        effective_permissions: string[];
-        overrides: number;
-      }>(`/users/${userId}/permissions`, {
-        method: "PATCH",
-        body: { permissions },
-      });
-      if (result.error) return { error: result.error };
-      return { data: result.data };
-    },
   };
 }

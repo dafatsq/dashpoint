@@ -97,10 +97,13 @@ export function SettingsEditProfileDialog({
                 placeholder="Leave blank to keep current"
                 value={form.pin}
                 onChange={(event) =>
-                  onFormChange({ ...form, pin: event.target.value })
+                  onFormChange({
+                    ...form,
+                    pin: event.target.value.replace(/\D/g, "").slice(0, 6),
+                  })
                 }
                 maxLength={6}
-                pattern="\\d*"
+                pattern="[0-9]*"
                 inputMode="numeric"
                 disabled={isSubmitting}
                 readOnly

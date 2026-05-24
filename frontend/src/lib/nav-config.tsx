@@ -123,7 +123,7 @@ export const navItems: NavItem[] = [
     label: "Users",
     icon: <Users className="h-5 w-5" />,
     permission: PERMISSIONS.USERS_VIEW,
-    description: "Manage staff and permissions",
+    description: "Manage staff and roles",
     color: "text-cyan-500",
   },
   {

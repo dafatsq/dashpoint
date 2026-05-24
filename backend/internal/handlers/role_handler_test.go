@@ -14,12 +14,10 @@ import (
 )
 
 type fakeRoleReader struct {
-	roles       []*models.Role
-	roleByID    *models.Role
-	permissions []*models.Permission
-	listErr     error
-	getByIDErr  error
-	permErr     error
+	roles      []*models.Role
+	roleByID   *models.Role
+	listErr    error
+	getByIDErr error
 }
 
 func (f *fakeRoleReader) List(context.Context) ([]*models.Role, error) {
@@ -28,25 +26,6 @@ func (f *fakeRoleReader) List(context.Context) ([]*models.Role, error) {
 
 func (f *fakeRoleReader) GetByID(context.Context, uuid.UUID) (*models.Role, error) {
 	return f.roleByID, f.getByIDErr
-}
-
-func (f *fakeRoleReader) GetRolePermissions(context.Context, uuid.UUID) ([]*models.Permission, error) {
-	return f.permissions, f.permErr
-}
-
-type fakePermissionReader struct {
-	permissions       []*models.Permission
-	permissionsByCate map[string][]*models.Permission
-	listErr           error
-	listByCatErr      error
-}
-
-func (f *fakePermissionReader) List(context.Context) ([]*models.Permission, error) {
-	return f.permissions, f.listErr
-}
-
-func (f *fakePermissionReader) ListByCategory(context.Context) (map[string][]*models.Permission, error) {
-	return f.permissionsByCate, f.listByCatErr
 }
 
 func TestRoleHandlerListRolesSuccess(t *testing.T) {
@@ -111,57 +90,34 @@ func TestRoleHandlerGetRoleNotFound(t *testing.T) {
 	}
 }
 
-func TestRoleHandlerListPermissionsGroupedAndUngrouped(t *testing.T) {
+func TestRoleHandlerGetRoleReturnsDerivedPermissions(t *testing.T) {
+	roleID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	handler := &RoleHandler{
-		permissionRepo: &fakePermissionReader{
-			permissions: []*models.Permission{
-				{ID: uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), Key: "can_view_users", Name: "View Users", Category: "users"},
-			},
-			permissionsByCate: map[string][]*models.Permission{
-				"users": {
-					{ID: uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), Key: "can_view_users", Name: "View Users", Category: "users"},
-				},
+		roleRepo: &fakeRoleReader{
+			roleByID: &models.Role{
+				ID:   roleID,
+				Name: "manager",
 			},
 		},
 	}
 
 	app := fiber.New()
-	app.Get("/permissions", handler.ListPermissions)
+	app.Get("/roles/:id", handler.GetRole)
 
-	groupedResp, err := app.Test(httptest.NewRequest("GET", "/permissions?grouped=true", nil))
+	resp, err := app.Test(httptest.NewRequest("GET", "/roles/"+roleID.String(), nil))
 	if err != nil {
-		t.Fatalf("grouped app.Test returned error: %v", err)
+		t.Fatalf("app.Test returned error: %v", err)
 	}
-	if groupedResp.StatusCode != fiber.StatusOK {
-		t.Fatalf("expected grouped status 200, got %d", groupedResp.StatusCode)
-	}
-
-	var groupedBody struct {
-		Permissions map[string][]PermissionResponse `json:"permissions"`
-	}
-	if err := json.NewDecoder(groupedResp.Body).Decode(&groupedBody); err != nil {
-		t.Fatalf("grouped decode returned error: %v", err)
-	}
-	if len(groupedBody.Permissions["users"]) != 1 {
-		t.Fatalf("expected one grouped permission")
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
 	}
 
-	plainResp, err := app.Test(httptest.NewRequest("GET", "/permissions", nil))
-	if err != nil {
-		t.Fatalf("plain app.Test returned error: %v", err)
+	var body RoleDetailResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode returned error: %v", err)
 	}
-	if plainResp.StatusCode != fiber.StatusOK {
-		t.Fatalf("expected plain status 200, got %d", plainResp.StatusCode)
-	}
-
-	var plainBody struct {
-		Permissions []PermissionResponse `json:"permissions"`
-	}
-	if err := json.NewDecoder(plainResp.Body).Decode(&plainBody); err != nil {
-		t.Fatalf("plain decode returned error: %v", err)
-	}
-	if len(plainBody.Permissions) != 1 {
-		t.Fatalf("expected one permission, got %d", len(plainBody.Permissions))
+	if len(body.Permissions) == 0 {
+		t.Fatal("expected derived permissions")
 	}
 }
 

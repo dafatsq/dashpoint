@@ -20,10 +20,6 @@ type fakeAuthUserRepo struct {
 	userByID                 *models.User
 	getByEmailErr            error
 	getByIDErr               error
-	permissions              []string
-	permissionsForRole       []string
-	getPermissionsErr        error
-	getPermissionsForRoleErr error
 	updateLastLoginErr       error
 	updateLastLoginCalls     int
 }
@@ -34,14 +30,6 @@ func (f *fakeAuthUserRepo) GetByID(context.Context, uuid.UUID) (*models.User, er
 
 func (f *fakeAuthUserRepo) GetByEmail(context.Context, string) (*models.User, error) {
 	return f.userByEmail, f.getByEmailErr
-}
-
-func (f *fakeAuthUserRepo) GetUserPermissions(context.Context, uuid.UUID) ([]string, error) {
-	return f.permissions, f.getPermissionsErr
-}
-
-func (f *fakeAuthUserRepo) GetUserPermissionsForRole(context.Context, uuid.UUID, uuid.UUID) ([]string, error) {
-	return f.permissionsForRole, f.getPermissionsForRoleErr
 }
 
 func (f *fakeAuthUserRepo) UpdateLastLogin(context.Context, uuid.UUID) error {
@@ -123,7 +111,6 @@ func TestAuthHandlerLoginSuccess(t *testing.T) {
 			UpdatedAt:    time.Unix(200, 0),
 			Role:         &models.Role{ID: roleID, Name: "owner"},
 		},
-		permissionsForRole: []string{"can_view_users"},
 	}
 
 	tokenStore := &fakeRefreshTokenStore{}
@@ -172,8 +159,8 @@ func TestAuthHandlerLoginSuccess(t *testing.T) {
 	if body.User.RoleName != "owner" {
 		t.Fatalf("expected role name owner, got %q", body.User.RoleName)
 	}
-	if len(body.User.Permissions) != 1 || body.User.Permissions[0] != "can_view_users" {
-		t.Fatalf("unexpected permissions: %#v", body.User.Permissions)
+	if len(body.User.Permissions) == 0 {
+		t.Fatalf("expected role-derived permissions in response")
 	}
 }
 
@@ -211,7 +198,6 @@ func TestAuthHandlerRefreshRotatesToken(t *testing.T) {
 			UpdatedAt: time.Unix(200, 0),
 			Role:      &models.Role{ID: roleID, Name: "manager"},
 		},
-		permissionsForRole: []string{"can_view_users"},
 	}
 	tokenStore := &fakeRefreshTokenStore{
 		stored: &models.RefreshToken{

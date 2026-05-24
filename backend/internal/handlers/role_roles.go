@@ -1,5 +1,7 @@
 package handlers
 
+import "dashpoint/backend/internal/authz"
+
 import "github.com/gofiber/fiber/v2"
 
 // GetRole handles GET /api/v1/roles/:id
@@ -20,16 +22,11 @@ func (h *RoleHandler) GetRole(c *fiber.Ctx) error {
 		})
 	}
 
-	permissions, err := h.roleRepo.GetRolePermissions(c.Context(), id)
-	if err != nil {
-		return roleInternalError(c, err, "Failed to retrieve role permissions")
-	}
-
-	return c.JSON(RoleWithPermissionsResponse{
+	return c.JSON(RoleDetailResponse{
 		ID:          role.ID.String(),
 		Name:        role.Name,
 		Description: role.Description,
-		Permissions: mapPermissionResponses(permissions),
+		Permissions: authz.PermissionsForRole(role.Name),
 	})
 }
 

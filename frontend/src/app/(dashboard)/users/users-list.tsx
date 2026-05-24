@@ -8,7 +8,6 @@ import {
   Plus,
   RotateCcw,
   Search,
-  Settings2,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -38,7 +37,6 @@ interface UsersListProps {
   canCreateUser: boolean;
   canEditUserAny: boolean;
   canDeleteUserAny: boolean;
-  canManagePermissions: boolean;
   searchQuery: string;
   selectedRole: string;
   page: number;
@@ -54,9 +52,7 @@ interface UsersListProps {
   onPageChange: (value: number) => void;
   canEditUser: (user: User) => boolean;
   canDeleteUser: (user: User) => boolean;
-  canManageUserPermissions: (user: User) => boolean;
   onEdit: (user: User) => void;
-  onManagePermissions: (user: User) => void;
   onArchive: (user: User) => void;
   onPermanentDelete: (user: User) => void;
   onRestore: (user: User) => void;
@@ -98,7 +94,6 @@ export function UsersList({
   canCreateUser,
   canEditUserAny,
   canDeleteUserAny,
-  canManagePermissions,
   searchQuery,
   selectedRole,
   page,
@@ -114,9 +109,7 @@ export function UsersList({
   onPageChange,
   canEditUser,
   canDeleteUser,
-  canManageUserPermissions,
   onEdit,
-  onManagePermissions,
   onArchive,
   onPermanentDelete,
   onRestore,
@@ -194,8 +187,7 @@ export function UsersList({
                       <th className="pb-3 font-medium text-center">Status</th>
                       {(canCreateUser ||
                         canEditUserAny ||
-                        canDeleteUserAny ||
-                        canManagePermissions) && (
+                        canDeleteUserAny) && (
                         <th className="pb-3 font-medium text-right">Actions</th>
                       )}
                     </tr>
@@ -239,8 +231,7 @@ export function UsersList({
                         </td>
                         {(canCreateUser ||
                           canEditUserAny ||
-                          canDeleteUserAny ||
-                          canManagePermissions) && (
+                          canDeleteUserAny) && (
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
                               {viewMode === "active" ? (
@@ -253,16 +244,6 @@ export function UsersList({
                                       title="Edit user"
                                     >
                                       <Pencil className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  {canManageUserPermissions(user) && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => onManagePermissions(user)}
-                                      title="Manage permissions"
-                                    >
-                                      <Settings2 className="h-4 w-4" />
                                     </Button>
                                   )}
                                   {canDeleteUser(user) && (
@@ -357,8 +338,7 @@ export function UsersList({
 
                   {(canCreateUser ||
                     canEditUserAny ||
-                    canDeleteUserAny ||
-                    canManagePermissions) && (
+                    canDeleteUserAny) && (
                     <div className="flex justify-end gap-2 pt-2 border-t">
                       {viewMode === "active" ? (
                         <>
@@ -371,17 +351,6 @@ export function UsersList({
                             >
                               <Pencil className="h-3.5 w-3.5 mr-1" />
                               Edit
-                            </Button>
-                          )}
-                          {canManageUserPermissions(user) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => onManagePermissions(user)}
-                              className="h-8"
-                            >
-                              <Settings2 className="h-3.5 w-3.5 mr-1" />
-                              Perms
                             </Button>
                           )}
                           {canDeleteUser(user) && (

@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"dashpoint/backend/internal/authz"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
@@ -222,13 +223,7 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 		return middleware.JSONError(c, fiber.StatusNotFound, "USER_NOT_FOUND", "User not found")
 	}
 
-	permissions, err := h.userRepo.GetUserPermissions(c.Context(), user.ID)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get user permissions")
-		permissions = []string{}
-	}
-
 	return c.JSON(fiber.Map{
-		"user": authUserResponse(user, permissions, true),
+		"user": authUserResponse(user, authz.PermissionsForRole(roleNameOfUser(user)), true),
 	})
 }

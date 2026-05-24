@@ -32,7 +32,6 @@ vi.mock("@/contexts/auth-context", () => ({
   PERMISSIONS: {
     USERS_EDIT: "can_edit_user",
     USERS_DELETE: "can_delete_user",
-    USERS_PERMISSIONS: "can_manage_permissions",
   },
   useAuth: () => ({
     user: {
@@ -107,10 +106,6 @@ vi.mock("@/components/shared/confirmation-dialog", () => ({
 
 vi.mock("./users-form-dialog", () => ({
   UsersFormDialog: () => null,
-}));
-
-vi.mock("./users-permissions-dialog", () => ({
-  UsersPermissionsDialog: () => null,
 }));
 
 describe("UsersScreen", () => {

@@ -11,13 +11,3 @@ type RoleRepository struct {
 func NewRoleRepository(pool *pgxpool.Pool) *RoleRepository {
 	return &RoleRepository{pool: pool}
 }
-
-// PermissionRepository handles permission database operations
-type PermissionRepository struct {
-	pool *pgxpool.Pool
-}
-
-// NewPermissionRepository creates a new permission repository
-func NewPermissionRepository(pool *pgxpool.Pool) *PermissionRepository {
-	return &PermissionRepository{pool: pool}
-}

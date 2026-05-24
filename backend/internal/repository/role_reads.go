@@ -99,38 +99,3 @@ func (r *RoleRepository) List(ctx context.Context) ([]*models.Role, error) {
 
 	return roles, nil
 }
-
-// GetRolePermissions retrieves all permissions for a role
-func (r *RoleRepository) GetRolePermissions(ctx context.Context, roleID uuid.UUID) ([]*models.Permission, error) {
-	query := `
-		SELECT p.id, p.key, p.name, p.description, p.category, p.created_at
-		FROM role_permissions rp
-		JOIN permissions p ON rp.permission_id = p.id
-		WHERE rp.role_id = $1
-		ORDER BY p.category, p.key
-	`
-
-	rows, err := r.pool.Query(ctx, query, roleID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query role permissions: %w", err)
-	}
-	defer rows.Close()
-
-	var permissions []*models.Permission
-	for rows.Next() {
-		permission := &models.Permission{}
-		if err := rows.Scan(
-			&permission.ID,
-			&permission.Key,
-			&permission.Name,
-			&permission.Description,
-			&permission.Category,
-			&permission.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan permission: %w", err)
-		}
-		permissions = append(permissions, permission)
-	}
-
-	return permissions, nil
-}
