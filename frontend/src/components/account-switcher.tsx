@@ -220,14 +220,16 @@ export function AccountSwitcher({
                 name="pin-entry"
                 placeholder="Enter your PIN"
                 value={pin}
-                onChange={(e) => setPin(e.target.value)}
+                onChange={(e) =>
+                  setPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
                 onFocus={(e) => e.target.removeAttribute('readonly')}
                 readOnly
                 required
                 disabled={isSubmitting}
                 autoFocus
                 maxLength={6}
-                pattern="\d*"
+                pattern="[0-9]*"
                 inputMode="numeric"
                 autoComplete="new-password"
                 data-form-type="other"

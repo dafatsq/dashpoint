@@ -17,8 +17,6 @@ import type {
   InventoryAdjustment,
   InventoryValuation,
   LowStockItem,
-  Permission,
-  PermissionOverride,
   Product,
   Sale,
   SalesRangeReport,
@@ -148,27 +146,6 @@ export interface UserApi {
   permanentDeleteUser(id: string): Promise<ApiResponse<unknown>>;
   getRoles(): Promise<
     ApiResponse<{ id: string; name: string; description: string }[]>
-  >;
-  getPermissions(
-    grouped?: boolean,
-  ): Promise<ApiResponse<Permission[] | Record<string, Permission[]>>>;
-  getUserPermissions(
-    userId: string,
-  ): Promise<
-    ApiResponse<{
-      effective_permissions: string[];
-      overrides: PermissionOverride[];
-    }>
-  >;
-  setUserPermissions(
-    userId: string,
-    permissions: { permission_id: string; allowed: boolean }[],
-  ): Promise<
-    ApiResponse<{
-      message: string;
-      effective_permissions: string[];
-      overrides: number;
-    }>
   >;
 }
 

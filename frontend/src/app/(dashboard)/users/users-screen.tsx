@@ -8,8 +8,6 @@ import { PERMISSIONS, useAuth } from "@/contexts/auth-context";
 import { useGlobalError } from "@/contexts/error-context";
 import type {
   CreateUserRequest,
-  Permission,
-  PermissionOverride,
   UpdateUserRequest,
   User,
 } from "@/types";
@@ -17,8 +15,6 @@ import type {
 import {
   canDeleteUser,
   canEditUser,
-  canManageUserPermissions,
-  createPermissionChangeSet,
   findRoleIdByName,
   getAssignableUserRoles,
   hasUserFormChanges,
@@ -26,7 +22,6 @@ import {
 import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
 import { UsersFormDialog } from "./users-form-dialog";
 import { UsersList } from "./users-list";
-import { UsersPermissionsDialog } from "./users-permissions-dialog";
 
 export default function UsersScreen() {
   const { user: currentUser, hasPermission } = useAuth();
@@ -38,10 +33,6 @@ export default function UsersScreen() {
     hasPermission(PERMISSIONS.USERS_DELETE) ||
     hasPermission("can_delete_manager_users") ||
     hasPermission("can_delete_cashier_users");
-  const canManagePermissions =
-    hasPermission(PERMISSIONS.USERS_PERMISSIONS) ||
-    hasPermission("can_manage_manager_permissions") ||
-    hasPermission("can_manage_cashier_permissions");
   const isOwner = currentUser?.role_name === "owner";
   const assignableCreateRoles = useMemo(
     () =>
@@ -69,19 +60,10 @@ export default function UsersScreen() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
-  const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
-  const [permissionsUser, setPermissionsUser] = useState<User | null>(null);
   const { showError } = useGlobalError();
-  const [saveSuccess, setSaveSuccess] = useState(false);
-
-  const [allPermissions, setAllPermissions] = useState<Record<string, Permission[]>>({});
-  const [userEffectivePermissions, setUserEffectivePermissions] = useState<string[]>([]);
-  const [userOverrides, setUserOverrides] = useState<PermissionOverride[]>([]);
-  const [permissionChanges, setPermissionChanges] = useState<Record<string, boolean | null>>({});
-  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
 
   const [formData, setFormData] = useState<CreateUserRequest>({
     email: "",
@@ -164,12 +146,6 @@ export default function UsersScreen() {
     });
     setEditingUser(null);
     setFormErrors({});
-  };
-
-  const closePermissionsDialog = () => {
-    setPermissionsDialogOpen(false);
-    setPermissionsUser(null);
-    setPermissionChanges({});
   };
 
   const openCreateDialog = () => {
@@ -336,93 +312,6 @@ export default function UsersScreen() {
     }
   };
 
-  const openPermissionsDialog = async (user: User) => {
-    setPermissionsUser(user);
-    setPermissionsDialogOpen(true);
-    setIsLoadingPermissions(true);
-    setPermissionChanges({});
-    setSaveSuccess(false);
-
-    try {
-      const [permissionsResult, userPermissionsResult] = await Promise.all([
-        api.getPermissions(true),
-        api.getUserPermissions(user.id),
-      ]);
-
-      if (permissionsResult.error) {
-        showError("Load Failed", permissionsResult.error);
-        return;
-      }
-      if (userPermissionsResult.error) {
-        showError("Load Failed", userPermissionsResult.error);
-        return;
-      }
-
-      setAllPermissions((permissionsResult.data || {}) as Record<string, Permission[]>);
-      setUserEffectivePermissions(
-        userPermissionsResult.data?.effective_permissions || [],
-      );
-      setUserOverrides(userPermissionsResult.data?.overrides || []);
-    } catch {
-      showError("Load Error", "Failed to load permissions. Please try again.");
-    } finally {
-      setIsLoadingPermissions(false);
-    }
-  };
-
-  const togglePermission = (permission: Permission, enabled: boolean) => {
-    setPermissionChanges((current) =>
-      createPermissionChangeSet({
-        permission,
-        enabled,
-        allPermissions,
-        permissionChanges: current,
-        userOverrides,
-        userEffectivePermissions,
-        currentUser,
-        targetUser: permissionsUser,
-      }),
-    );
-  };
-
-  const savePermissionChanges = async () => {
-    if (!permissionsUser) return;
-    if (Object.keys(permissionChanges).length === 0) {
-      showError("No Changes", "Make at least one permission change before saving.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const permissions = Object.entries(permissionChanges).map(([id, allowed]) => ({
-        permission_id: id,
-        allowed: allowed === true,
-      }));
-
-      const result = await api.setUserPermissions(permissionsUser.id, permissions);
-      if (result.error) {
-        showError("Save Failed", result.error);
-        return;
-      }
-
-      const refreshed = await api.getUserPermissions(permissionsUser.id);
-      if (refreshed.error) {
-        showError("Save Failed", refreshed.error);
-        return;
-      }
-
-      setUserEffectivePermissions(refreshed.data?.effective_permissions || []);
-      setUserOverrides(refreshed.data?.overrides || []);
-      setPermissionChanges({});
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
-      showError("Save Error", error instanceof Error ? error.message : "An unexpected error occurred");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const userCanEdit = (targetUser: User) =>
     canEditUser({
       currentUser,
@@ -436,14 +325,6 @@ export default function UsersScreen() {
       currentUser,
       targetUser,
       canDeleteUserAny,
-      hasPermission,
-    });
-
-  const userCanManagePermissions = (targetUser: User) =>
-    canManageUserPermissions({
-      currentUser,
-      targetUser,
-      canManagePermissions,
       hasPermission,
     });
 
@@ -478,7 +359,6 @@ export default function UsersScreen() {
         canCreateUser={canCreateUser}
         canEditUserAny={canEditUserAny}
         canDeleteUserAny={canDeleteUserAny}
-        canManagePermissions={canManagePermissions}
         searchQuery={searchQuery}
         selectedRole={selectedRole}
         page={page}
@@ -494,9 +374,7 @@ export default function UsersScreen() {
         onPageChange={setPage}
         canEditUser={userCanEdit}
         canDeleteUser={userCanDelete}
-        canManageUserPermissions={userCanManagePermissions}
         onEdit={openEditDialog}
-        onManagePermissions={openPermissionsDialog}
         onArchive={(user) => {
           setDeletingUser(user);
           setDeleteDialogOpen(true);
@@ -542,28 +420,6 @@ export default function UsersScreen() {
         isSubmitting={isSubmitting}
         loadingText="Deleting..."
         onConfirm={permanentlyDeleteUser}
-      />
-
-      <UsersPermissionsDialog
-        open={permissionsDialogOpen}
-        onOpenChange={(open) => {
-          setPermissionsDialogOpen(open);
-          if (!open) {
-            closePermissionsDialog();
-          }
-        }}
-        permissionsUser={permissionsUser}
-        currentUser={currentUser}
-        allPermissions={allPermissions}
-        userEffectivePermissions={userEffectivePermissions}
-        userOverrides={userOverrides}
-        permissionChanges={permissionChanges}
-        isLoadingPermissions={isLoadingPermissions}
-        isSubmitting={isSubmitting}
-        saveSuccess={saveSuccess}
-        onTogglePermission={togglePermission}
-        onSaveChanges={savePermissionChanges}
-        onCancel={closePermissionsDialog}
       />
     </div>
   );

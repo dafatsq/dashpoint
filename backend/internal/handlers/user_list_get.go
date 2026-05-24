@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
+	"dashpoint/backend/internal/authz"
 	"dashpoint/backend/internal/models"
 )
 
@@ -72,14 +73,9 @@ func (h *UserHandler) Get(c *fiber.Ctx) error {
 		return userNotFound(c)
 	}
 
-	permissions, err := h.userRepo.GetUserPermissions(c.Context(), id)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get user permissions")
-	}
-
 	return c.JSON(fiber.Map{
 		"user":        h.toUserDetailResponse(user),
-		"permissions": permissions,
+		"permissions": authz.PermissionsForRole(roleNameOfUser(user)),
 	})
 }
 

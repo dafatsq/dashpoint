@@ -16,8 +16,6 @@ import (
 type authUserReader interface {
 	GetByID(context.Context, uuid.UUID) (*models.User, error)
 	GetByEmail(context.Context, string) (*models.User, error)
-	GetUserPermissions(context.Context, uuid.UUID) ([]string, error)
-	GetUserPermissionsForRole(context.Context, uuid.UUID, uuid.UUID) ([]string, error)
 	UpdateLastLogin(context.Context, uuid.UUID) error
 }
 

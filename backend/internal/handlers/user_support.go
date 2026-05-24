@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"dashpoint/backend/internal/authz"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 )
@@ -24,19 +25,11 @@ type userRepository interface {
 	HasSalesHistory(context.Context, uuid.UUID) (bool, error)
 	HasExpenseHistory(context.Context, uuid.UUID) (bool, error)
 	EmailExists(context.Context, string, *uuid.UUID) (bool, error)
-	GetUserPermissions(context.Context, uuid.UUID) ([]string, error)
-	GetUserPermissionOverrides(context.Context, uuid.UUID) ([]*models.UserPermission, error)
-	ClearUserPermissionOverrides(context.Context, uuid.UUID) error
-	SetUserPermission(context.Context, uuid.UUID, uuid.UUID, bool, *uuid.UUID) error
 	NameExists(context.Context, string, *uuid.UUID) (bool, error)
 }
 
 type roleReader interface {
 	GetByID(context.Context, uuid.UUID) (*models.Role, error)
-}
-
-type permissionReader interface {
-	GetByID(context.Context, uuid.UUID) (*models.Permission, error)
 }
 
 type userEventBroadcaster interface {
@@ -54,7 +47,6 @@ const (
 	userActionCreate            userAction = "create"
 	userActionEdit              userAction = "edit"
 	userActionDelete            userAction = "delete"
-	userActionManagePermissions userAction = "manage_permissions"
 )
 
 func badUserRequest(c *fiber.Ctx, code, message string) error {
@@ -109,11 +101,7 @@ func parseUserPagination(c *fiber.Ctx) (int, int, *bool, string, string) {
 }
 
 func (h *UserHandler) currentUserPermissionSet(c *fiber.Ctx) (map[string]bool, error) {
-	permissions, err := h.userRepo.GetUserPermissions(c.Context(), middleware.GetUserID(c))
-	if err != nil {
-		return nil, err
-	}
-
+	permissions := authz.PermissionsForRole(middleware.GetRoleName(c))
 	permissionSet := make(map[string]bool, len(permissions))
 	for _, permission := range permissions {
 		permissionSet[permission] = true
@@ -196,8 +184,6 @@ func managerPermissionForAction(action userAction, targetRoleName string) (strin
 			return "can_edit_manager_users", "You do not have permission to edit details of Managers", true
 		case userActionDelete:
 			return "can_delete_manager_users", "You do not have permission to archive/delete Managers", true
-		case userActionManagePermissions:
-			return "can_manage_manager_permissions", "You do not have permission to manage Managers", true
 		}
 	case isRoleName(targetRoleName, roleCashier):
 		switch action {
@@ -207,8 +193,6 @@ func managerPermissionForAction(action userAction, targetRoleName string) (strin
 			return "can_edit_cashier_users", "You do not have permission to edit details of Cashiers", true
 		case userActionDelete:
 			return "can_delete_cashier_users", "You do not have permission to archive/delete Cashiers", true
-		case userActionManagePermissions:
-			return "can_manage_cashier_permissions", "You do not have permission to manage Cashiers", true
 		}
 	}
 
