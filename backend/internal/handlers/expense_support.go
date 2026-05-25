@@ -23,17 +23,18 @@ func expenseInternalError(c *fiber.Ctx, err error, message string) error {
 
 func expenseToResponse(e *models.Expense) ExpenseResponse {
 	resp := ExpenseResponse{
-		ID:              e.ID.String(),
-		Amount:          e.Amount.String(),
-		Description:     e.Description,
-		ExpenseDate:     e.ExpenseDate.Format(reportDateLayout),
-		Vendor:          e.Vendor,
-		ReferenceNumber: e.ReferenceNumber,
-		Notes:           e.Notes,
-		CreatedBy:       e.CreatedBy.String(),
-		CreatedByName:   e.CreatedByName,
-		CreatedAt:       e.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       e.UpdatedAt.Format(time.RFC3339),
+		ID:               e.ID.String(),
+		Amount:           e.Amount.String(),
+		Description:      e.Description,
+		ExpenseDate:      e.ExpenseDate.Format(reportDateLayout),
+		AppliesInventory: e.AppliesInventory,
+		Vendor:           e.Vendor,
+		ReferenceNumber:  e.ReferenceNumber,
+		Notes:            e.Notes,
+		CreatedBy:        e.CreatedBy.String(),
+		CreatedByName:    e.CreatedByName,
+		CreatedAt:        e.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:        e.UpdatedAt.Format(time.RFC3339),
 	}
 	if e.CategoryID != nil {
 		categoryID := e.CategoryID.String()
@@ -140,6 +141,7 @@ func expenseAuditValues(expense *models.Expense) map[string]interface{} {
 	if expense.Quantity != nil {
 		values["quantity"] = expense.Quantity.String()
 	}
+	values["applies_inventory"] = expense.AppliesInventory
 	return values
 }
 

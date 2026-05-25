@@ -9,15 +9,15 @@ type CategoryActionLabels = {
   deleteActionLabel: string;
 };
 
-/** The one expense category that is system-managed and must never be edited, archived, or deleted. */
-export const SPECIAL_EXPENSE_CATEGORY_NAME = "Inventory Purchase";
+/** The one expense category that is system-managed and must never be permanently deleted. */
+export const SPECIAL_EXPENSE_CATEGORY_KEY = "inventory_purchase";
 
 /**
- * Returns true if the given category is the protected "Inventory Purchase" special category.
+ * Returns true if the given category is the protected inventory-purchase system category.
  * Only applicable to expense categories.
  */
 export function isSpecialExpenseCategory(category: ManagedCategory, type: CategoryType): boolean {
-  return type === "expense" && category.name === SPECIAL_EXPENSE_CATEGORY_NAME;
+  return type === "expense" && "system_key" in category && category.system_key === SPECIAL_EXPENSE_CATEGORY_KEY;
 }
 
 export interface CategoryFormData {

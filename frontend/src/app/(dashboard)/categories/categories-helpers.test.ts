@@ -6,6 +6,7 @@ import {
   createEmptyCategoryFormData,
   filterCategories,
   hasCategoryFormChanges,
+  isSpecialExpenseCategory,
   mapCategoryToFormData,
   resolveCategoryActionLabels,
   type CategoryFormData,
@@ -28,6 +29,7 @@ function buildExpenseCategory(overrides: Partial<ExpenseCategory> = {}): Expense
   return {
     id: "expense-category-1",
     name: "Utilities",
+    system_key: undefined,
     description: "Bills",
     is_active: true,
     created_at: "2026-01-01T00:00:00Z",
@@ -78,6 +80,16 @@ describe("categories helpers", () => {
 
     expect(filterCategories(categories, "util", "active")).toHaveLength(1);
     expect(filterCategories(categories, "", "archived")).toHaveLength(1);
+  });
+
+  test("detects the special expense category by system key rather than display name", () => {
+    expect(
+      isSpecialExpenseCategory(
+        buildExpenseCategory({ name: "Renamed Inventory Purchases", system_key: "inventory_purchase" }),
+        "expense",
+      ),
+    ).toBe(true);
+    expect(isSpecialExpenseCategory(buildExpenseCategory({ name: "Inventory Purchase" }), "expense")).toBe(false);
   });
 
   test("returns action labels based on archived vs active mode", () => {

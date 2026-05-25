@@ -165,21 +165,8 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 
 	oldValues := expenseAuditValues(existing)
 
-	isChangingToNonInventoryCategory := false
-	if req.CategoryID != nil && *req.CategoryID != "" {
-		newCategoryID, _ := parseOptionalExpenseUUIDField(req.CategoryID, "Invalid category ID")
-		categories, _ := h.repo.ListCategories(c.Context(), "all")
-		if newCategoryID != nil {
-			if categoryName := categoryNameByID(categories, *newCategoryID); categoryName != nil && *categoryName != "Inventory Purchase" {
-				isChangingToNonInventoryCategory = true
-			}
-		}
-	}
-
 	finalProductID := existing.ProductID
-	if isChangingToNonInventoryCategory {
-		finalProductID = nil
-	} else if req.ProductID != nil {
+	if req.ProductID != nil {
 		if *req.ProductID == "" {
 			finalProductID = nil
 		} else {
@@ -188,9 +175,7 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	}
 
 	finalQuantity := existing.Quantity
-	if isChangingToNonInventoryCategory {
-		finalQuantity = nil
-	} else if req.Quantity != nil {
+	if req.Quantity != nil {
 		if *req.Quantity == "" {
 			finalQuantity = nil
 		} else {
@@ -198,19 +183,46 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 		}
 	}
 
-	if err := h.syncExpenseInventory(c.Context(), tx, id, userID, existing, finalProductID, finalQuantity); err != nil {
+	finalCategoryID := existing.CategoryID
+	if req.CategoryID != nil {
+		if *req.CategoryID == "" {
+			finalCategoryID = nil
+		} else {
+			finalCategoryID, _ = parseOptionalExpenseUUIDField(req.CategoryID, "Invalid category ID")
+		}
+	}
+
+	finalIsInventoryPurchase, err := h.isInventoryPurchaseCategory(c.Context(), finalCategoryID)
+	if err != nil {
+		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
+	}
+	if !finalIsInventoryPurchase {
+		finalProductID = nil
+		finalQuantity = nil
+	}
+	if finalIsInventoryPurchase && finalProductID == nil {
+		return expenseMessage(c, fiber.StatusBadRequest, "Product is required for Inventory Purchase")
+	}
+	if finalIsInventoryPurchase && finalQuantity == nil {
+		return expenseMessage(c, fiber.StatusBadRequest, "Quantity is required for Inventory Purchase")
+	}
+
+	finalAppliesInventory := existing.AppliesInventory
+	if req.AppliesInventory != nil {
+		finalAppliesInventory = *req.AppliesInventory
+	}
+	if !finalIsInventoryPurchase {
+		finalAppliesInventory = false
+	}
+
+	if err := h.syncExpenseInventory(c.Context(), tx, id, userID, existing, finalAppliesInventory, finalProductID, finalQuantity); err != nil {
 		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
 	}
 
-	if req.CategoryID != nil {
-		if *req.CategoryID == "" {
-			existing.CategoryID = nil
-		} else {
-			existing.CategoryID, _ = parseOptionalExpenseUUIDField(req.CategoryID, "Invalid category ID")
-		}
-	}
+	existing.CategoryID = finalCategoryID
 	existing.ProductID = finalProductID
 	existing.Quantity = finalQuantity
+	existing.AppliesInventory = finalAppliesInventory
 
 	if req.Amount != nil {
 		amount, parseErr := parseRequiredAmount(*req.Amount)
@@ -248,16 +260,6 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	}
 
 	newValues := expenseAuditValues(updated)
-	if updated.ProductID == nil {
-		if _, ok := oldValues["product"]; ok {
-			newValues["product"] = "[removed]"
-		}
-	}
-	if updated.Quantity == nil {
-		if _, ok := oldValues["quantity"]; ok {
-			newValues["quantity"] = "[removed]"
-		}
-	}
 	audit.LogWithValues(c, models.AuditActionExpenseUpdate, models.AuditEntityExpense, id.String(), "Updated expense: "+updated.Description, oldValues, newValues)
 
 	return c.JSON(fiber.Map{"data": expenseToResponse(updated)})
@@ -286,7 +288,7 @@ func (h *ExpenseHandler) Delete(c *fiber.Ctx) error {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense not found")
 	}
 
-	if expense.ProductID != nil && expense.Quantity != nil {
+	if expense.AppliesInventory && expense.ProductID != nil && expense.Quantity != nil {
 		if _, err := h.inventoryRepo.AdjustStockWithTx(
 			c.Context(),
 			tx,

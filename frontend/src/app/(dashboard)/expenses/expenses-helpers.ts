@@ -9,6 +9,7 @@ export function createEmptyExpenseFormData(expenseDate = todayDateString()): Cre
     category_id: "",
     product_id: "",
     quantity: "",
+    applies_inventory: false,
     amount: "",
     description: "",
     expense_date: expenseDate,
@@ -26,7 +27,7 @@ export function isInventoryPurchaseCategory(
     return false;
   }
   const category = categories.find((item) => item.id === categoryID);
-  return category?.name === "Inventory Purchase";
+  return category?.system_key === "inventory_purchase";
 }
 
 export function deriveInventoryPurchaseAmount(
@@ -66,6 +67,7 @@ export function mapExpenseToFormData(expense: Expense): CreateExpenseRequest {
     category_id: expense.category_id || "",
     product_id: expense.product_id || "",
     quantity: expense.quantity || "",
+    applies_inventory: expense.applies_inventory,
     amount: expense.amount,
     description: expense.description,
     expense_date: expense.expense_date,
@@ -83,6 +85,7 @@ export function hasExpenseFormChanges(formData: CreateExpenseRequest, editingExp
     formData.category_id !== (editingExpense.category_id || "") ||
     formData.product_id !== (editingExpense.product_id || "") ||
     formData.quantity !== (editingExpense.quantity || "") ||
+    !!formData.applies_inventory !== editingExpense.applies_inventory ||
     formData.amount !== editingExpense.amount ||
     formData.description !== editingExpense.description ||
     formData.expense_date !== editingExpense.expense_date ||
@@ -104,7 +107,7 @@ export function canSubmitExpenseForm(input: {
     return false;
   }
 
-  if (!input.categoryId) {
+  if (!input.categoryId || input.categoryId === "none") {
     return false;
   }
 
@@ -125,6 +128,7 @@ export function buildExpenseRequest(formData: CreateExpenseRequest): CreateExpen
     category_id: formData.category_id && formData.category_id !== "none" ? formData.category_id : undefined,
     product_id: formData.product_id || undefined,
     quantity: formData.quantity || undefined,
+    applies_inventory: !!formData.applies_inventory,
     vendor: formData.vendor || undefined,
     reference_number: formData.reference_number || undefined,
     notes: formData.notes || undefined,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, Lock, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,7 +60,7 @@ export function CategoriesList({
             {viewMode === "active" ? (
               <Plus className="h-6 w-6 text-muted-foreground" />
             ) : (
-              <Trash2 className="h-6 w-6 text-muted-foreground" />
+              <Archive className="h-6 w-6 text-muted-foreground" />
             )}
           </div>
           <h3 className="font-medium text-lg">{labels.emptyTitle}</h3>
@@ -74,12 +74,15 @@ export function CategoriesList({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {categories.map((category) => {
         const isSpecial = isSpecialExpenseCategory(category, type);
-        const canShowActions = !isSpecial && (canEditCategories || canDeleteCategories);
+        const canShowActions =
+          viewMode === "active"
+            ? canEditCategories || canDeleteCategories
+            : canDeleteCategories;
         return (
-          <Card key={category.id} className="group hover:border-primary/50 transition-all duration-200 shadow-sm hover:shadow-md">
+          <Card key={category.id}>
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1 pr-4">
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-lg">{category.name}</CardTitle>
                     {isSpecial ? (
@@ -93,42 +96,14 @@ export function CategoriesList({
                     {category.description || "No description"}
                   </CardDescription>
                 </div>
-                {canShowActions ? (
-                  <div className="flex items-center gap-1">
-                    {viewMode === "active" ? (
-                      <>
-                        {canEditCategories ? (
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(category)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        ) : null}
-                        {canDeleteCategories ? (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onArchive(category)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        {canDeleteCategories ? (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => onRestore(category)}>
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
-                        ) : null}
-                        {canDeleteCategories ? (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onPermanentDelete(category)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                ) : null}
+                <span className="text-xs text-muted-foreground whitespace-nowrap self-start pt-1">
+                  Updated {new Date(category.updated_at).toLocaleDateString()}
+                </span>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t">
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   {type === "product" && "product_count" in category ? (
                     <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
                       {category.product_count || 0} Products
@@ -140,7 +115,51 @@ export function CategoriesList({
                     </span>
                   ) : null}
                 </div>
-                <span>Updated {new Date(category.updated_at).toLocaleDateString()}</span>
+                {canShowActions ? (
+                  <div className="flex items-center gap-2">
+                    {viewMode === "active" ? (
+                      <>
+                        {canEditCategories ? (
+                          <Button variant="outline" size="sm" className="h-8" onClick={() => onEdit(category)}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                        ) : null}
+                        {canDeleteCategories ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-500 dark:hover:bg-amber-950/20"
+                            onClick={() => onArchive(category)}
+                          >
+                            <Archive className="mr-1 h-3.5 w-3.5" />
+                            Archive
+                          </Button>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        {canDeleteCategories ? (
+                          <Button variant="outline" size="sm" className="h-8" onClick={() => onRestore(category)}>
+                            <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                            Restore
+                          </Button>
+                        ) : null}
+                        {canDeleteCategories && !isSpecial ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => onPermanentDelete(category)}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            Delete
+                          </Button>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>

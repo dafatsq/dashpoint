@@ -17,6 +17,7 @@ function buildCategory(overrides: Partial<ExpenseCategory> = {}): ExpenseCategor
   return {
     id: "category-1",
     name: "Inventory Purchase",
+    system_key: "inventory_purchase",
     is_active: true,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
@@ -46,6 +47,7 @@ function buildExpense(overrides: Partial<Expense> = {}): Expense {
     product_id: "product-1",
     product_name: "Beans",
     quantity: "3",
+    applies_inventory: true,
     amount: "21000",
     description: "Beans x 3",
     expense_date: "2026-05-14",
@@ -63,7 +65,7 @@ describe("expenses helpers", () => {
   test("detects inventory purchase category by current category name", () => {
     expect(isInventoryPurchaseCategory("category-1", [buildCategory()])).toBe(true);
     expect(
-      isInventoryPurchaseCategory("category-2", [buildCategory({ id: "category-2", name: "Utilities" })]),
+      isInventoryPurchaseCategory("category-2", [buildCategory({ id: "category-2", name: "Utilities", system_key: undefined })]),
     ).toBe(false);
   });
 
@@ -80,6 +82,7 @@ describe("expenses helpers", () => {
       category_id: "category-1",
       product_id: "product-1",
       quantity: "3",
+      applies_inventory: true,
       amount: "21000",
       description: "Beans x 3",
       expense_date: "2026-05-14",
@@ -106,6 +109,7 @@ describe("expenses helpers", () => {
       description: "Beans x 3",
       product_id: "",
       quantity: "",
+      applies_inventory: false,
       vendor: "",
       reference_number: "",
       notes: "",
@@ -113,6 +117,7 @@ describe("expenses helpers", () => {
 
     expect(buildExpenseRequest(formData)).toEqual({
       category_id: "category-1",
+      applies_inventory: false,
       amount: "21000",
       description: "Beans x 3",
       expense_date: "2026-05-14",
@@ -158,6 +163,17 @@ describe("expenses helpers", () => {
         isSubmitting: false,
         hasChanges: true,
         categoryId: "none",
+        isInventoryPurchase: false,
+        productId: "",
+        quantity: "",
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitExpenseForm({
+        isSubmitting: false,
+        hasChanges: true,
+        categoryId: "category-2",
         isInventoryPurchase: false,
         productId: "",
         quantity: "",

@@ -1,6 +1,7 @@
-import { Info, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
@@ -63,6 +64,9 @@ export function ExpensesFormDialog({
   const updateFormData = (patch: Partial<CreateExpenseRequest>) => {
     onFormDataChange({ ...formData, ...patch });
   };
+  const hasCategory = !!formData.category_id && formData.category_id !== "none";
+  const inventoryFieldsReady = !!formData.product_id && !!formData.quantity;
+  const canEditRemainingFields = hasCategory && (!isInventoryPurchase || inventoryFieldsReady);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -85,13 +89,15 @@ export function ExpensesFormDialog({
             <div className="grid gap-2">
               <Label htmlFor="category">Category</Label>
               <Select
-                value={formData.category_id}
+                value={formData.category_id || "none"}
                 onValueChange={(value) => {
+                  const nextCategoryId = value === "none" ? "" : value;
                   if (!editingExpense) {
                     onFormDataChange({
-                      category_id: value,
+                      category_id: nextCategoryId,
                       product_id: "",
                       quantity: "",
+                      applies_inventory: false,
                       amount: "",
                       description: "",
                       expense_date: formData.expense_date,
@@ -100,7 +106,7 @@ export function ExpensesFormDialog({
                       notes: "",
                     });
                   } else {
-                    updateFormData({ category_id: value, product_id: "", quantity: "" });
+                    updateFormData({ category_id: nextCategoryId, product_id: "", quantity: "", applies_inventory: false });
                   }
                   onManualAmountChange(false);
                   onManualDescriptionChange(false);
@@ -122,7 +128,7 @@ export function ExpensesFormDialog({
             <div className="grid gap-2">
               {isInventoryPurchase ? (
                 <>
-                  <Label htmlFor="quantity" className={!formData.category_id ? "opacity-50" : ""}>
+                  <Label htmlFor="quantity" className={!hasCategory ? "opacity-50" : ""}>
                     Quantity *
                   </Label>
                   <Input
@@ -136,12 +142,23 @@ export function ExpensesFormDialog({
                       onManualDescriptionChange(false);
                     }}
                     placeholder="Enter quantity"
-                    disabled={!formData.category_id}
+                    disabled={!hasCategory}
                   />
+                  <div className="mt-2 flex items-center gap-2">
+                    <Checkbox
+                      id="applies_inventory"
+                      checked={!!formData.applies_inventory}
+                      onCheckedChange={(checked) => updateFormData({ applies_inventory: checked === true })}
+                      disabled={!canEditRemainingFields}
+                    />
+                    <Label htmlFor="applies_inventory" className={!canEditRemainingFields ? "opacity-50" : ""}>
+                      Add to product inventory
+                    </Label>
+                  </div>
                 </>
               ) : (
                 <>
-                  <Label htmlFor="vendor" className={!formData.category_id ? "opacity-50" : ""}>
+                  <Label htmlFor="vendor" className={!hasCategory ? "opacity-50" : ""}>
                     Vendor
                   </Label>
                   <Input
@@ -149,7 +166,7 @@ export function ExpensesFormDialog({
                     value={formData.vendor}
                     onChange={(event) => onFormDataChange({ ...formData, vendor: event.target.value })}
                     placeholder="e.g., PLN"
-                    disabled={!formData.category_id}
+                    disabled={!canEditRemainingFields}
                   />
                 </>
               )}
@@ -159,7 +176,7 @@ export function ExpensesFormDialog({
           <div className="grid gap-2">
             {isInventoryPurchase ? (
               <>
-                <Label htmlFor="product" className={!formData.category_id ? "opacity-50" : ""}>
+                <Label htmlFor="product" className={!hasCategory ? "opacity-50" : ""}>
                   Product *
                 </Label>
                 <Select
@@ -169,7 +186,7 @@ export function ExpensesFormDialog({
                     onManualAmountChange(false);
                     onManualDescriptionChange(false);
                   }}
-                  disabled={!formData.category_id}
+                  disabled={!hasCategory}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select product" />
@@ -186,7 +203,7 @@ export function ExpensesFormDialog({
               </>
             ) : (
               <>
-                <Label htmlFor="description" className={!formData.category_id ? "opacity-50" : ""}>
+                <Label htmlFor="description" className={!hasCategory ? "opacity-50" : ""}>
                   Description *
                 </Label>
                 <Input
@@ -199,7 +216,7 @@ export function ExpensesFormDialog({
                     }
                   }}
                   placeholder="e.g., Monthly electricity bill"
-                  disabled={!formData.category_id}
+                  disabled={!canEditRemainingFields}
                 />
               </>
             )}
@@ -208,17 +225,17 @@ export function ExpensesFormDialog({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="amount" className={!formData.category_id ? "opacity-50" : ""}>
+                <Label htmlFor="amount" className={!hasCategory ? "opacity-50" : ""}>
                   Amount (IDR) *
                 </Label>
                 {isInventoryPurchase && formData.product_id && formData.quantity && (
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="h-6 text-xs"
+                    className="h-8 text-xs"
                     onClick={() => onManualAmountChange(!isManualAmount)}
-                    disabled={!formData.category_id}
+                    disabled={!canEditRemainingFields}
                   >
                     {isManualAmount ? "Auto-calculate" : "Manual edit"}
                   </Button>
@@ -239,61 +256,38 @@ export function ExpensesFormDialog({
                 }}
                 placeholder="100000"
                 disabled={
-                  !formData.category_id ||
-                  (isInventoryPurchase && !isManualAmount && !!formData.product_id && !!formData.quantity)
+                  !canEditRemainingFields ||
+                  (isInventoryPurchase && !isManualAmount && inventoryFieldsReady)
                 }
               />
-              {isInventoryPurchase && !isManualAmount && formData.product_id && formData.quantity && (
-                <p className="text-xs text-muted-foreground">Auto-calculated from product cost × quantity</p>
-              )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="expense_date" className={!formData.category_id ? "opacity-50" : ""}>
+              <Label htmlFor="expense_date" className={!canEditRemainingFields ? "opacity-50" : ""}>
                 Date *
               </Label>
               <DatePicker
                 date={formData.expense_date}
                 onSelect={(date) => updateFormData({ expense_date: date })}
-                disabled={!formData.category_id}
+                disabled={!canEditRemainingFields}
               />
             </div>
           </div>
 
           {isInventoryPurchase && (
             <>
-              <div className="my-4 flex items-center gap-3 rounded-md border border-primary/30 bg-primary/10 p-3">
-                <Info className="h-5 w-5 flex-shrink-0 text-primary" />
-                <p className="text-sm text-primary">
-                  Inventory Purchase: Amount is auto-calculated based on the selected Product and Quantity.
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="vendor_inventory" className={!formData.category_id ? "opacity-50" : ""}>
-                  Vendor
-                </Label>
-                <Input
-                  id="vendor_inventory"
-                  value={formData.vendor}
-                  onChange={(event) => updateFormData({ vendor: event.target.value })}
-                  placeholder="e.g., Supplier Name"
-                  disabled={!formData.category_id}
-                />
-              </div>
-
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="description_inventory" className={!formData.category_id ? "opacity-50" : ""}>
+                  <Label htmlFor="description_inventory" className={!canEditRemainingFields ? "opacity-50" : ""}>
                     Description *
                   </Label>
                   {formData.product_id && formData.quantity && (
-                    <Button
+                  <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-6 text-xs"
+                      className="h-8 text-xs"
                       onClick={() => onManualDescriptionChange(!isManualDescription)}
-                      disabled={!formData.category_id}
+                      disabled={!canEditRemainingFields}
                     >
                       {isManualDescription ? "Auto-generate" : "Manual edit"}
                     </Button>
@@ -310,17 +304,30 @@ export function ExpensesFormDialog({
                     onManualDescriptionChange(true);
                   }}
                   placeholder="e.g., Stock for February"
-                  disabled={!formData.category_id || (!isManualDescription && !!formData.product_id && !!formData.quantity)}
+                  disabled={!canEditRemainingFields || (!isManualDescription && inventoryFieldsReady)}
                 />
-                {!isManualDescription && formData.product_id && formData.quantity && (
+                {!isManualDescription && inventoryFieldsReady && (
                   <p className="text-xs text-muted-foreground">Auto-generated from product and quantity</p>
                 )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="vendor_inventory" className={!canEditRemainingFields ? "opacity-50" : ""}>
+                  Vendor
+                </Label>
+                <Input
+                  id="vendor_inventory"
+                  value={formData.vendor}
+                  onChange={(event) => updateFormData({ vendor: event.target.value })}
+                  placeholder="e.g., Supplier Name"
+                  disabled={!canEditRemainingFields}
+                />
               </div>
             </>
           )}
 
           <div className="grid gap-2">
-            <Label htmlFor="reference_number" className={!formData.category_id ? "opacity-50" : ""}>
+            <Label htmlFor="reference_number" className={!canEditRemainingFields ? "opacity-50" : ""}>
               Reference Number
             </Label>
             <Input
@@ -328,12 +335,12 @@ export function ExpensesFormDialog({
               value={formData.reference_number}
               onChange={(event) => updateFormData({ reference_number: event.target.value })}
               placeholder="e.g., Invoice #12345"
-              disabled={!formData.category_id}
+              disabled={!canEditRemainingFields}
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="notes" className={!formData.category_id ? "opacity-50" : ""}>
+            <Label htmlFor="notes" className={!canEditRemainingFields ? "opacity-50" : ""}>
               Notes
             </Label>
             <Input
@@ -341,7 +348,7 @@ export function ExpensesFormDialog({
               value={formData.notes}
               onChange={(event) => updateFormData({ notes: event.target.value })}
               placeholder="Additional notes..."
-              disabled={!formData.category_id}
+              disabled={!canEditRemainingFields}
             />
           </div>
         </div>

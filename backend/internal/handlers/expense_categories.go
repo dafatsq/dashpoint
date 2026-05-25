@@ -8,7 +8,11 @@ import (
 	"dashpoint/backend/internal/models"
 )
 
-const inventoryPurchaseCategoryName = "Inventory Purchase"
+const inventoryPurchaseCategorySystemKey = "inventory_purchase"
+
+func isInventoryPurchaseExpenseCategory(category *models.ExpenseCategory) bool {
+	return category != nil && category.SystemKey != nil && *category.SystemKey == inventoryPurchaseCategorySystemKey
+}
 
 func expenseCategoryAuditValues(category *models.ExpenseCategory) map[string]interface{} {
 	if category == nil {
@@ -131,11 +135,6 @@ func (h *ExpenseHandler) UpdateCategory(c *fiber.Ctx) error {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense category not found")
 	}
 
-	// Inventory Purchase is a system-managed special category — it cannot be modified.
-	if category.Name == inventoryPurchaseCategoryName {
-		return expenseMessage(c, fiber.StatusForbidden, "The 'Inventory Purchase' category is a system category and cannot be edited")
-	}
-
 	oldValues := map[string]interface{}{
 		"affected_category": category.Name,
 		"name":              category.Name,
@@ -190,11 +189,6 @@ func (h *ExpenseHandler) DeleteCategory(c *fiber.Ctx) error {
 	category, _ := h.repo.GetCategoryByID(c.Context(), id)
 	categoryName := expenseCategoryName(category)
 
-	// Inventory Purchase is a system-managed special category — it cannot be archived.
-	if categoryName == inventoryPurchaseCategoryName {
-		return expenseMessage(c, fiber.StatusForbidden, "The 'Inventory Purchase' category is a system category and cannot be archived")
-	}
-
 	if repoErr := h.repo.DeleteCategory(c.Context(), id); repoErr != nil {
 		return expenseInternalError(c, repoErr, "Failed to delete expense category")
 	}
@@ -220,8 +214,8 @@ func (h *ExpenseHandler) PermanentDeleteCategory(c *fiber.Ctx) error {
 	category, _ := h.repo.GetCategoryByID(c.Context(), id)
 	categoryName := expenseCategoryName(category)
 
-	// Inventory Purchase is a system-managed special category — it cannot be deleted.
-	if categoryName == inventoryPurchaseCategoryName {
+	// The inventory-purchase system category cannot be deleted.
+	if isInventoryPurchaseExpenseCategory(category) {
 		return expenseMessage(c, fiber.StatusForbidden, "The 'Inventory Purchase' category is a system category and cannot be deleted")
 	}
 
