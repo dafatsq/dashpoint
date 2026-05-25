@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Archive,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -253,7 +254,7 @@ export function UsersList({
                                       onClick={() => onArchive(user)}
                                       title="Archive user"
                                     >
-                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                      <Archive className="h-4 w-4 text-amber-600 hover:text-amber-700 dark:text-amber-500" />
                                     </Button>
                                   )}
                                 </>
@@ -358,9 +359,9 @@ export function UsersList({
                               variant="outline"
                               size="sm"
                               onClick={() => onArchive(user)}
-                              className="h-8 text-destructive hover:text-destructive"
+                              className="h-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-500 dark:hover:bg-amber-950/20"
                             >
-                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                              <Archive className="h-3.5 w-3.5 mr-1" />
                               Archive
                             </Button>
                           )}

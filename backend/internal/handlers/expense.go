@@ -54,44 +54,47 @@ func NewExpenseHandler(repo expenseStore, inventoryRepo expenseInventoryStore, _
 }
 
 type CreateExpenseRequest struct {
-	CategoryID      *string `json:"category_id"`
-	ProductID       *string `json:"product_id"`
-	Quantity        *string `json:"quantity"`
-	Amount          string  `json:"amount"`
-	Description     string  `json:"description"`
-	ExpenseDate     string  `json:"expense_date"`
-	Vendor          *string `json:"vendor"`
-	ReferenceNumber *string `json:"reference_number"`
-	Notes           *string `json:"notes"`
+	CategoryID       *string `json:"category_id"`
+	ProductID        *string `json:"product_id"`
+	Quantity         *string `json:"quantity"`
+	AppliesInventory bool    `json:"applies_inventory"`
+	Amount           string  `json:"amount"`
+	Description      string  `json:"description"`
+	ExpenseDate      string  `json:"expense_date"`
+	Vendor           *string `json:"vendor"`
+	ReferenceNumber  *string `json:"reference_number"`
+	Notes            *string `json:"notes"`
 }
 
 type UpdateExpenseRequest struct {
-	CategoryID      *string `json:"category_id"`
-	ProductID       *string `json:"product_id"`
-	Quantity        *string `json:"quantity"`
-	Amount          *string `json:"amount"`
-	Description     *string `json:"description"`
-	ExpenseDate     *string `json:"expense_date"`
-	Vendor          *string `json:"vendor"`
-	ReferenceNumber *string `json:"reference_number"`
-	Notes           *string `json:"notes"`
+	CategoryID       *string `json:"category_id"`
+	ProductID        *string `json:"product_id"`
+	Quantity         *string `json:"quantity"`
+	AppliesInventory *bool   `json:"applies_inventory"`
+	Amount           *string `json:"amount"`
+	Description      *string `json:"description"`
+	ExpenseDate      *string `json:"expense_date"`
+	Vendor           *string `json:"vendor"`
+	ReferenceNumber  *string `json:"reference_number"`
+	Notes            *string `json:"notes"`
 }
 
 type ExpenseResponse struct {
-	ID              string  `json:"id"`
-	CategoryID      *string `json:"category_id,omitempty"`
-	CategoryName    *string `json:"category_name,omitempty"`
-	ProductID       *string `json:"product_id,omitempty"`
-	ProductName     *string `json:"product_name,omitempty"`
-	Quantity        *string `json:"quantity,omitempty"`
-	Amount          string  `json:"amount"`
-	Description     string  `json:"description"`
-	ExpenseDate     string  `json:"expense_date"`
-	Vendor          *string `json:"vendor,omitempty"`
-	ReferenceNumber *string `json:"reference_number,omitempty"`
-	Notes           *string `json:"notes,omitempty"`
-	CreatedBy       string  `json:"created_by"`
-	CreatedByName   *string `json:"created_by_name,omitempty"`
-	CreatedAt       string  `json:"created_at"`
-	UpdatedAt       string  `json:"updated_at"`
+	ID               string  `json:"id"`
+	CategoryID       *string `json:"category_id,omitempty"`
+	CategoryName     *string `json:"category_name,omitempty"`
+	ProductID        *string `json:"product_id,omitempty"`
+	ProductName      *string `json:"product_name,omitempty"`
+	Quantity         *string `json:"quantity,omitempty"`
+	AppliesInventory bool    `json:"applies_inventory"`
+	Amount           string  `json:"amount"`
+	Description      string  `json:"description"`
+	ExpenseDate      string  `json:"expense_date"`
+	Vendor           *string `json:"vendor,omitempty"`
+	ReferenceNumber  *string `json:"reference_number,omitempty"`
+	Notes            *string `json:"notes,omitempty"`
+	CreatedBy        string  `json:"created_by"`
+	CreatedByName    *string `json:"created_by_name,omitempty"`
+	CreatedAt        string  `json:"created_at"`
+	UpdatedAt        string  `json:"updated_at"`
 }

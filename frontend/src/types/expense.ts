@@ -1,6 +1,7 @@
 export interface ExpenseCategory {
   id: string;
   name: string;
+  system_key?: string;
   description?: string;
   is_active: boolean;
   created_at: string;
@@ -14,6 +15,7 @@ export interface Expense {
   product_id?: string;
   product_name?: string;
   quantity?: string;
+  applies_inventory: boolean;
   amount: string;
   description: string;
   expense_date: string;
@@ -30,6 +32,7 @@ export interface CreateExpenseRequest {
   category_id?: string;
   product_id?: string;
   quantity?: string;
+  applies_inventory?: boolean;
   amount: string;
   description: string;
   expense_date: string;
@@ -42,6 +45,7 @@ export interface UpdateExpenseRequest {
   category_id?: string;
   product_id?: string;
   quantity?: string;
+  applies_inventory?: boolean;
   amount?: string;
   description?: string;
   expense_date?: string;

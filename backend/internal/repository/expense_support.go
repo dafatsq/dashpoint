@@ -12,7 +12,7 @@ import (
 
 const expenseSelectColumns = `
 	SELECT e.id, e.category_id, ec.name as category_name, e.product_id, p.name as product_name,
-	       e.quantity, e.amount, e.description,
+	       e.quantity, e.applies_inventory, e.amount, e.description,
 	       e.expense_date, e.vendor, e.reference_number, e.notes,
 	       e.created_by, u.name as created_by_name, e.created_at, e.updated_at
 `
@@ -47,6 +47,7 @@ func scanExpense(scanner expenseScanner) (*models.Expense, error) {
 		&expense.ProductID,
 		&expense.ProductName,
 		&expense.Quantity,
+		&expense.AppliesInventory,
 		&expense.Amount,
 		&expense.Description,
 		&expense.ExpenseDate,

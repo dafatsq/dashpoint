@@ -15,12 +15,13 @@ import (
 )
 
 const (
-	managerPasswordHash = "$2a$12$Lk7MKaGpZkn/ZM2.DGwele0oBQSFI7znHnkyvP0KG83c2UMMg9cLa"
-	cashierPasswordHash = "$2a$12$.HFs8tIjNMFIKE6My.5DIe6FHrkO5O3Qdj30PElSwWCBLCTn.fzEu"
-	managerPinHash      = "$2a$12$GHnsR25t75pwOjuwus7cKOC3c8F.KBzBSNOso29RXYctuQm/glSeS"
-	cashierPinHash      = "$2a$12$AXQP.ErpkUyp9k/U1lOBYOW8A8HqXl5jxl5PTWlJ9aFKAqp7QSYh."
-	seedMarker          = "[seed]"
-	rupiahScale         = 1000
+	managerPasswordHash                = "$2a$12$Lk7MKaGpZkn/ZM2.DGwele0oBQSFI7znHnkyvP0KG83c2UMMg9cLa"
+	cashierPasswordHash                = "$2a$12$.HFs8tIjNMFIKE6My.5DIe6FHrkO5O3Qdj30PElSwWCBLCTn.fzEu"
+	managerPinHash                     = "$2a$12$GHnsR25t75pwOjuwus7cKOC3c8F.KBzBSNOso29RXYctuQm/glSeS"
+	cashierPinHash                     = "$2a$12$AXQP.ErpkUyp9k/U1lOBYOW8A8HqXl5jxl5PTWlJ9aFKAqp7QSYh."
+	seedMarker                         = "[seed]"
+	rupiahScale                        = 1000
+	inventoryPurchaseCategorySystemKey = "inventory_purchase"
 )
 
 type role struct {
@@ -29,8 +30,9 @@ type role struct {
 }
 
 type category struct {
-	ID   uuid.UUID
-	Name string
+	ID        uuid.UUID
+	Name      string
+	SystemKey *string
 }
 
 type userSeed struct {
@@ -150,19 +152,20 @@ type paymentSeed struct {
 }
 
 type expenseSeed struct {
-	ID              uuid.UUID
-	CategoryID      uuid.UUID
-	Amount          float64
-	Description     string
-	ExpenseDate     time.Time
-	Vendor          string
-	ReferenceNumber string
-	Notes           string
-	CreatedBy       uuid.UUID
-	ProductID       *uuid.UUID
-	Quantity        *float64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID               uuid.UUID
+	CategoryID       uuid.UUID
+	Amount           float64
+	Description      string
+	ExpenseDate      time.Time
+	Vendor           string
+	ReferenceNumber  string
+	Notes            string
+	CreatedBy        uuid.UUID
+	ProductID        *uuid.UUID
+	Quantity         *float64
+	AppliesInventory bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type auditSeed struct {
@@ -339,7 +342,7 @@ func loadCategories(ctx context.Context, tx pgx.Tx) ([]category, error) {
 }
 
 func loadExpenseCategories(ctx context.Context, tx pgx.Tx) ([]category, error) {
-	rows, err := tx.Query(ctx, `SELECT id, name FROM expense_categories WHERE is_active = true ORDER BY name`)
+	rows, err := tx.Query(ctx, `SELECT id, name, system_key FROM expense_categories WHERE is_active = true ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +351,7 @@ func loadExpenseCategories(ctx context.Context, tx pgx.Tx) ([]category, error) {
 	var out []category
 	for rows.Next() {
 		var c category
-		if err := rows.Scan(&c.ID, &c.Name); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.SystemKey); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -956,7 +959,7 @@ func buildExpenses(users []userSeed, categories []category, products []productSe
 	now := time.Now().UTC()
 	var inventoryPurchase category
 	for _, category := range categories {
-		if category.Name == "Inventory Purchase" {
+		if category.SystemKey != nil && *category.SystemKey == inventoryPurchaseCategorySystemKey {
 			inventoryPurchase = category
 			break
 		}
@@ -990,6 +993,7 @@ func buildExpenses(users []userSeed, categories []category, products []productSe
 			expense.CategoryID = inventoryPurchase.ID
 			expense.ProductID = &product.ID
 			expense.Quantity = &quantity
+			expense.AppliesInventory = true
 			expense.Amount = round2(product.Cost * quantity)
 			expense.Description = fmt.Sprintf("%s inventory restock for %s", seedMarker, product.Name)
 		} else {
@@ -1008,9 +1012,9 @@ func insertExpenses(ctx context.Context, tx pgx.Tx, expenses []expenseSeed) erro
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO expenses (
 				id, category_id, amount, description, expense_date, vendor, reference_number, notes,
-				created_by, created_at, updated_at, product_id, quantity
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-		`, expense.ID, expense.CategoryID, money(expense.Amount), expense.Description, expense.ExpenseDate.Format("2006-01-02"), expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.CreatedBy, expense.CreatedAt, expense.UpdatedAt, expense.ProductID, nullableQty(expense.Quantity)); err != nil {
+				created_by, created_at, updated_at, product_id, quantity, applies_inventory
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		`, expense.ID, expense.CategoryID, money(expense.Amount), expense.Description, expense.ExpenseDate.Format("2006-01-02"), expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.CreatedBy, expense.CreatedAt, expense.UpdatedAt, expense.ProductID, nullableQty(expense.Quantity), expense.AppliesInventory); err != nil {
 			return err
 		}
 	}

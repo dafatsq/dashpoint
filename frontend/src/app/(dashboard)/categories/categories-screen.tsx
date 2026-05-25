@@ -125,9 +125,6 @@ export function CategoriesScreen() {
       if (!canEditCategories) {
         return;
       }
-      if (isSpecialExpenseCategory(category, activeTab)) {
-        return;
-      }
       setEditingCategory({ id: category.id, name: category.name, type: activeTab });
       setFormData(mapCategoryToFormData(category));
       setDialogOpen(true);
@@ -356,7 +353,6 @@ export function CategoriesScreen() {
                 canDeleteCategories={canDeleteCategories}
                 onEdit={openEditDialog}
                 onArchive={(category) => {
-                  if (isSpecialExpenseCategory(category, activeTab)) return;
                   setDeleteTarget(category);
                   setDeleteDialogOpen(true);
                 }}

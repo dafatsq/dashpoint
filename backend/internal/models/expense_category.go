@@ -10,6 +10,7 @@ import (
 type ExpenseCategory struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
+	SystemKey   *string   `json:"system_key,omitempty"`
 	Description *string   `json:"description,omitempty"`
 	IsActive    bool      `json:"is_active"`
 	CreatedAt   time.Time `json:"created_at"`

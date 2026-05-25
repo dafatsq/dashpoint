@@ -12,7 +12,7 @@ import (
 )
 
 const expenseCategorySelectColumns = `
-	SELECT id, name, description, is_active, created_at, updated_at
+	SELECT id, name, system_key, description, is_active, created_at, updated_at
 	FROM expense_categories
 `
 
@@ -33,6 +33,7 @@ func scanExpenseCategory(scanner expenseCategoryScanner) (*models.ExpenseCategor
 	if err := scanner.Scan(
 		&category.ID,
 		&category.Name,
+		&category.SystemKey,
 		&category.Description,
 		&category.IsActive,
 		&category.CreatedAt,
@@ -82,7 +83,7 @@ func (r *ExpenseRepository) CreateCategory(ctx context.Context, name string, des
 	query := `
 		INSERT INTO expense_categories (id, name, description, is_active, created_at, updated_at)
 		VALUES ($1, $2, $3, true, $4, $4)
-		RETURNING id, name, description, is_active, created_at, updated_at
+		RETURNING id, name, system_key, description, is_active, created_at, updated_at
 	`
 
 	now := time.Now()
@@ -109,7 +110,7 @@ func (r *ExpenseRepository) UpdateCategory(ctx context.Context, category *models
 		UPDATE expense_categories
 		SET name = $2, description = $3, is_active = $4, updated_at = $5
 		WHERE id = $1
-		RETURNING id, name, description, is_active, created_at, updated_at
+		RETURNING id, name, system_key, description, is_active, created_at, updated_at
 	`
 
 	updated, err := scanExpenseCategory(r.pool.QueryRow(ctx, query, category.ID, category.Name, category.Description, category.IsActive, category.UpdatedAt))

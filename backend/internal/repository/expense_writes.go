@@ -19,12 +19,12 @@ func (r *ExpenseRepository) Create(ctx context.Context, expense *models.Expense)
 	expense.UpdatedAt = now
 
 	query := `
-		INSERT INTO expenses (id, category_id, product_id, quantity, amount, description, expense_date, vendor, reference_number, notes, created_by, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+		INSERT INTO expenses (id, category_id, product_id, quantity, applies_inventory, amount, description, expense_date, vendor, reference_number, notes, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
 	`
 
 	_, err := r.pool.Exec(ctx, query,
-		expense.ID, expense.CategoryID, expense.ProductID, expense.Quantity, expense.Amount, expense.Description,
+		expense.ID, expense.CategoryID, expense.ProductID, expense.Quantity, expense.AppliesInventory, expense.Amount, expense.Description,
 		expense.ExpenseDate, expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.CreatedBy, now,
 	)
 	if err != nil {
@@ -46,12 +46,12 @@ func (r *ExpenseRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, expense
 	expense.UpdatedAt = now
 
 	query := `
-		INSERT INTO expenses (id, category_id, product_id, quantity, amount, description, expense_date, vendor, reference_number, notes, created_by, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+		INSERT INTO expenses (id, category_id, product_id, quantity, applies_inventory, amount, description, expense_date, vendor, reference_number, notes, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
 	`
 
 	_, err := tx.Exec(ctx, query,
-		expense.ID, expense.CategoryID, expense.ProductID, expense.Quantity, expense.Amount, expense.Description,
+		expense.ID, expense.CategoryID, expense.ProductID, expense.Quantity, expense.AppliesInventory, expense.Amount, expense.Description,
 		expense.ExpenseDate, expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.CreatedBy, now,
 	)
 	if err != nil {
@@ -65,13 +65,13 @@ func (r *ExpenseRepository) Update(ctx context.Context, expense *models.Expense)
 	expense.UpdatedAt = time.Now()
 	query := `
 		UPDATE expenses
-		SET category_id = $2, product_id = $3, quantity = $4, amount = $5, description = $6, expense_date = $7,
-		    vendor = $8, reference_number = $9, notes = $10, updated_at = $11
+		SET category_id = $2, product_id = $3, quantity = $4, applies_inventory = $5, amount = $6, description = $7, expense_date = $8,
+		    vendor = $9, reference_number = $10, notes = $11, updated_at = $12
 		WHERE id = $1
 	`
 
 	result, err := r.pool.Exec(ctx, query,
-		expense.ID, expense.CategoryID, expense.ProductID, expense.Quantity, expense.Amount, expense.Description,
+		expense.ID, expense.CategoryID, expense.ProductID, expense.Quantity, expense.AppliesInventory, expense.Amount, expense.Description,
 		expense.ExpenseDate, expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.UpdatedAt,
 	)
 	if err != nil {
@@ -88,13 +88,13 @@ func (r *ExpenseRepository) UpdateWithTx(ctx context.Context, tx pgx.Tx, expense
 	expense.UpdatedAt = time.Now()
 	query := `
 		UPDATE expenses
-		SET category_id = $2, product_id = $3, quantity = $4, amount = $5, description = $6, expense_date = $7,
-		    vendor = $8, reference_number = $9, notes = $10, updated_at = $11
+		SET category_id = $2, product_id = $3, quantity = $4, applies_inventory = $5, amount = $6, description = $7, expense_date = $8,
+		    vendor = $9, reference_number = $10, notes = $11, updated_at = $12
 		WHERE id = $1
 	`
 
 	result, err := tx.Exec(ctx, query,
-		expense.ID, expense.CategoryID, expense.ProductID, expense.Quantity, expense.Amount, expense.Description,
+		expense.ID, expense.CategoryID, expense.ProductID, expense.Quantity, expense.AppliesInventory, expense.Amount, expense.Description,
 		expense.ExpenseDate, expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.UpdatedAt,
 	)
 	if err != nil {

@@ -11,6 +11,22 @@ import (
 	"dashpoint/backend/internal/models"
 )
 
+func (h *ExpenseHandler) isInventoryPurchaseCategory(ctx context.Context, categoryID *uuid.UUID) (bool, error) {
+	if categoryID == nil {
+		return false, nil
+	}
+
+	category, err := h.repo.GetCategoryByID(ctx, *categoryID)
+	if err != nil {
+		return false, fmt.Errorf("Failed to load expense category")
+	}
+	if category == nil {
+		return false, fmt.Errorf("Invalid category ID")
+	}
+
+	return isInventoryPurchaseExpenseCategory(category), nil
+}
+
 func (h *ExpenseHandler) createExpenseModel(ctx context.Context, req CreateExpenseRequest, userID uuid.UUID) (*models.Expense, error) {
 	amount, err := parseRequiredAmount(req.Amount)
 	if err != nil {
@@ -34,22 +50,39 @@ func (h *ExpenseHandler) createExpenseModel(ctx context.Context, req CreateExpen
 		return nil, err
 	}
 
+	isInventoryPurchase, err := h.isInventoryPurchaseCategory(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	if isInventoryPurchase {
+		if productID == nil {
+			return nil, fmt.Errorf("Product is required for Inventory Purchase")
+		}
+		if quantity == nil {
+			return nil, fmt.Errorf("Quantity is required for Inventory Purchase")
+		}
+	} else {
+		productID = nil
+		quantity = nil
+	}
+
 	return &models.Expense{
-		CategoryID:      categoryID,
-		ProductID:       productID,
-		Quantity:        quantity,
-		Amount:          amount,
-		Description:     req.Description,
-		ExpenseDate:     expenseDate,
-		Vendor:          req.Vendor,
-		ReferenceNumber: req.ReferenceNumber,
-		Notes:           req.Notes,
-		CreatedBy:       userID,
+		CategoryID:       categoryID,
+		ProductID:        productID,
+		Quantity:         quantity,
+		AppliesInventory: isInventoryPurchase && req.AppliesInventory,
+		Amount:           amount,
+		Description:      req.Description,
+		ExpenseDate:      expenseDate,
+		Vendor:           req.Vendor,
+		ReferenceNumber:  req.ReferenceNumber,
+		Notes:            req.Notes,
+		CreatedBy:        userID,
 	}, nil
 }
 
 func (h *ExpenseHandler) createExpense(ctx context.Context, expense *models.Expense, userID uuid.UUID) (*models.Expense, error) {
-	if expense.ProductID == nil || expense.Quantity == nil {
+	if !expense.AppliesInventory || expense.ProductID == nil || expense.Quantity == nil {
 		return h.repo.Create(ctx, expense)
 	}
 
@@ -85,19 +118,20 @@ func (h *ExpenseHandler) createExpense(ctx context.Context, expense *models.Expe
 	return created, nil
 }
 
-func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, expenseID uuid.UUID, userID uuid.UUID, existing *models.Expense, finalProductID *uuid.UUID, finalQuantity *decimal.Decimal) error {
+func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, expenseID uuid.UUID, userID uuid.UUID, existing *models.Expense, finalAppliesInventory bool, finalProductID *uuid.UUID, finalQuantity *decimal.Decimal) error {
+	oldAppliesInventory := existing.AppliesInventory && existing.ProductID != nil && existing.Quantity != nil
+	newAppliesInventory := finalAppliesInventory && finalProductID != nil && finalQuantity != nil
+
 	inventoryChanged := false
 	switch {
-	case existing.ProductID != nil && finalProductID == nil:
+	case oldAppliesInventory && !newAppliesInventory:
 		inventoryChanged = true
-	case existing.ProductID == nil && finalProductID != nil:
+	case !oldAppliesInventory && newAppliesInventory:
 		inventoryChanged = true
-	case existing.ProductID != nil && finalProductID != nil && *existing.ProductID != *finalProductID:
+	case oldAppliesInventory && newAppliesInventory && *existing.ProductID != *finalProductID:
 		inventoryChanged = true
-	case finalProductID != nil:
+	case oldAppliesInventory && newAppliesInventory:
 		if existing.Quantity != nil && finalQuantity != nil && !existing.Quantity.Equal(*finalQuantity) {
-			inventoryChanged = true
-		} else if (existing.Quantity == nil) != (finalQuantity == nil) {
 			inventoryChanged = true
 		}
 	}
@@ -106,7 +140,7 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 		return nil
 	}
 
-	isSameProduct := existing.ProductID != nil && finalProductID != nil && *existing.ProductID == *finalProductID
+	isSameProduct := oldAppliesInventory && newAppliesInventory && *existing.ProductID == *finalProductID
 	if isSameProduct {
 		oldQuantity := decimal.Zero
 		if existing.Quantity != nil {
@@ -137,7 +171,7 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 		return nil
 	}
 
-	if existing.ProductID != nil && existing.Quantity != nil {
+	if oldAppliesInventory {
 		_, err := h.inventoryRepo.AdjustStockWithTx(
 			ctx,
 			tx,
@@ -154,7 +188,7 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 		}
 	}
 
-	if finalProductID != nil && finalQuantity != nil {
+	if newAppliesInventory {
 		_, err := h.inventoryRepo.AdjustStockWithTx(
 			ctx,
 			tx,

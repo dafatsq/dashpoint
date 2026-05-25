@@ -30,11 +30,11 @@ export function CategoriesControls({
       <Tabs value={activeTab} onValueChange={(value) => onActiveTabChange(value as CategoryType)} className="w-full xl:w-auto">
         <TabsList className="grid grid-cols-2 w-full xl:min-w-[400px]">
           <TabsTrigger value="product" className="flex items-center gap-2">
-            <Boxes className="h-4 w-4" />
+            <Boxes className="h-4 w-4 shrink-0" />
             Product Categories
           </TabsTrigger>
           <TabsTrigger value="expense" className="flex items-center gap-2">
-            <Wallet className="h-4 w-4" />
+            <Wallet className="h-4 w-4 shrink-0" />
             Expense Categories
           </TabsTrigger>
         </TabsList>

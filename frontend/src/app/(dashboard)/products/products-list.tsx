@@ -1,4 +1,4 @@
-import { ImageIcon, Loader2, Package, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, ImageIcon, Loader2, Package, Pencil, RotateCcw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -153,11 +153,11 @@ export function ProductsList({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                className="h-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-500 dark:hover:bg-amber-950/20"
                                 onClick={() => onArchive(product)}
                               >
-                                <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                Delete
+                                <Archive className="mr-1 h-3.5 w-3.5" />
+                                Archive
                               </Button>
                             )}
                           </>
@@ -285,8 +285,13 @@ export function ProductsList({
                                   </Button>
                                 )}
                                 {canDelete && (
-                                  <Button variant="ghost" size="icon" onClick={() => onArchive(product)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => onArchive(product)}
+                                    title="Archive product"
+                                  >
+                                    <Archive className="h-4 w-4 text-amber-600 hover:text-amber-700 dark:text-amber-500" />
                                   </Button>
                                 )}
                               </>
