@@ -14,10 +14,10 @@ import (
 // GetByID retrieves a product by ID with optional inventory
 func (r *ProductRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error) {
 	query := `
-		SELECT p.id, p.sku, p.barcode, p.name, p.description, p.category_id, p.price, p.cost, p.tax_rate, p.unit, 
-		       p.is_active, p.track_inventory, p.allow_negative_stock, p.image_url, p.created_at, p.updated_at,
+		SELECT p.id, p.sku, p.barcode, p.name, p.description, p.category_id, p.price, p.cost, p.tax_rate, 
+		       p.is_active, p.image_url, p.created_at, p.updated_at,
 		       c.id, c.name, c.description,
-		       i.quantity, i.reserved_quantity, i.low_stock_threshold
+		       i.quantity, i.low_stock_threshold
 		FROM products p
 		LEFT JOIN categories c ON p.category_id = c.id
 		LEFT JOIN inventory_items i ON p.id = i.product_id
@@ -26,14 +26,14 @@ func (r *ProductRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 
 	product := &models.Product{}
 	var catID, catName, catDesc *string
-	var invQty, invReserved, invThreshold *decimal.Decimal
+	var invQty, invThreshold *decimal.Decimal
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&product.ID, &product.SKU, &product.Barcode, &product.Name, &product.Description,
-		&product.CategoryID, &product.Price, &product.Cost, &product.TaxRate, &product.Unit,
-		&product.IsActive, &product.TrackInventory, &product.AllowNegativeStock, &product.ImageURL,
+		&product.CategoryID, &product.Price, &product.Cost, &product.TaxRate,
+		&product.IsActive, &product.ImageURL,
 		&product.CreatedAt, &product.UpdatedAt,
-		&catID, &catName, &catDesc, &invQty, &invReserved, &invThreshold,
+		&catID, &catName, &catDesc, &invQty, &invThreshold,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -42,7 +42,7 @@ func (r *ProductRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 		return nil, fmt.Errorf("failed to get product: %w", err)
 	}
 
-	hydrateProductRelations(product, catID, catName, catDesc, invQty, invReserved, invThreshold)
+	hydrateProductRelations(product, catID, catName, catDesc, invQty, invThreshold)
 	return product, nil
 }
 
@@ -130,10 +130,10 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter) ([]*
 	}
 
 	query := `
-		SELECT p.id, p.sku, p.barcode, p.name, p.description, p.category_id, p.price, p.cost, p.tax_rate, p.unit,
-		       p.is_active, p.track_inventory, p.allow_negative_stock, p.image_url, p.created_at, p.updated_at,
+		SELECT p.id, p.sku, p.barcode, p.name, p.description, p.category_id, p.price, p.cost, p.tax_rate,
+		       p.is_active, p.image_url, p.created_at, p.updated_at,
 		       c.id, c.name,
-		       i.quantity, i.reserved_quantity, i.low_stock_threshold
+		       i.quantity, i.low_stock_threshold
 		FROM products p
 		LEFT JOIN categories c ON p.category_id = c.id
 		LEFT JOIN inventory_items i ON p.id = i.product_id
@@ -153,16 +153,16 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter) ([]*
 	for rows.Next() {
 		product := &models.Product{}
 		var catID, catName *string
-		var invQty, invReserved, invThreshold *decimal.Decimal
+		var invQty, invThreshold *decimal.Decimal
 		if err := rows.Scan(
 			&product.ID, &product.SKU, &product.Barcode, &product.Name, &product.Description,
-			&product.CategoryID, &product.Price, &product.Cost, &product.TaxRate, &product.Unit,
-			&product.IsActive, &product.TrackInventory, &product.AllowNegativeStock, &product.ImageURL,
-			&product.CreatedAt, &product.UpdatedAt, &catID, &catName, &invQty, &invReserved, &invThreshold,
+			&product.CategoryID, &product.Price, &product.Cost, &product.TaxRate,
+			&product.IsActive, &product.ImageURL,
+			&product.CreatedAt, &product.UpdatedAt, &catID, &catName, &invQty, &invThreshold,
 		); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan product: %w", err)
 		}
-		hydrateProductRelations(product, catID, catName, nil, invQty, invReserved, invThreshold)
+		hydrateProductRelations(product, catID, catName, nil, invQty, invThreshold)
 		products = append(products, product)
 	}
 

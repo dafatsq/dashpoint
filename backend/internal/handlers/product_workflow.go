@@ -28,9 +28,6 @@ func (h *ProductHandler) reactivateProduct(c *fiber.Ctx, existingProduct *models
 		}
 		existingProduct.TaxRate = taxRate
 	}
-	if req.Unit != nil {
-		existingProduct.Unit = *req.Unit
-	}
 	categoryID, err := parseOptionalUUIDField(req.CategoryID, "category_id")
 	if err != nil {
 		return nil, productJSONError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", err.Error())

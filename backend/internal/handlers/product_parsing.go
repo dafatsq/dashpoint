@@ -92,10 +92,7 @@ func parseCreateProductInput(req CreateProductRequest) (*productCreateInput, err
 		Price:              price,
 		Cost:               decimal.Zero,
 		TaxRate:            decimal.Zero,
-		Unit:               "pcs",
 		IsActive:           true,
-		TrackInventory:     true,
-		AllowNegativeStock: false,
 		ImageURL:           req.ImageURL,
 	}
 	if cost != nil {
@@ -103,15 +100,6 @@ func parseCreateProductInput(req CreateProductRequest) (*productCreateInput, err
 	}
 	if taxRate != nil {
 		product.TaxRate = *taxRate
-	}
-	if req.Unit != nil {
-		product.Unit = *req.Unit
-	}
-	if req.TrackInventory != nil {
-		product.TrackInventory = *req.TrackInventory
-	}
-	if req.AllowNegativeStock != nil {
-		product.AllowNegativeStock = *req.AllowNegativeStock
 	}
 
 	return &productCreateInput{
@@ -160,17 +148,8 @@ func applyUpdateProductRequest(product *models.Product, req UpdateProductRequest
 		}
 		product.TaxRate = taxRate
 	}
-	if req.Unit != nil {
-		product.Unit = *req.Unit
-	}
 	if req.IsActive != nil {
 		product.IsActive = *req.IsActive
-	}
-	if req.TrackInventory != nil {
-		product.TrackInventory = *req.TrackInventory
-	}
-	if req.AllowNegativeStock != nil {
-		product.AllowNegativeStock = *req.AllowNegativeStock
 	}
 	return nil
 }

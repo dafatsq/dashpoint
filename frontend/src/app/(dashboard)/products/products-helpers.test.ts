@@ -28,8 +28,6 @@ function buildProduct(overrides: Partial<Product> = {}): Product {
     category_id: "category-1",
     category_name: "Dairy",
     is_active: true,
-    track_inventory: true,
-    allow_negative_stock: false,
     image_url: "/uploads/milk.jpg",
     inventory: {
       quantity: "12",

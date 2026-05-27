@@ -63,24 +63,11 @@ func (r *InventoryRepository) AdjustStockWithTx(
 
 	newQty := currentQty.Add(quantityChange)
 	if newQty.LessThan(decimal.Zero) {
-		var allowNegative bool
-		err = tx.QueryRow(ctx, `SELECT allow_negative_stock FROM products WHERE id = $1`, productID).Scan(&allowNegative)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check product settings: %w", err)
-		}
-		if !allowNegative {
-			return nil, fmt.Errorf("insufficient stock: available %s, requested %s", currentQty.String(), quantityChange.Abs().String())
-		}
+		return nil, fmt.Errorf("insufficient stock: available %s, requested %s", currentQty.String(), quantityChange.Abs().String())
 	}
 
 	if _, err := tx.Exec(ctx, `UPDATE inventory_items SET quantity = $1, updated_at = $2 WHERE product_id = $3`, newQty, now, productID); err != nil {
 		return nil, fmt.Errorf("failed to update inventory: %w", err)
-	}
-
-	if quantityChange.GreaterThan(decimal.Zero) && (adjustmentType == models.AdjustmentPurchase || adjustmentType == models.AdjustmentReturn) {
-		if _, err := tx.Exec(ctx, `UPDATE inventory_items SET last_restocked_at = $1 WHERE product_id = $2`, now, productID); err != nil {
-			return nil, fmt.Errorf("failed to update last_restocked_at: %w", err)
-		}
 	}
 
 	adjustment := &models.StockAdjustment{
@@ -121,13 +108,13 @@ func (r *InventoryRepository) SetQuantity(ctx context.Context, productID uuid.UU
 	return r.AdjustStock(ctx, productID, models.AdjustmentCount, quantityChange, reason, nil, nil, adjustedBy)
 }
 
-// UpdateThresholds updates the low stock and reorder thresholds
-func (r *InventoryRepository) UpdateThresholds(ctx context.Context, productID uuid.UUID, lowStockThreshold, reorderQuantity decimal.Decimal) error {
+// UpdateThresholds updates the low stock threshold.
+func (r *InventoryRepository) UpdateThresholds(ctx context.Context, productID uuid.UUID, lowStockThreshold decimal.Decimal) error {
 	result, err := r.pool.Exec(ctx, `
 		UPDATE inventory_items 
-		SET low_stock_threshold = $1, reorder_quantity = $2, updated_at = $3
-		WHERE product_id = $4
-	`, lowStockThreshold, reorderQuantity, time.Now(), productID)
+		SET low_stock_threshold = $1, updated_at = $2
+		WHERE product_id = $3
+	`, lowStockThreshold, time.Now(), productID)
 	if err != nil {
 		return fmt.Errorf("failed to update thresholds: %w", err)
 	}
@@ -135,10 +122,4 @@ func (r *InventoryRepository) UpdateThresholds(ctx context.Context, productID uu
 		return fmt.Errorf("inventory not found")
 	}
 	return nil
-}
-
-// RecordLastCounted updates the last counted timestamp
-func (r *InventoryRepository) RecordLastCounted(ctx context.Context, productID uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `UPDATE inventory_items SET last_counted_at = $1, updated_at = $1 WHERE product_id = $2`, time.Now(), productID)
-	return err
 }

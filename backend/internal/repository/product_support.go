@@ -31,7 +31,7 @@ type ProductFilter struct {
 	Offset     int
 }
 
-func hydrateProductRelations(product *models.Product, catID, catName, catDesc *string, invQty, invReserved, invThreshold *decimal.Decimal) {
+func hydrateProductRelations(product *models.Product, catID, catName, catDesc *string, invQty, invThreshold *decimal.Decimal) {
 	if catID != nil && catName != nil {
 		catUUID, _ := uuid.Parse(*catID)
 		product.Category = &models.Category{
@@ -45,11 +45,7 @@ func hydrateProductRelations(product *models.Product, catID, catName, catDesc *s
 		product.Inventory = &models.InventoryItem{
 			ProductID:         product.ID,
 			Quantity:          *invQty,
-			ReservedQuantity:  decimal.Zero,
 			LowStockThreshold: decimal.Zero,
-		}
-		if invReserved != nil {
-			product.Inventory.ReservedQuantity = *invReserved
 		}
 		if invThreshold != nil {
 			product.Inventory.LowStockThreshold = *invThreshold

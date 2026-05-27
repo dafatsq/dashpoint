@@ -14,15 +14,13 @@ import (
 // GetByProductID retrieves inventory for a product
 func (r *InventoryRepository) GetByProductID(ctx context.Context, productID uuid.UUID) (*models.InventoryItem, error) {
 	query := `
-		SELECT product_id, quantity, reserved_quantity, low_stock_threshold, reorder_quantity,
-		       last_counted_at, last_restocked_at, created_at, updated_at
+		SELECT product_id, quantity, low_stock_threshold, updated_at
 		FROM inventory_items
 		WHERE product_id = $1
 	`
 	item := &models.InventoryItem{}
 	err := r.pool.QueryRow(ctx, query, productID).Scan(
-		&item.ProductID, &item.Quantity, &item.ReservedQuantity, &item.LowStockThreshold,
-		&item.ReorderQuantity, &item.LastCountedAt, &item.LastRestockedAt, &item.CreatedAt, &item.UpdatedAt,
+		&item.ProductID, &item.Quantity, &item.LowStockThreshold, &item.UpdatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -36,12 +34,11 @@ func (r *InventoryRepository) GetByProductID(ctx context.Context, productID uuid
 // GetLowStockProducts retrieves products that are at or below their low stock threshold
 func (r *InventoryRepository) GetLowStockProducts(ctx context.Context) ([]*models.ProductWithInventory, error) {
 	query := `
-		SELECT p.id, p.sku, p.barcode, p.name, p.category_id, p.price, p.unit, p.is_active,
-		       i.quantity, i.reserved_quantity, i.low_stock_threshold
+		SELECT p.id, p.sku, p.barcode, p.name, p.category_id, p.price, p.is_active,
+		       i.quantity, i.low_stock_threshold
 		FROM products p
 		JOIN inventory_items i ON p.id = i.product_id
 		WHERE p.is_active = true 
-		  AND p.track_inventory = true
 		  AND i.quantity <= i.low_stock_threshold
 		ORDER BY (i.quantity - i.low_stock_threshold) ASC
 	`
@@ -54,14 +51,14 @@ func (r *InventoryRepository) GetLowStockProducts(ctx context.Context) ([]*model
 	var products []*models.ProductWithInventory
 	for rows.Next() {
 		p := &models.Product{}
-		var qty, reserved, threshold decimal.Decimal
-		if err := rows.Scan(&p.ID, &p.SKU, &p.Barcode, &p.Name, &p.CategoryID, &p.Price, &p.Unit, &p.IsActive, &qty, &reserved, &threshold); err != nil {
+		var qty, threshold decimal.Decimal
+		if err := rows.Scan(&p.ID, &p.SKU, &p.Barcode, &p.Name, &p.CategoryID, &p.Price, &p.IsActive, &qty, &threshold); err != nil {
 			return nil, fmt.Errorf("failed to scan product: %w", err)
 		}
 		products = append(products, &models.ProductWithInventory{
 			Product:           p,
 			Quantity:          qty,
-			AvailableQuantity: qty.Sub(reserved),
+			AvailableQuantity: qty,
 			IsLowStock:        true,
 		})
 	}

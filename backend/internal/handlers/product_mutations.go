@@ -4,7 +4,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/shopspring/decimal"
 
 	"dashpoint/backend/internal/models"
 )
@@ -77,8 +76,8 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 		return productInternalError(c, err, "Failed to create product", "Failed to create product")
 	}
 
-	if input.lowStockThreshold != nil && input.product.TrackInventory {
-		if err := h.inventoryRepo.UpdateThresholds(c.Context(), input.product.ID, *input.lowStockThreshold, decimal.Zero); err != nil {
+	if input.lowStockThreshold != nil {
+		if err := h.inventoryRepo.UpdateThresholds(c.Context(), input.product.ID, *input.lowStockThreshold); err != nil {
 			log.Warn().Err(err).Str("product_id", input.product.ID.String()).Msg("Failed to update inventory thresholds after product creation")
 		}
 	}

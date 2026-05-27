@@ -30,7 +30,7 @@ type inventoryStore interface {
 	GetByProductID(context.Context, uuid.UUID) (*models.InventoryItem, error)
 	AdjustStock(context.Context, uuid.UUID, models.AdjustmentType, decimal.Decimal, *string, *string, *uuid.UUID, uuid.UUID) (*models.StockAdjustment, error)
 	SetQuantity(context.Context, uuid.UUID, decimal.Decimal, *string, uuid.UUID) (*models.StockAdjustment, error)
-	UpdateThresholds(context.Context, uuid.UUID, decimal.Decimal, decimal.Decimal) error
+	UpdateThresholds(context.Context, uuid.UUID, decimal.Decimal) error
 	GetLowStockProducts(context.Context) ([]*models.ProductWithInventory, error)
 	GetAdjustmentHistory(context.Context, uuid.UUID, int, int) ([]*models.StockAdjustment, int, error)
 }
@@ -74,10 +74,7 @@ type ProductResponse struct {
 	Price              string             `json:"price"`
 	Cost               string             `json:"cost"`
 	TaxRate            string             `json:"tax_rate"`
-	Unit               string             `json:"unit"`
 	IsActive           bool               `json:"is_active"`
-	TrackInventory     bool               `json:"track_inventory"`
-	AllowNegativeStock bool               `json:"allow_negative_stock"`
 	ImageURL           *string            `json:"image_url,omitempty"`
 	Inventory          *InventoryResponse `json:"inventory,omitempty"`
 	CreatedAt          string             `json:"created_at"`
@@ -100,9 +97,6 @@ type CreateProductRequest struct {
 	Price              string  `json:"price"`
 	Cost               *string `json:"cost"`
 	TaxRate            *string `json:"tax_rate"`
-	Unit               *string `json:"unit"`
-	TrackInventory     *bool   `json:"track_inventory"`
-	AllowNegativeStock *bool   `json:"allow_negative_stock"`
 	InitialQuantity    *string `json:"initial_quantity"`
 	LowStockThreshold  *string `json:"low_stock_threshold"`
 	ImageURL           *string `json:"image_url"`
@@ -117,10 +111,7 @@ type UpdateProductRequest struct {
 	Price              *string `json:"price"`
 	Cost               *string `json:"cost"`
 	TaxRate            *string `json:"tax_rate"`
-	Unit               *string `json:"unit"`
 	IsActive           *bool   `json:"is_active"`
-	TrackInventory     *bool   `json:"track_inventory"`
-	AllowNegativeStock *bool   `json:"allow_negative_stock"`
 	ImageURL           *string `json:"image_url"`
 }
 

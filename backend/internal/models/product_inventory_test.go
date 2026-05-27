@@ -24,12 +24,11 @@ func TestProductCalculateTaxAndTotal(t *testing.T) {
 func TestInventoryItemAvailableQuantityAndLowStock(t *testing.T) {
 	item := &InventoryItem{
 		Quantity:          decimal.RequireFromString("10"),
-		ReservedQuantity:  decimal.RequireFromString("3"),
 		LowStockThreshold: decimal.RequireFromString("10"),
 	}
 
-	if got := item.AvailableQuantity(); !got.Equal(decimal.RequireFromString("7")) {
-		t.Fatalf("expected available quantity 7, got %s", got)
+	if got := item.AvailableQuantity(); !got.Equal(decimal.RequireFromString("10")) {
+		t.Fatalf("expected available quantity 10, got %s", got)
 	}
 	if !item.IsLowStock() {
 		t.Fatal("expected item to be low stock at threshold")
