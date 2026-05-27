@@ -24,14 +24,6 @@ func invalidCategoryIDError() *categoryAPIError {
 	}
 }
 
-func invalidParentIDError() *categoryAPIError {
-	return &categoryAPIError{
-		Status:  fiber.StatusBadRequest,
-		Code:    "INVALID_PARENT_ID",
-		Message: "Invalid parent category ID format",
-	}
-}
-
 func respondCategoryError(c *fiber.Ctx, err *categoryAPIError) error {
 	return c.Status(err.Status).JSON(fiber.Map{
 		"error": fiber.Map{
@@ -58,35 +50,15 @@ func parseCategoryIDParam(c *fiber.Ctx) (uuid.UUID, *categoryAPIError) {
 	return id, nil
 }
 
-func parseOptionalParentID(raw *string) (*uuid.UUID, *categoryAPIError) {
-	if raw == nil {
-		return nil, nil
-	}
-	if strings.TrimSpace(*raw) == "" {
-		return nil, nil
-	}
-
-	parsed, err := uuid.Parse(*raw)
-	if err != nil {
-		return nil, invalidParentIDError()
-	}
-	return &parsed, nil
-}
-
 func categoryResponse(category *models.Category, productCount *int) CategoryResponse {
 	response := CategoryResponse{
 		ID:           category.ID.String(),
 		Name:         category.Name,
 		Description:  category.Description,
-		SortOrder:    category.SortOrder,
 		ProductCount: productCount,
 		IsActive:     category.IsActive,
 		CreatedAt:    category.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:    category.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-	}
-	if category.ParentID != nil {
-		parentID := category.ParentID.String()
-		response.ParentID = &parentID
 	}
 	return response
 }

@@ -17,7 +17,7 @@ type categoryHandlerStore interface {
 	PermanentDelete(context.Context, uuid.UUID) error
 	GetProductCount(context.Context, uuid.UUID) (int, error)
 	GetProductCounts(context.Context, []uuid.UUID) (map[uuid.UUID]int, error)
-	DuplicateSiblingExists(context.Context, string, *uuid.UUID, *uuid.UUID) (bool, error)
+	DuplicateSiblingExists(context.Context, string, *uuid.UUID) (bool, error)
 }
 
 type CategoryHandler struct {
@@ -32,8 +32,6 @@ type CategoryResponse struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
 	Description  *string `json:"description,omitempty"`
-	ParentID     *string `json:"parent_id,omitempty"`
-	SortOrder    int     `json:"sort_order"`
 	ProductCount *int    `json:"product_count,omitempty"`
 	IsActive     bool    `json:"is_active"`
 	CreatedAt    string  `json:"created_at"`
@@ -43,14 +41,10 @@ type CategoryResponse struct {
 type CreateCategoryRequest struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description,omitempty"`
-	ParentID    *string `json:"parent_id,omitempty"`
-	SortOrder   *int    `json:"sort_order,omitempty"`
 }
 
 type UpdateCategoryRequest struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
-	ParentID    *string `json:"parent_id,omitempty"`
-	SortOrder   *int    `json:"sort_order,omitempty"`
 	IsActive    *bool   `json:"is_active,omitempty"`
 }

@@ -10,7 +10,7 @@ import (
 )
 
 const categorySelectColumns = `
-	SELECT id, name, description, parent_id, sort_order, is_active, created_at, updated_at
+	SELECT id, name, description, is_active, created_at, updated_at
 	FROM categories
 `
 
@@ -37,7 +37,7 @@ func (r *CategoryRepository) List(ctx context.Context, status string) ([]*models
 	case "archived":
 		query += ` WHERE is_active = false`
 	}
-	query += ` ORDER BY sort_order ASC, name ASC`
+	query += ` ORDER BY name ASC`
 
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
@@ -111,17 +111,10 @@ func (r *CategoryRepository) GetProductCounts(ctx context.Context, ids []uuid.UU
 	return counts, nil
 }
 
-// DuplicateSiblingExists checks if a category with the same name already exists under the same parent (case-insensitive)
-func (r *CategoryRepository) DuplicateSiblingExists(ctx context.Context, name string, parentID *uuid.UUID, excludeID *uuid.UUID) (bool, error) {
+// DuplicateSiblingExists checks if an active category with the same name already exists (case-insensitive).
+func (r *CategoryRepository) DuplicateSiblingExists(ctx context.Context, name string, excludeID *uuid.UUID) (bool, error) {
 	query := `SELECT COUNT(*) FROM categories WHERE name ILIKE $1 AND is_active = true`
 	args := []interface{}{name}
-
-	if parentID != nil {
-		query += ` AND parent_id = $2`
-		args = append(args, *parentID)
-	} else {
-		query += ` AND parent_id IS NULL`
-	}
 
 	if excludeID != nil {
 		query += fmt.Sprintf(` AND id != $%d`, len(args)+1)
