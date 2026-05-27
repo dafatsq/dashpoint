@@ -58,7 +58,7 @@ func (f *fakeManagedCategoryStore) Delete(ctx context.Context, id uuid.UUID) err
 	return nil
 }
 
-func (f *fakeManagedCategoryStore) DuplicateSiblingExists(context.Context, string, *uuid.UUID, *uuid.UUID) (bool, error) {
+func (f *fakeManagedCategoryStore) DuplicateSiblingExists(context.Context, string, *uuid.UUID) (bool, error) {
 	return false, nil
 }
 
@@ -124,43 +124,6 @@ func TestCategoryHandlerListUsesBatchedProductCounts(t *testing.T) {
 	}
 }
 
-func TestCategoryHandlerCreateRejectsInvalidParentID(t *testing.T) {
-	handler := NewCategoryHandler(&fakeManagedCategoryStore{})
-	app := fiber.New()
-	app.Post("/categories", handler.Create)
-
-	req := httptest.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{"name":"Coffee","parent_id":"bad-id"}`))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
-	}
-	if resp.StatusCode != fiber.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", resp.StatusCode)
-	}
-}
-
-func TestCategoryHandlerUpdateRejectsInvalidParentID(t *testing.T) {
-	categoryID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
-	repo := &fakeManagedCategoryStore{
-		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
-			return &models.Category{ID: categoryID, Name: "Coffee", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
-		},
-	}
-	handler := NewCategoryHandler(repo)
-	app := fiber.New()
-	app.Patch("/categories/:id", handler.Update)
-
-	req := httptest.NewRequest(http.MethodPatch, "/categories/"+categoryID.String(), strings.NewReader(`{"parent_id":"bad-id"}`))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
-	}
-	if resp.StatusCode != fiber.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", resp.StatusCode)
-	}
-}
 
 func TestCategoryHandlerGetRejectsInvalidID(t *testing.T) {
 	handler := NewCategoryHandler(&fakeManagedCategoryStore{})

@@ -32,8 +32,6 @@ func categoryAuditValues(category *models.Category) map[string]interface{} {
 	return map[string]interface{}{
 		"name":        category.Name,
 		"description": category.Description,
-		"parent_id":   category.ParentID,
-		"sort_order":  category.SortOrder,
 		"is_active":   category.IsActive,
 	}
 }
@@ -48,12 +46,7 @@ func (h *CategoryHandler) Create(c *fiber.Ctx) error {
 		return respondCategoryError(c, apiErr)
 	}
 
-	parentID, apiErr := parseOptionalParentID(req.ParentID)
-	if apiErr != nil {
-		return respondCategoryError(c, apiErr)
-	}
-
-	exists, checkErr := h.categoryRepo.DuplicateSiblingExists(c.UserContext(), req.Name, parentID, nil)
+	exists, checkErr := h.categoryRepo.DuplicateSiblingExists(c.UserContext(), req.Name, nil)
 	if checkErr != nil {
 		return respondCategoryInternalError(c, "Failed to check for duplicate category")
 	}
@@ -64,11 +57,7 @@ func (h *CategoryHandler) Create(c *fiber.Ctx) error {
 	category := &models.Category{
 		Name:        req.Name,
 		Description: req.Description,
-		ParentID:    parentID,
 		IsActive:    true,
-	}
-	if req.SortOrder != nil {
-		category.SortOrder = *req.SortOrder
 	}
 
 	if err := h.categoryRepo.Create(c.UserContext(), category); err != nil {
@@ -113,22 +102,12 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 	if req.Description != nil {
 		category.Description = req.Description
 	}
-	if req.ParentID != nil {
-		parentID, parentErr := parseOptionalParentID(req.ParentID)
-		if parentErr != nil {
-			return respondCategoryError(c, parentErr)
-		}
-		category.ParentID = parentID
-	}
-	if req.SortOrder != nil {
-		category.SortOrder = *req.SortOrder
-	}
 	if req.IsActive != nil {
 		category.IsActive = *req.IsActive
 	}
 
-	if req.Name != nil || req.ParentID != nil {
-		exists, checkErr := h.categoryRepo.DuplicateSiblingExists(c.UserContext(), category.Name, category.ParentID, &category.ID)
+	if req.Name != nil {
+		exists, checkErr := h.categoryRepo.DuplicateSiblingExists(c.UserContext(), category.Name, &category.ID)
 		if checkErr != nil {
 			return respondCategoryInternalError(c, "Failed to check for duplicate category")
 		}

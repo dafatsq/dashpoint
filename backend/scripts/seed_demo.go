@@ -54,15 +54,10 @@ type productSeed struct {
 	Price          float64
 	Cost           float64
 	TaxRate        float64
-	Unit           string
 	IsActive       bool
-	TrackInventory bool
-	AllowNegative  bool
 	ImageURL       string
 	Quantity       float64
-	Reserved       float64
 	Threshold      float64
-	Reorder        float64
 	CreatedAt      time.Time
 }
 
@@ -324,7 +319,7 @@ func loadRoles(ctx context.Context, tx pgx.Tx) (map[string]role, error) {
 }
 
 func loadCategories(ctx context.Context, tx pgx.Tx) ([]category, error) {
-	rows, err := tx.Query(ctx, `SELECT id, name FROM categories WHERE is_active = true ORDER BY sort_order, name`)
+	rows, err := tx.Query(ctx, `SELECT id, name FROM categories WHERE is_active = true ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +500,6 @@ func buildProducts(categories []category) []productSeed {
 			qty += 12
 		}
 		threshold := float64(4 + (i % 5))
-		reserved := float64(i % 4)
 		product := productSeed{
 			ID:             seedUUID("product", i+1),
 			SKU:            fmt.Sprintf("SEED-SKU-%03d", i+1),
@@ -516,15 +510,10 @@ func buildProducts(categories []category) []productSeed {
 			Price:          price,
 			Cost:           cost,
 			TaxRate:        []float64{0, 5, 10}[i%3],
-			Unit:           "pcs",
 			IsActive:       i%13 != 0,
-			TrackInventory: true,
-			AllowNegative:  false,
 			ImageURL:       "",
 			Quantity:       qty,
-			Reserved:       reserved,
 			Threshold:      threshold,
-			Reorder:        threshold * 3,
 			CreatedAt:      now.Add(-time.Duration((i+1)*6) * time.Hour),
 		}
 		products = append(products, product)
@@ -553,10 +542,10 @@ func insertProducts(ctx context.Context, tx pgx.Tx, products []productSeed) erro
 	for _, product := range products {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO products (
-				id, sku, barcode, name, description, category_id, price, cost, tax_rate, unit,
-				is_active, track_inventory, allow_negative_stock, image_url, created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,''),$15,$16)
-		`, product.ID, product.SKU, product.Barcode, product.Name, product.Description, product.CategoryID, money(product.Price), money(product.Cost), money(product.TaxRate), product.Unit, product.IsActive, product.TrackInventory, product.AllowNegative, product.ImageURL, product.CreatedAt, product.CreatedAt); err != nil {
+				id, sku, barcode, name, description, category_id, price, cost, tax_rate,
+				is_active, image_url, created_at, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11,''),$12,$13)
+		`, product.ID, product.SKU, product.Barcode, product.Name, product.Description, product.CategoryID, money(product.Price), money(product.Cost), money(product.TaxRate), product.IsActive, product.ImageURL, product.CreatedAt, product.CreatedAt); err != nil {
 			return err
 		}
 	}
@@ -568,10 +557,9 @@ func insertInventory(ctx context.Context, tx pgx.Tx, products []productSeed) err
 	for _, product := range products {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO inventory_items (
-				product_id, quantity, reserved_quantity, low_stock_threshold, reorder_quantity,
-				last_counted_at, last_restocked_at, created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		`, product.ID, qty(product.Quantity), qty(product.Reserved), qty(product.Threshold), qty(product.Reorder), now.Add(-36*time.Hour), now.Add(-72*time.Hour), product.CreatedAt, now); err != nil {
+				product_id, quantity, low_stock_threshold, updated_at
+			) VALUES ($1,$2,$3,$4)
+		`, product.ID, qty(product.Quantity), qty(product.Threshold), now); err != nil {
 			return err
 		}
 	}

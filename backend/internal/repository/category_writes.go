@@ -11,8 +11,8 @@ import (
 
 func (r *CategoryRepository) Create(ctx context.Context, category *models.Category) error {
 	query := `
-		INSERT INTO categories (name, description, parent_id, sort_order, is_active)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO categories (name, description, is_active)
+		VALUES ($1, $2, $3)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -21,8 +21,6 @@ func (r *CategoryRepository) Create(ctx context.Context, category *models.Catego
 		query,
 		category.Name,
 		category.Description,
-		category.ParentID,
-		category.SortOrder,
 		category.IsActive,
 	).Scan(&category.ID, &category.CreatedAt, &category.UpdatedAt)
 }
@@ -30,7 +28,7 @@ func (r *CategoryRepository) Create(ctx context.Context, category *models.Catego
 func (r *CategoryRepository) Update(ctx context.Context, category *models.Category) error {
 	query := `
 		UPDATE categories
-		SET name = $2, description = $3, parent_id = $4, sort_order = $5, is_active = $6, updated_at = NOW()
+		SET name = $2, description = $3, is_active = $4, updated_at = NOW()
 		WHERE id = $1
 		RETURNING updated_at
 	`
@@ -41,8 +39,6 @@ func (r *CategoryRepository) Update(ctx context.Context, category *models.Catego
 		category.ID,
 		category.Name,
 		category.Description,
-		category.ParentID,
-		category.SortOrder,
 		category.IsActive,
 	).Scan(&category.UpdatedAt)
 	if err != nil {

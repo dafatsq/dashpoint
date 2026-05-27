@@ -32,8 +32,6 @@ func scanCategory(scanner interface {
 		&category.ID,
 		&category.Name,
 		&category.Description,
-		&category.ParentID,
-		&category.SortOrder,
 		&category.IsActive,
 		&category.CreatedAt,
 		&category.UpdatedAt,
