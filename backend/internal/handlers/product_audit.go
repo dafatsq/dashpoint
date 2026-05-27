@@ -14,10 +14,7 @@ func buildProductAuditValues(product *models.Product) map[string]interface{} {
 		"price":                product.Price.String(),
 		"cost":                 product.Cost.String(),
 		"tax_rate":             product.TaxRate.String(),
-		"unit":                 product.Unit,
 		"is_active":            product.IsActive,
-		"track_inventory":      product.TrackInventory,
-		"allow_negative_stock": product.AllowNegativeStock,
 	}
 	if product.SKU != nil {
 		values["sku"] = *product.SKU

@@ -90,10 +90,7 @@ func testProduct() *models.Product {
 		Price:              decimal.RequireFromString("10.00"),
 		Cost:               decimal.RequireFromString("5.00"),
 		TaxRate:            decimal.RequireFromString("11.00"),
-		Unit:               "pcs",
 		IsActive:           true,
-		TrackInventory:     true,
-		AllowNegativeStock: false,
 	}
 }
 
@@ -115,7 +112,7 @@ func TestCreateSucceedsWhenThresholdUpdateFails(t *testing.T) {
 		},
 	}
 	inventoryRepo := &fakeInventoryStore{
-		updateThresholdsFunc: func(context.Context, uuid.UUID, decimal.Decimal, decimal.Decimal) error {
+		updateThresholdsFunc: func(context.Context, uuid.UUID, decimal.Decimal) error {
 			return context.DeadlineExceeded
 		},
 	}
@@ -124,7 +121,7 @@ func TestCreateSucceedsWhenThresholdUpdateFails(t *testing.T) {
 	app := fiber.New()
 	app.Post("/products", handler.Create)
 
-	body := `{"name":"Milk","price":"12.50","track_inventory":true,"low_stock_threshold":"3"}`
+	body := `{"name":"Milk","price":"12.50","low_stock_threshold":"3"}`
 	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -285,7 +282,7 @@ type fakeInventoryStore struct {
 	getByProductIDFunc       func(context.Context, uuid.UUID) (*models.InventoryItem, error)
 	adjustStockFunc          func(context.Context, uuid.UUID, models.AdjustmentType, decimal.Decimal, *string, *string, *uuid.UUID, uuid.UUID) (*models.StockAdjustment, error)
 	setQuantityFunc          func(context.Context, uuid.UUID, decimal.Decimal, *string, uuid.UUID) (*models.StockAdjustment, error)
-	updateThresholdsFunc     func(context.Context, uuid.UUID, decimal.Decimal, decimal.Decimal) error
+	updateThresholdsFunc     func(context.Context, uuid.UUID, decimal.Decimal) error
 	getLowStockProductsFunc  func(context.Context) ([]*models.ProductWithInventory, error)
 	getAdjustmentHistoryFunc func(context.Context, uuid.UUID, int, int) ([]*models.StockAdjustment, int, error)
 }
@@ -308,9 +305,9 @@ func (f *fakeInventoryStore) SetQuantity(ctx context.Context, productID uuid.UUI
 	}
 	return nil, nil
 }
-func (f *fakeInventoryStore) UpdateThresholds(ctx context.Context, productID uuid.UUID, lowStockThreshold decimal.Decimal, reorderQuantity decimal.Decimal) error {
+func (f *fakeInventoryStore) UpdateThresholds(ctx context.Context, productID uuid.UUID, lowStockThreshold decimal.Decimal) error {
 	if f.updateThresholdsFunc != nil {
-		return f.updateThresholdsFunc(ctx, productID, lowStockThreshold, reorderQuantity)
+		return f.updateThresholdsFunc(ctx, productID, lowStockThreshold)
 	}
 	return nil
 }

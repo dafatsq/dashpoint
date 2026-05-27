@@ -25,30 +25,28 @@ func (r *ProductRepository) Create(ctx context.Context, product *models.Product,
 	product.UpdatedAt = now
 
 	query := `
-		INSERT INTO products (id, sku, barcode, name, description, category_id, price, cost, tax_rate, unit, is_active, track_inventory, allow_negative_stock, image_url, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		INSERT INTO products (id, sku, barcode, name, description, category_id, price, cost, tax_rate, is_active, image_url, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 	_, err = tx.Exec(ctx, query,
 		product.ID, product.SKU, product.Barcode, product.Name, product.Description, product.CategoryID,
-		product.Price, product.Cost, product.TaxRate, product.Unit, product.IsActive, product.TrackInventory,
-		product.AllowNegativeStock, product.ImageURL, product.CreatedAt, product.UpdatedAt,
+		product.Price, product.Cost, product.TaxRate, product.IsActive,
+		product.ImageURL, product.CreatedAt, product.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create product: %w", err)
 	}
 
-	if product.TrackInventory {
-		qty := decimal.Zero
-		if initialQuantity != nil {
-			qty = *initialQuantity
-		}
-		_, err = tx.Exec(ctx, `
-			INSERT INTO inventory_items (product_id, quantity, created_at, updated_at)
-			VALUES ($1, $2, $3, $3)
-		`, product.ID, qty, now)
-		if err != nil {
-			return fmt.Errorf("failed to create inventory record: %w", err)
-		}
+	qty := decimal.Zero
+	if initialQuantity != nil {
+		qty = *initialQuantity
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO inventory_items (product_id, quantity, low_stock_threshold, updated_at)
+		VALUES ($1, $2, $3, $4)
+	`, product.ID, qty, decimal.Zero, now)
+	if err != nil {
+		return fmt.Errorf("failed to create inventory record: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -63,14 +61,14 @@ func (r *ProductRepository) Update(ctx context.Context, product *models.Product)
 	query := `
 		UPDATE products 
 		SET sku = $1, barcode = $2, name = $3, description = $4, category_id = $5, 
-		    price = $6, cost = $7, tax_rate = $8, unit = $9, is_active = $10,
-		    track_inventory = $11, allow_negative_stock = $12, image_url = $13, updated_at = $14
-		WHERE id = $15
+		    price = $6, cost = $7, tax_rate = $8, is_active = $9,
+		    image_url = $10, updated_at = $11
+		WHERE id = $12
 	`
 	result, err := r.pool.Exec(ctx, query,
 		product.SKU, product.Barcode, product.Name, product.Description, product.CategoryID,
-		product.Price, product.Cost, product.TaxRate, product.Unit, product.IsActive,
-		product.TrackInventory, product.AllowNegativeStock, product.ImageURL, product.UpdatedAt, product.ID,
+		product.Price, product.Cost, product.TaxRate, product.IsActive,
+		product.ImageURL, product.UpdatedAt, product.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update product: %w", err)

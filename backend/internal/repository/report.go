@@ -110,7 +110,7 @@ func inclusiveEndDate(endDate time.Time) time.Time {
 }
 
 func inventoryWhereClause(categoryID *uuid.UUID) (string, []interface{}) {
-	whereClause := "WHERE p.is_active = true AND p.track_inventory = true"
+	whereClause := "WHERE p.is_active = true"
 	if categoryID == nil {
 		return whereClause, nil
 	}

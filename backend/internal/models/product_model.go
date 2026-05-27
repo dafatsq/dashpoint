@@ -18,10 +18,7 @@ type Product struct {
 	Price              decimal.Decimal `json:"price"`
 	Cost               decimal.Decimal `json:"cost"`
 	TaxRate            decimal.Decimal `json:"tax_rate"`
-	Unit               string          `json:"unit"`
 	IsActive           bool            `json:"is_active"`
-	TrackInventory     bool            `json:"track_inventory"`
-	AllowNegativeStock bool            `json:"allow_negative_stock"`
 	ImageURL           *string         `json:"image_url,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`

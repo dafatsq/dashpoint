@@ -191,13 +191,13 @@ export function ExpensesFormDialog({
                   <SelectTrigger>
                     <SelectValue placeholder="Select product" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Select a product</SelectItem>
-                    {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name} - {formatCurrency(parseFloat(product.cost || "0"))}/unit
-                      </SelectItem>
-                    ))}
+                    <SelectContent>
+                      <SelectItem value="none">Select a product</SelectItem>
+                      {products.map((product) => (
+                        <SelectItem key={product.id} value={product.id}>
+                        {product.name} - {formatCurrency(parseFloat(product.cost || "0"))}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </>

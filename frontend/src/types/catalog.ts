@@ -24,12 +24,9 @@ export interface Product {
   price: string;
   cost: string;
   tax_rate?: string;
-  unit?: string;
   category_id?: string;
   category_name?: string;
   is_active: boolean;
-  track_inventory?: boolean;
-  allow_negative_stock?: boolean;
   image_url?: string;
   inventory?: ProductInventory;
   created_at: string;
