@@ -40,16 +40,9 @@ type Payment struct {
 	AmountTendered *decimal.Decimal `json:"amount_tendered,omitempty"`
 	ChangeGiven    *decimal.Decimal `json:"change_given,omitempty"`
 
-	CardType     *string `json:"card_type,omitempty"`
-	CardLastFour *string `json:"card_last_four,omitempty"`
-	ReferenceNo  *string `json:"reference_no,omitempty"`
-	BankName     *string `json:"bank_name,omitempty"`
-	AccountNo    *string `json:"account_no,omitempty"`
-	VoucherCode  *string `json:"voucher_code,omitempty"`
+	ReferenceNo *string `json:"reference_no,omitempty"`
 
-	Status      PaymentRecordStatus `json:"status"`
-	Notes       *string             `json:"notes,omitempty"`
-	ProcessedBy *uuid.UUID          `json:"processed_by,omitempty"`
+	Status PaymentRecordStatus `json:"status"`
 
 	CreatedAt time.Time `json:"created_at"`
 }

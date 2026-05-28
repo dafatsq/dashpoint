@@ -68,7 +68,6 @@ func permanentDeleteTx(ctx context.Context, tx userCleanupTx, userID uuid.UUID) 
 		{name: "delete refresh tokens", query: `DELETE FROM refresh_tokens WHERE user_id = $1`},
 		{name: "nullify audit logs", query: `UPDATE audit_logs SET user_id = NULL WHERE user_id = $1`},
 		{name: "nullify stock adjustments", query: `UPDATE stock_adjustments SET adjusted_by = NULL WHERE adjusted_by = $1`},
-		{name: "nullify payments", query: `UPDATE payments SET processed_by = NULL WHERE processed_by = $1`},
 		{name: "nullify sales voids", query: `UPDATE sales SET voided_by = NULL WHERE voided_by = $1`},
 		{name: "delete shifts", query: `DELETE FROM shifts WHERE employee_id = $1`},
 	}

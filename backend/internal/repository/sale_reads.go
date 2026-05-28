@@ -237,8 +237,7 @@ func loadSalePayments(ctx context.Context, db interface {
 	rows, err := db.Query(ctx, `
 		SELECT
 			id, sale_id, payment_method, amount, amount_tendered, change_given,
-			card_type, card_last_four, reference_no, bank_name, account_no,
-			voucher_code, status, notes, processed_by, created_at
+			reference_no, status, created_at
 		FROM payments
 		WHERE sale_id = $1
 		ORDER BY created_at
@@ -253,9 +252,8 @@ func loadSalePayments(ctx context.Context, db interface {
 		var payment models.Payment
 		if err := rows.Scan(
 			&payment.ID, &payment.SaleID, &payment.PaymentMethod, &payment.Amount,
-			&payment.AmountTendered, &payment.ChangeGiven, &payment.CardType, &payment.CardLastFour,
-			&payment.ReferenceNo, &payment.BankName, &payment.AccountNo, &payment.VoucherCode,
-			&payment.Status, &payment.Notes, &payment.ProcessedBy, &payment.CreatedAt,
+			&payment.AmountTendered, &payment.ChangeGiven, &payment.ReferenceNo,
+			&payment.Status, &payment.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

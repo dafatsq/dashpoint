@@ -52,13 +52,7 @@ type CreatePaymentRequest struct {
 	Amount         decimal.Decimal
 	AmountTendered *decimal.Decimal
 	ChangeGiven    *decimal.Decimal
-	CardType       *string
-	CardLastFour   *string
 	ReferenceNo    *string
-	BankName       *string
-	AccountNo      *string
-	VoucherCode    *string
-	Notes          *string
 }
 
 // SaleFilter contains sales listing filters.

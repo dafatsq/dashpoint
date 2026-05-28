@@ -48,7 +48,6 @@ export interface SalePayment {
   amount_tendered?: string;
   change_given?: string;
   reference_no?: string;
-  notes?: string;
 }
 
 export interface CreateSaleItem {
@@ -65,7 +64,6 @@ export interface CreatePayment {
   amount_tendered?: string;
   change_given?: string;
   reference_no?: string;
-  notes?: string;
 }
 
 export interface CreateSaleRequest {
