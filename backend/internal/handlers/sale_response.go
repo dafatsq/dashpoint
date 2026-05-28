@@ -77,12 +77,6 @@ func (h *SaleHandler) toSaleResponse(s *models.Sale) fiber.Map {
 	if s.ShiftID != nil {
 		response["shift_id"] = s.ShiftID.String()
 	}
-	if s.CustomerName != nil {
-		response["customer_name"] = *s.CustomerName
-	}
-	if s.CustomerPhone != nil {
-		response["customer_phone"] = *s.CustomerPhone
-	}
 	if s.DiscountType != nil {
 		response["discount_type"] = *s.DiscountType
 	}
@@ -136,9 +130,6 @@ func (h *SaleHandler) toSaleListResponse(s *models.Sale) fiber.Map {
 
 	if s.EmployeeName != nil {
 		response["employee_name"] = *s.EmployeeName
-	}
-	if s.CustomerName != nil {
-		response["customer_name"] = *s.CustomerName
 	}
 	if len(s.Payments) > 0 {
 		payments := make([]fiber.Map, 0, len(s.Payments))

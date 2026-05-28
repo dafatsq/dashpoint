@@ -33,8 +33,6 @@ export interface Sale {
   change_amount: string;
   item_count: number;
   payment_status: string;
-  customer_name?: string;
-  customer_phone?: string;
   notes?: string;
   void_reason?: string;
   created_at: string;
@@ -73,8 +71,6 @@ export interface CreatePayment {
 export interface CreateSaleRequest {
   items: CreateSaleItem[];
   payments: CreatePayment[];
-  customer_name?: string;
-  customer_phone?: string;
   discount_type?: string;
   discount_value?: string;
   discount_reason?: string;

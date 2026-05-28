@@ -30,8 +30,6 @@ type CreateSaleRequest struct {
 	Payments       []CreatePaymentRequest
 	EmployeeID     uuid.UUID
 	ShiftID        *uuid.UUID
-	CustomerName   *string
-	CustomerPhone  *string
 	DiscountType   *string
 	DiscountValue  *decimal.Decimal
 	DiscountReason *string

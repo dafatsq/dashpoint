@@ -127,8 +127,6 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 	return &saleCreateInput{
 		items:          items,
 		payments:       payments,
-		customerName:   req.CustomerName,
-		customerPhone:  req.CustomerPhone,
 		discountType:   req.DiscountType,
 		discountValue:  discountValue,
 		discountReason: req.DiscountReason,

@@ -124,8 +124,6 @@ type saleItemSeed struct {
 	TaxAmount      float64
 	Subtotal       float64
 	Total          float64
-	IsRefunded     bool
-	RefundedQty    float64
 }
 
 type paymentSeed struct {
@@ -700,8 +698,6 @@ func buildSales(users []userSeed, products []productSeed, shifts []shiftSeed) []
 			TaxAmount:      taxA,
 			Subtotal:       subA,
 			Total:          round2(subA + taxA),
-			IsRefunded:     false,
-			RefundedQty:    0,
 		}
 		itemTwoDiscount := discountAmount
 		itemTwo := saleItemSeed{
@@ -720,8 +716,6 @@ func buildSales(users []userSeed, products []productSeed, shifts []shiftSeed) []
 			TaxAmount:      taxB,
 			Subtotal:       subB,
 			Total:          round2(subB + taxB - itemTwoDiscount),
-			IsRefunded:     false,
-			RefundedQty:    0,
 		}
 
 		var cardType, cardLastFour, referenceNo, bankName, accountNo, voucherCode *string
@@ -885,19 +879,18 @@ func insertSales(ctx context.Context, tx pgx.Tx, sales []saleSeed) error {
 			INSERT INTO sales (
 				id, invoice_no, created_at, updated_at, subtotal, tax_amount, discount_amount, total_amount, item_count,
 				payment_status, amount_paid, change_amount, discount_type, discount_value, discount_reason, employee_id,
-				shift_id, customer_name, customer_phone, status, voided_at, voided_by, void_reason, notes
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
-		`, sale.ID, sale.InvoiceNo, sale.CreatedAt, sale.UpdatedAt, money(sale.Subtotal), money(sale.TaxAmount), money(sale.DiscountAmount), money(sale.TotalAmount), sale.ItemCount, sale.PaymentStatus, money(sale.AmountPaid), money(sale.ChangeAmount), sale.DiscountType, nullableMoney(sale.DiscountValue), sale.DiscountReason, sale.EmployeeID, sale.ShiftID, sale.CustomerName, sale.CustomerPhone, sale.Status, sale.VoidedAt, sale.VoidedBy, sale.VoidReason, sale.Notes); err != nil {
+				shift_id, status, voided_at, voided_by, void_reason, notes
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+		`, sale.ID, sale.InvoiceNo, sale.CreatedAt, sale.UpdatedAt, money(sale.Subtotal), money(sale.TaxAmount), money(sale.DiscountAmount), money(sale.TotalAmount), sale.ItemCount, sale.PaymentStatus, money(sale.AmountPaid), money(sale.ChangeAmount), sale.DiscountType, nullableMoney(sale.DiscountValue), sale.DiscountReason, sale.EmployeeID, sale.ShiftID, sale.Status, sale.VoidedAt, sale.VoidedBy, sale.VoidReason, sale.Notes); err != nil {
 			return err
 		}
 		for _, item := range sale.Items {
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO sale_items (
 					id, sale_id, product_id, product_name, product_sku, product_barcode, quantity, unit_price, cost_price,
-					discount_type, discount_value, discount_amount, tax_rate, tax_amount, subtotal, total,
-					is_refunded, refunded_quantity, created_at
-				) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-			`, item.ID, sale.ID, item.ProductID, item.ProductName, item.ProductSKU, item.ProductBarcode, qty(item.Quantity), money(item.UnitPrice), money(item.CostPrice), item.DiscountType, nullableMoney(item.DiscountValue), money(item.DiscountAmount), money(item.TaxRate), money(item.TaxAmount), money(item.Subtotal), money(item.Total), item.IsRefunded, qty(item.RefundedQty), sale.CreatedAt); err != nil {
+					discount_type, discount_value, discount_amount, tax_rate, tax_amount, subtotal, total, created_at
+				) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+			`, item.ID, sale.ID, item.ProductID, item.ProductName, item.ProductSKU, item.ProductBarcode, qty(item.Quantity), money(item.UnitPrice), money(item.CostPrice), item.DiscountType, nullableMoney(item.DiscountValue), money(item.DiscountAmount), money(item.TaxRate), money(item.TaxAmount), money(item.Subtotal), money(item.Total), sale.CreatedAt); err != nil {
 				return err
 			}
 		}

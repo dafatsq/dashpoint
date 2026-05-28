@@ -67,8 +67,6 @@ type PaymentRequest struct {
 type CreateSaleRequest struct {
 	Items          []SaleItemRequest `json:"items"`
 	Payments       []PaymentRequest  `json:"payments"`
-	CustomerName   *string           `json:"customer_name"`
-	CustomerPhone  *string           `json:"customer_phone"`
 	DiscountType   *string           `json:"discount_type"`
 	DiscountValue  *string           `json:"discount_value"`
 	DiscountReason *string           `json:"discount_reason"`
@@ -83,8 +81,6 @@ type VoidSaleRequest struct {
 type saleCreateInput struct {
 	items          []repository.CreateSaleItemRequest
 	payments       []repository.CreatePaymentRequest
-	customerName   *string
-	customerPhone  *string
 	discountType   *string
 	discountValue  *decimal.Decimal
 	discountReason *string
