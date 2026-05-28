@@ -74,7 +74,7 @@ func (r *ShiftRepository) CloseShift(ctx context.Context, shiftID uuid.UUID, clo
 }
 
 // UpdateSalesTotals updates the shift sales totals.
-func (r *ShiftRepository) UpdateSalesTotals(ctx context.Context, shiftID uuid.UUID, saleAmount decimal.Decimal, isRefund bool) error {
+func (r *ShiftRepository) UpdateSalesTotals(ctx context.Context, shiftID uuid.UUID, saleAmount decimal.Decimal, isVoid bool) error {
 	now := time.Now()
 	query := `
 		UPDATE shifts
@@ -84,12 +84,12 @@ func (r *ShiftRepository) UpdateSalesTotals(ctx context.Context, shiftID uuid.UU
 			updated_at = $2
 		WHERE id = $3
 	`
-	if isRefund {
+	if isVoid {
 		query = `
 			UPDATE shifts
 			SET
-				total_refunds = total_refunds + $1,
-				refund_count = refund_count + 1,
+				total_voided = total_voided + $1,
+				void_count = void_count + 1,
 				updated_at = $2
 			WHERE id = $3
 		`

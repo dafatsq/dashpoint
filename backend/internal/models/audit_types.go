@@ -35,7 +35,6 @@ const (
 
 	AuditActionSaleCreate AuditAction = "sale.create"
 	AuditActionSaleVoid   AuditAction = "sale.void"
-	AuditActionRefund     AuditAction = "sale.refund"
 
 	AuditActionShiftStart AuditAction = "shift.start"
 	AuditActionShiftClose AuditAction = "shift.close"

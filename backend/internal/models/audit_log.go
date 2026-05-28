@@ -11,10 +11,9 @@ type AuditLog struct {
 	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 
-	UserID    *uuid.UUID `json:"user_id,omitempty"`
-	UserEmail *string    `json:"user_email,omitempty"`
-	UserName  *string    `json:"user_name,omitempty"`
-	UserRole  *string    `json:"user_role,omitempty"`
+	UserID   *uuid.UUID `json:"user_id,omitempty"`
+	UserName *string    `json:"user_name,omitempty"`
+	UserRole *string    `json:"user_role,omitempty"`
 
 	Action      AuditAction     `json:"action"`
 	EntityType  AuditEntityType `json:"entity_type"`
@@ -25,17 +24,12 @@ type AuditLog struct {
 	NewValues map[string]interface{} `json:"new_values,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 
-	IPAddress *string `json:"ip_address,omitempty"`
-	UserAgent *string `json:"user_agent,omitempty"`
-	RequestID *string `json:"request_id,omitempty"`
-
 	Status AuditStatus `json:"status"`
 }
 
 // AuditLogEntry is a builder for creating audit log entries.
 type AuditLogEntry struct {
 	UserID      *uuid.UUID
-	UserEmail   string
 	UserName    string
 	UserRole    string
 	Action      AuditAction
@@ -45,8 +39,5 @@ type AuditLogEntry struct {
 	OldValues   map[string]interface{}
 	NewValues   map[string]interface{}
 	Metadata    map[string]interface{}
-	IPAddress   string
-	UserAgent   string
-	RequestID   string
 	Status      AuditStatus
 }

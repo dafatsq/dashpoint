@@ -84,16 +84,16 @@ type SalesReportItem struct {
 }
 
 type CashReport struct {
-	Date         string          `json:"date"`
-	OpeningCash  decimal.Decimal `json:"opening_cash"`
-	CashSales    decimal.Decimal `json:"cash_sales"`
-	CashRefunds  decimal.Decimal `json:"cash_refunds"`
-	PayInTotal   decimal.Decimal `json:"pay_in_total"`
-	PayOutTotal  decimal.Decimal `json:"pay_out_total"`
-	ExpectedCash decimal.Decimal `json:"expected_cash"`
-	ActualCash   decimal.Decimal `json:"actual_cash"`
-	Difference   decimal.Decimal `json:"difference"`
-	ShiftCount   int             `json:"shift_count"`
+	Date            string          `json:"date"`
+	OpeningCash     decimal.Decimal `json:"opening_cash"`
+	CashSales       decimal.Decimal `json:"cash_sales"`
+	CashVoidedSales decimal.Decimal `json:"cash_voided_sales"`
+	PayInTotal      decimal.Decimal `json:"pay_in_total"`
+	PayOutTotal     decimal.Decimal `json:"pay_out_total"`
+	ExpectedCash    decimal.Decimal `json:"expected_cash"`
+	ActualCash      decimal.Decimal `json:"actual_cash"`
+	Difference      decimal.Decimal `json:"difference"`
+	ShiftCount      int             `json:"shift_count"`
 }
 
 type SalesRangeSummary struct {

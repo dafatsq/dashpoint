@@ -51,7 +51,7 @@ export interface CashReport {
   date: string;
   opening_cash: string;
   cash_sales: string;
-  cash_refunds: string;
+  cash_voided_sales: string;
   pay_in_total: string;
   pay_out_total: string;
   expected_cash: string;

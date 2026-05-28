@@ -79,9 +79,9 @@ func blindShiftView(shift *models.Shift) *models.Shift {
 	}
 	copy := *shift
 	copy.TotalSales = decimal.Zero
-	copy.TotalRefunds = decimal.Zero
+	copy.TotalVoided = decimal.Zero
 	copy.ExpectedCash = nil
 	copy.TransactionCount = 0
-	copy.RefundCount = 0
+	copy.VoidCount = 0
 	return &copy
 }

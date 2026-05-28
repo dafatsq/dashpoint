@@ -31,9 +31,9 @@ type Shift struct {
 
 	TotalSales       decimal.Decimal `json:"total_sales"`
 	TotalCashSales   decimal.Decimal `json:"total_cash_sales"`
-	TotalRefunds     decimal.Decimal `json:"total_refunds"`
+	TotalVoided      decimal.Decimal `json:"total_voided"`
 	TransactionCount int             `json:"transaction_count"`
-	RefundCount      int             `json:"refund_count"`
+	VoidCount        int             `json:"void_count"`
 
 	Notes *string `json:"notes,omitempty"`
 

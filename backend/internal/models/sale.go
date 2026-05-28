@@ -14,7 +14,6 @@ const (
 	SaleStatusDraft     SaleStatus = "draft"
 	SaleStatusCompleted SaleStatus = "completed"
 	SaleStatusVoided    SaleStatus = "voided"
-	SaleStatusRefunded  SaleStatus = "refunded"
 )
 
 // PaymentStatus represents the payment status of a sale.

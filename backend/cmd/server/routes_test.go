@@ -49,7 +49,7 @@ func (routeTestCategoryStore) GetProductCount(context.Context, uuid.UUID) (int, 
 func (routeTestCategoryStore) GetProductCounts(context.Context, []uuid.UUID) (map[uuid.UUID]int, error) {
 	return map[uuid.UUID]int{}, nil
 }
-func (routeTestCategoryStore) DuplicateSiblingExists(context.Context, string, *uuid.UUID, *uuid.UUID) (bool, error) {
+func (routeTestCategoryStore) DuplicateSiblingExists(context.Context, string, *uuid.UUID) (bool, error) {
 	return false, nil
 }
 

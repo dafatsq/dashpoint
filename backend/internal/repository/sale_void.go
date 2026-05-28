@@ -43,7 +43,7 @@ func (r *SaleRepository) VoidSale(ctx context.Context, saleID, voidedBy uuid.UUI
 		return err
 	}
 	if shiftID != nil {
-		if err := updateShiftRefundTotalsTx(ctx, tx, *shiftID, totalAmount, now); err != nil {
+		if err := updateShiftVoidTotalsTx(ctx, tx, *shiftID, totalAmount, now); err != nil {
 			return err
 		}
 	}
@@ -137,11 +137,11 @@ func refundPaymentsTx(ctx context.Context, tx pgx.Tx, saleID uuid.UUID) error {
 	return nil
 }
 
-func updateShiftRefundTotalsTx(ctx context.Context, tx pgx.Tx, shiftID uuid.UUID, totalAmount decimal.Decimal, now time.Time) error {
+func updateShiftVoidTotalsTx(ctx context.Context, tx pgx.Tx, shiftID uuid.UUID, totalAmount decimal.Decimal, now time.Time) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE shifts SET
-			total_refunds = total_refunds + $1,
-			refund_count = refund_count + 1,
+			total_voided = total_voided + $1,
+			void_count = void_count + 1,
 			updated_at = $2
 		WHERE id = $3
 	`, totalAmount, now, shiftID)

@@ -17,7 +17,6 @@ function buildAuditLog(overrides: Partial<AuditLog> = {}): AuditLog {
     id: "log-1",
     user_id: "user-1",
     user_name: "Alice",
-    user_email: "alice@example.com",
     action: "product.update",
     entity_type: "product",
     entity_id: "entity-1",

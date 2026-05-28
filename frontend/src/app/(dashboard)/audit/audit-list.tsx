@@ -100,7 +100,6 @@ export function AuditList({
                   <th className="pb-3 font-medium">User</th>
                   <th className="pb-3 font-medium">Action</th>
                   <th className="pb-3 font-medium">Entity</th>
-                  <th className="pb-3 font-medium">IP Address</th>
                   <th className="pb-3 text-right font-medium">Details</th>
                 </tr>
               </thead>
@@ -127,9 +126,6 @@ export function AuditList({
                           ({log.entity_id.slice(0, 8)}...)
                         </span>
                       ) : null}
-                    </td>
-                    <td className="py-3 text-sm text-muted-foreground">
-                      {log.ip_address || "-"}
                     </td>
                     <td className="py-3 text-right">
                       {renderDetailsButton(log)}

@@ -76,9 +76,9 @@ func TestGetCurrentShiftBlindMasksSensitiveFields(t *testing.T) {
 		EmployeeID:       userID,
 		OpeningCash:      decimal.RequireFromString("100"),
 		TotalSales:       decimal.RequireFromString("55"),
-		TotalRefunds:     decimal.RequireFromString("5"),
+		TotalVoided:      decimal.RequireFromString("5"),
 		TransactionCount: 3,
-		RefundCount:      1,
+		VoidCount:        1,
 	}
 	expectedCash := decimal.RequireFromString("150")
 	shift.ExpectedCash = &expectedCash
