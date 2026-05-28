@@ -14,8 +14,8 @@ const saleSummarySelectColumns = `
 		SELECT
 			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
 			s.item_count, s.payment_status, s.amount_paid, s.change_amount, s.discount_type,
-			s.discount_value, s.discount_reason, s.employee_id, s.shift_id, s.customer_name,
-			s.customer_phone, s.status, s.voided_at, s.voided_by, s.void_reason, s.notes,
+			s.discount_value, s.discount_reason, s.employee_id, s.shift_id,
+			s.status, s.voided_at, s.voided_by, s.void_reason, s.notes,
 			s.created_at, s.updated_at, u.name as employee_name
 `
 
@@ -23,7 +23,7 @@ const saleListSelectColumns = `
 		SELECT
 			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
 			s.item_count, s.payment_status, s.amount_paid, s.change_amount,
-			s.employee_id, s.shift_id, s.customer_name, s.status, s.created_at, s.updated_at,
+			s.employee_id, s.shift_id, s.status, s.created_at, s.updated_at,
 			u.name as employee_name,
 			(SELECT payment_method FROM payments WHERE sale_id = s.id LIMIT 1) as payment_method
 `
@@ -44,7 +44,7 @@ func scanSaleSummary(scanner saleScanner) (*models.Sale, error) {
 		&sale.ID, &sale.InvoiceNo, &sale.Subtotal, &sale.TaxAmount, &sale.DiscountAmount,
 		&sale.TotalAmount, &sale.ItemCount, &sale.PaymentStatus, &sale.AmountPaid, &sale.ChangeAmount,
 		&sale.DiscountType, &sale.DiscountValue, &sale.DiscountReason, &sale.EmployeeID, &sale.ShiftID,
-		&sale.CustomerName, &sale.CustomerPhone, &sale.Status, &sale.VoidedAt, &sale.VoidedBy,
+		&sale.Status, &sale.VoidedAt, &sale.VoidedBy,
 		&sale.VoidReason, &sale.Notes, &sale.CreatedAt, &sale.UpdatedAt, &sale.EmployeeName,
 	); err != nil {
 		if err == pgx.ErrNoRows {
@@ -63,7 +63,7 @@ func scanSaleListRow(scanner saleScanner) (*models.Sale, error) {
 	if err := scanner.Scan(
 		&sale.ID, &sale.InvoiceNo, &sale.Subtotal, &sale.TaxAmount, &sale.DiscountAmount, &sale.TotalAmount,
 		&sale.ItemCount, &sale.PaymentStatus, &sale.AmountPaid, &sale.ChangeAmount,
-		&sale.EmployeeID, &sale.ShiftID, &sale.CustomerName, &sale.Status, &sale.CreatedAt, &sale.UpdatedAt,
+		&sale.EmployeeID, &sale.ShiftID, &sale.Status, &sale.CreatedAt, &sale.UpdatedAt,
 		&sale.EmployeeName, &paymentMethod,
 	); err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func loadSaleItems(ctx context.Context, db interface {
 		SELECT
 			id, sale_id, product_id, product_name, product_sku, product_barcode,
 			quantity, unit_price, cost_price, discount_type, discount_value, discount_amount,
-			tax_rate, tax_amount, subtotal, total, is_refunded, refunded_quantity, created_at
+			tax_rate, tax_amount, subtotal, total, created_at
 		FROM sale_items
 		WHERE sale_id = $1
 		ORDER BY created_at
@@ -222,8 +222,7 @@ func loadSaleItems(ctx context.Context, db interface {
 			&item.ID, &item.SaleID, &item.ProductID, &item.ProductName, &item.ProductSKU,
 			&item.ProductBarcode, &item.Quantity, &item.UnitPrice, &item.CostPrice,
 			&item.DiscountType, &item.DiscountValue, &item.DiscountAmount, &item.TaxRate,
-			&item.TaxAmount, &item.Subtotal, &item.Total, &item.IsRefunded, &item.RefundedQuantity,
-			&item.CreatedAt,
+			&item.TaxAmount, &item.Subtotal, &item.Total, &item.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

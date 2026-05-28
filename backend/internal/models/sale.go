@@ -47,10 +47,8 @@ type Sale struct {
 	DiscountValue  *decimal.Decimal `json:"discount_value,omitempty"`
 	DiscountReason *string          `json:"discount_reason,omitempty"`
 
-	EmployeeID    uuid.UUID  `json:"employee_id"`
-	ShiftID       *uuid.UUID `json:"shift_id,omitempty"`
-	CustomerName  *string    `json:"customer_name,omitempty"`
-	CustomerPhone *string    `json:"customer_phone,omitempty"`
+	EmployeeID uuid.UUID  `json:"employee_id"`
+	ShiftID    *uuid.UUID `json:"shift_id,omitempty"`
 
 	Status     SaleStatus `json:"status"`
 	VoidedAt   *time.Time `json:"voided_at,omitempty"`
@@ -89,9 +87,6 @@ type SaleItem struct {
 	TaxAmount decimal.Decimal `json:"tax_amount"`
 	Subtotal  decimal.Decimal `json:"subtotal"`
 	Total     decimal.Decimal `json:"total"`
-
-	IsRefunded       bool            `json:"is_refunded"`
-	RefundedQuantity decimal.Decimal `json:"refunded_quantity"`
 
 	CreatedAt time.Time `json:"created_at"`
 }

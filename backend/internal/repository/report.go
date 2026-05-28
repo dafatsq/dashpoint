@@ -74,7 +74,6 @@ type SalesReportItem struct {
 	Date          string          `json:"date"`
 	Time          string          `json:"time"`
 	EmployeeName  string          `json:"employee_name"`
-	CustomerName  *string         `json:"customer_name,omitempty"`
 	ItemCount     int             `json:"item_count"`
 	Subtotal      decimal.Decimal `json:"subtotal"`
 	Tax           decimal.Decimal `json:"tax"`

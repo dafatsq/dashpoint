@@ -36,20 +36,15 @@ func (h *ReportHandler) ExportSalesCSV(c *fiber.Ctx) error {
 		{"Total Discounts:", summary.TotalDiscount.String()},
 		{""},
 		{""},
-		{"Invoice No", "Date", "Time", "Employee", "Customer", "Items", "Subtotal", "Tax", "Discount", "Total", "Payment Method", "Status"},
+		{"Invoice No", "Date", "Time", "Employee", "Items", "Subtotal", "Tax", "Discount", "Total", "Payment Method", "Status"},
 	}
 
 	for _, item := range items {
-		customer := ""
-		if item.CustomerName != nil {
-			customer = *item.CustomerName
-		}
 		rows = append(rows, []string{
 			item.InvoiceNo,
 			item.Date,
 			item.Time,
 			item.EmployeeName,
-			customer,
 			fmt.Sprintf("%d", item.ItemCount),
 			item.Subtotal.String(),
 			item.Tax.String(),

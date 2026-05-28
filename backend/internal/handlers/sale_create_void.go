@@ -44,8 +44,6 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 		Payments:       input.payments,
 		EmployeeID:     userID,
 		ShiftID:        shiftID,
-		CustomerName:   input.customerName,
-		CustomerPhone:  input.customerPhone,
 		DiscountType:   input.discountType,
 		DiscountValue:  input.discountValue,
 		DiscountReason: input.discountReason,

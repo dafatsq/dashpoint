@@ -54,8 +54,6 @@ func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*m
 		ChangeAmount:   changeAmount,
 		EmployeeID:     req.EmployeeID,
 		ShiftID:        req.ShiftID,
-		CustomerName:   req.CustomerName,
-		CustomerPhone:  req.CustomerPhone,
 		DiscountType:   req.DiscountType,
 		DiscountValue:  req.DiscountValue,
 		DiscountReason: req.DiscountReason,
@@ -194,13 +192,13 @@ func insertSaleTx(ctx context.Context, tx pgx.Tx, sale *models.Sale) error {
 		INSERT INTO sales (
 			id, invoice_no, subtotal, tax_amount, discount_amount, total_amount, item_count,
 			payment_status, amount_paid, change_amount, discount_type, discount_value, discount_reason,
-			employee_id, shift_id, customer_name, customer_phone, status, notes, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+			employee_id, shift_id, status, notes, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`,
 		sale.ID, sale.InvoiceNo, sale.Subtotal, sale.TaxAmount, sale.DiscountAmount, sale.TotalAmount,
 		sale.ItemCount, sale.PaymentStatus, sale.AmountPaid, sale.ChangeAmount, sale.DiscountType,
-		sale.DiscountValue, sale.DiscountReason, sale.EmployeeID, sale.ShiftID, sale.CustomerName,
-		sale.CustomerPhone, sale.Status, sale.Notes, sale.CreatedAt, sale.UpdatedAt,
+		sale.DiscountValue, sale.DiscountReason, sale.EmployeeID, sale.ShiftID, sale.Status,
+		sale.Notes, sale.CreatedAt, sale.UpdatedAt,
 	)
 	return err
 }
