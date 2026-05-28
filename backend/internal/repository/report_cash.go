@@ -38,8 +38,8 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate
 		FROM payments p
 		JOIN sales s ON p.sale_id = s.id
 		WHERE s.created_at >= $1 AND s.created_at < $2
-		AND s.status = 'refunded' AND p.payment_method = 'cash' AND p.status = 'refunded'
-	`, startDate, endDate).Scan(&report.CashRefunds); err != nil {
+		AND s.status = 'voided' AND p.payment_method = 'cash' AND p.status = 'refunded'
+	`, startDate, endDate).Scan(&report.CashVoidedSales); err != nil {
 		return nil, err
 	}
 
@@ -56,7 +56,6 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate
 
 	report.ExpectedCash = report.OpeningCash.
 		Add(report.CashSales).
-		Sub(report.CashRefunds).
 		Add(report.PayInTotal).
 		Sub(report.PayOutTotal)
 	report.Difference = report.ActualCash.Sub(report.ExpectedCash)

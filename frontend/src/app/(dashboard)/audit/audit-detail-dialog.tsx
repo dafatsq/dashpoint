@@ -46,13 +46,6 @@ export function AuditDetailDialog({
           value: buildActivityDescription(log),
           wrapperClassName: "col-span-2",
         },
-        { label: "IP Address", value: log.ip_address || "-" },
-        {
-          label: "User Agent",
-          value: log.user_agent || "-",
-          valueClassName: "truncate text-xs font-medium",
-          title: log.user_agent,
-        },
       ]
     : [];
 
@@ -72,10 +65,7 @@ export function AuditDetailDialog({
               {detailItems.map((item) => (
                 <div key={item.label} className={item.wrapperClassName}>
                   <span className="text-muted-foreground">{item.label}:</span>
-                  <p
-                    className={item.valueClassName ?? "font-medium"}
-                    title={item.title}
-                  >
+                  <p className={item.valueClassName ?? "font-medium"}>
                     {item.value}
                   </p>
                 </div>

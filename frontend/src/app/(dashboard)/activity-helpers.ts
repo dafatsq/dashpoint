@@ -57,7 +57,6 @@ export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   "expense.restore": "Restore Expense",
   "sale.create": "Sale",
   "sale.void": "Void Sale",
-  "sale.refund": "Refund",
   "shift.start": "Start Shift",
   "shift.close": "Close Shift",
 };

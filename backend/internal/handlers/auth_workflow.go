@@ -99,11 +99,7 @@ func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, token
 	}
 
 	if !isRefresh {
-		email := ""
-		if user.Email != nil {
-			email = *user.Email
-		}
-		audit.LogAuth(c, models.AuditActionLogin, &user.ID, email, user.Name, user.Role.Name, true, map[string]interface{}{
+		audit.LogAuth(c, models.AuditActionLogin, &user.ID, user.Name, user.Role.Name, true, map[string]interface{}{
 			"role": user.Role.Name,
 		})
 	}
@@ -120,7 +116,7 @@ func logAuthFailure(c *fiber.Ctx, ctx authFailureContext) {
 	metadata := map[string]interface{}{
 		"reason": ctx.reason,
 	}
-	audit.LogAuth(c, ctx.action, ctx.userID, ctx.email, ctx.userName, ctx.roleName, false, metadata)
+	audit.LogAuth(c, ctx.action, ctx.userID, ctx.userName, ctx.roleName, false, metadata)
 }
 
 func parseAuthUserID(id string) (uuid.UUID, error) {

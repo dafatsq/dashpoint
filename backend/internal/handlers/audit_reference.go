@@ -26,7 +26,6 @@ func (h *AuditHandler) GetActions(c *fiber.Ctx) error {
 		{"action": "category.delete", "description": "Category deleted"},
 		{"action": "sale.create", "description": "Sale created"},
 		{"action": "sale.void", "description": "Sale voided"},
-		{"action": "sale.refund", "description": "Refund processed"},
 		{"action": "shift.start", "description": "Shift started"},
 		{"action": "shift.close", "description": "Shift closed"},
 		{"action": "report.export", "description": "Report exported"},

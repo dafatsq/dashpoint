@@ -16,7 +16,7 @@ func TestDecodeAuditJSONFieldsIgnoresInvalidJSON(t *testing.T) {
 
 func TestDecodeAuditJSONFieldsPopulatesMaps(t *testing.T) {
 	logEntry := &models.AuditLog{}
-	err := decodeAuditJSONFields(logEntry, []byte(`{"before":"x"}`), []byte(`{"after":"y"}`), []byte(`{"request_id":"r1"}`))
+	err := decodeAuditJSONFields(logEntry, []byte(`{"before":"x"}`), []byte(`{"after":"y"}`), []byte(`{"source":"test"}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestDecodeAuditJSONFieldsPopulatesMaps(t *testing.T) {
 	if logEntry.NewValues["after"] != "y" {
 		t.Fatalf("unexpected new_values: %#v", logEntry.NewValues)
 	}
-	if logEntry.Metadata["request_id"] != "r1" {
+	if logEntry.Metadata["source"] != "test" {
 		t.Fatalf("unexpected metadata: %#v", logEntry.Metadata)
 	}
 }

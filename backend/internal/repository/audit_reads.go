@@ -11,11 +11,11 @@ import (
 
 const auditSelectColumns = `
 	SELECT
-		audit_logs.id, audit_logs.created_at, audit_logs.user_id, audit_logs.user_email,
+		audit_logs.id, audit_logs.created_at, audit_logs.user_id,
 		COALESCE(u.name, audit_logs.user_name) as user_name, audit_logs.user_role,
 		audit_logs.action, audit_logs.entity_type, audit_logs.entity_id, audit_logs.description,
 		audit_logs.old_values, audit_logs.new_values, audit_logs.metadata,
-		audit_logs.ip_address, audit_logs.user_agent, audit_logs.request_id, audit_logs.status
+		audit_logs.status
 	FROM audit_logs
 	LEFT JOIN users u ON audit_logs.user_id = u.id
 `

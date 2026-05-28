@@ -12,14 +12,14 @@ import (
 const shiftSelectColumns = `
 	SELECT
 		s.id, s.employee_id, s.started_at, s.ended_at, s.opening_cash, s.closing_cash,
-		s.expected_cash, s.cash_difference, s.total_sales, s.total_refunds,
+		s.expected_cash, s.cash_difference, s.total_sales, s.total_voided,
 		(
 			SELECT COALESCE(SUM(p.amount), 0)
 			FROM payments p
 			JOIN sales s2 ON p.sale_id = s2.id
 			WHERE s2.shift_id = s.id AND p.payment_method = 'cash' AND p.status = 'completed'
 		) as total_cash_sales,
-		s.transaction_count, s.refund_count, s.status, s.notes, s.created_at, s.updated_at,
+		s.transaction_count, s.void_count, s.status, s.notes, s.created_at, s.updated_at,
 		u.name as employee_name,
 		s.closed_by, cu.name as closed_by_name,
 		(
@@ -141,10 +141,10 @@ func scanShift(scanner shiftRowScanner) (*models.Shift, error) {
 		&shift.ExpectedCash,
 		&shift.CashDifference,
 		&shift.TotalSales,
-		&shift.TotalRefunds,
+		&shift.TotalVoided,
 		&shift.TotalCashSales,
 		&shift.TransactionCount,
-		&shift.RefundCount,
+		&shift.VoidCount,
 		&shift.Status,
 		&shift.Notes,
 		&shift.CreatedAt,

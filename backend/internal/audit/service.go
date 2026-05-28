@@ -74,16 +74,8 @@ func LogFromFiber(c *fiber.Ctx, action models.AuditAction, entityType models.Aud
 	// Extract user info from context
 	if claims := middleware.GetClaims(c); claims != nil {
 		entry.UserID = &claims.UserID
-		entry.UserEmail = claims.Email
 		entry.UserName = claims.Name
 		entry.UserRole = claims.RoleName
-	}
-
-	// Extract request info
-	entry.IPAddress = c.IP()
-	entry.UserAgent = c.Get("User-Agent")
-	if requestID := middleware.GetRequestID(c); requestID != "" {
-		entry.RequestID = requestID
 	}
 
 	Log(c.Context(), entry)
@@ -104,16 +96,8 @@ func LogWithValues(c *fiber.Ctx, action models.AuditAction, entityType models.Au
 	// Extract user info from context
 	if claims := middleware.GetClaims(c); claims != nil {
 		entry.UserID = &claims.UserID
-		entry.UserEmail = claims.Email
 		entry.UserName = claims.Name
 		entry.UserRole = claims.RoleName
-	}
-
-	// Extract request info
-	entry.IPAddress = c.IP()
-	entry.UserAgent = c.Get("User-Agent")
-	if requestID := middleware.GetRequestID(c); requestID != "" {
-		entry.RequestID = requestID
 	}
 
 	Log(c.Context(), entry)
@@ -133,22 +117,14 @@ func LogFailure(c *fiber.Ctx, action models.AuditAction, entityType models.Audit
 	// Extract user info from context
 	if claims := middleware.GetClaims(c); claims != nil {
 		entry.UserID = &claims.UserID
-		entry.UserEmail = claims.Email
 		entry.UserRole = claims.RoleName
-	}
-
-	// Extract request info
-	entry.IPAddress = c.IP()
-	entry.UserAgent = c.Get("User-Agent")
-	if requestID := middleware.GetRequestID(c); requestID != "" {
-		entry.RequestID = requestID
 	}
 
 	Log(c.Context(), entry)
 }
 
 // LogAuth creates an auth-related audit log
-func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email string, userName string, userRole string, success bool, metadata map[string]interface{}) {
+func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, userName string, userRole string, success bool, metadata map[string]interface{}) {
 	status := models.AuditStatusSuccess
 	if !success {
 		status = models.AuditStatusFailure
@@ -161,7 +137,6 @@ func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email s
 
 	entry := &models.AuditLogEntry{
 		UserID:     userID,
-		UserEmail:  email,
 		UserName:   userName,
 		UserRole:   userRole,
 		Action:     action,
@@ -169,12 +144,6 @@ func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email s
 		EntityID:   entityID,
 		Metadata:   metadata,
 		Status:     status,
-		IPAddress:  c.IP(),
-		UserAgent:  c.Get("User-Agent"),
-	}
-
-	if requestID := middleware.GetRequestID(c); requestID != "" {
-		entry.RequestID = requestID
 	}
 
 	Log(c.Context(), entry)

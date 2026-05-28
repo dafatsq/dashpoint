@@ -12,9 +12,9 @@ export interface Shift {
   cash_difference?: string;
   total_sales: string;
   total_cash_sales: string;
-  total_refunds: string;
+  total_voided: string;
   transaction_count: number;
-  refund_count: number;
+  void_count: number;
   notes?: string;
   created_at: string;
   updated_at: string;

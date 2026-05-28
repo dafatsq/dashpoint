@@ -51,10 +51,10 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Cash Refunds</CardTitle>
+            <CardTitle className="text-sm font-medium">Voided Cash Sales</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">-{formatCurrency(cashReport.cash_refunds)}</div>
+            <div className="text-2xl font-bold text-red-600">-{formatCurrency(cashReport.cash_voided_sales)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -85,7 +85,7 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(cashReport.expected_cash)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Opening + Sales - Refunds + Pay In - Pay Out
+              Opening + Sales + Pay In - Pay Out
             </p>
           </CardContent>
         </Card>

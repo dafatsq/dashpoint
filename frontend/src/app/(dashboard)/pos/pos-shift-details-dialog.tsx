@@ -64,8 +64,8 @@ export function PosShiftDetailsDialog({
   const closedCashSales = formatCurrency(
     parseNumericInput(closedShiftData?.total_cash_sales || "0"),
   );
-  const closedRefunds = formatCurrency(
-    parseNumericInput(closedShiftData?.total_refunds || "0"),
+  const closedVoided = formatCurrency(
+    parseNumericInput(closedShiftData?.total_voided || "0"),
   );
   const closedExpectedCash = formatCurrency(
     parseNumericInput(closedShiftData?.expected_cash || "0"),
@@ -108,9 +108,9 @@ export function PosShiftDetailsDialog({
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">
-                    Total Refunds ({closedShiftData.refund_count})
+                    Total Voided ({closedShiftData.void_count})
                   </span>
-                  <span className="font-medium text-red-600">-{closedRefunds}</span>
+                  <span className="font-medium text-red-600">-{closedVoided}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Expected Cash</span>

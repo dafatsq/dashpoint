@@ -77,8 +77,8 @@ func buildAuditWhereClause(filter AuditFilter) (string, []interface{}, int) {
 	if filter.Search != nil && *filter.Search != "" {
 		words := strings.Fields(normalizeAuditSearch(*filter.Search))
 		for _, word := range words {
-			whereClause += fmt.Sprintf(" AND (audit_logs.description ILIKE $%d OR audit_logs.entity_id ILIKE $%d OR audit_logs.user_email ILIKE $%d OR audit_logs.user_name ILIKE $%d OR u.name ILIKE $%d OR audit_logs.action ILIKE $%d OR audit_logs.entity_type ILIKE $%d OR audit_logs.new_values::text ILIKE $%d OR audit_logs.old_values::text ILIKE $%d)",
-				argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex)
+			whereClause += fmt.Sprintf(" AND (audit_logs.description ILIKE $%d OR audit_logs.entity_id ILIKE $%d OR audit_logs.user_name ILIKE $%d OR u.name ILIKE $%d OR audit_logs.action ILIKE $%d OR audit_logs.entity_type ILIKE $%d OR audit_logs.new_values::text ILIKE $%d OR audit_logs.old_values::text ILIKE $%d)",
+				argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex)
 			args = append(args, "%"+word+"%")
 			argIndex++
 		}
@@ -107,10 +107,10 @@ func scanAuditLog(scanner auditScanner) (*models.AuditLog, error) {
 	var oldValuesJSON, newValuesJSON, metadataJSON []byte
 
 	if err := scanner.Scan(
-		&logEntry.ID, &logEntry.CreatedAt, &logEntry.UserID, &logEntry.UserEmail, &logEntry.UserName, &logEntry.UserRole,
+		&logEntry.ID, &logEntry.CreatedAt, &logEntry.UserID, &logEntry.UserName, &logEntry.UserRole,
 		&logEntry.Action, &logEntry.EntityType, &logEntry.EntityID, &logEntry.Description,
 		&oldValuesJSON, &newValuesJSON, &metadataJSON,
-		&logEntry.IPAddress, &logEntry.UserAgent, &logEntry.RequestID, &logEntry.Status,
+		&logEntry.Status,
 	); err != nil {
 		return nil, err
 	}

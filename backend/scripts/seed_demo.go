@@ -72,9 +72,9 @@ type shiftSeed struct {
 	ExpectedCash     *float64
 	CashDifference   *float64
 	TotalSales       float64
-	TotalRefunds     float64
+	TotalVoided      float64
 	TransactionCount int
-	RefundCount      int
+	VoidCount        int
 	Notes            string
 	ClosedBy         *uuid.UUID
 }
@@ -158,7 +158,6 @@ type auditSeed struct {
 	ID          uuid.UUID
 	CreatedAt   time.Time
 	UserID      uuid.UUID
-	UserEmail   string
 	UserName    string
 	UserRole    string
 	Action      string
@@ -168,7 +167,6 @@ type auditSeed struct {
 	OldValues   string
 	NewValues   string
 	Metadata    string
-	RequestID   string
 	Status      string
 }
 
@@ -371,7 +369,7 @@ func cleanupSeedData(ctx context.Context, tx pgx.Tx, seedMode string) error {
 	if seedMode == "full" {
 		queries = append([]string{
 			`DELETE FROM refresh_tokens WHERE token_hash LIKE 'seed:%'`,
-			`DELETE FROM audit_logs WHERE request_id LIKE 'seed-%' OR description LIKE '[seed]%'`,
+			`DELETE FROM audit_logs WHERE description LIKE '[seed]%'`,
 			`DELETE FROM payments WHERE sale_id IN (SELECT id FROM sales WHERE invoice_no LIKE 'SEED-INV-%')`,
 			`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE invoice_no LIKE 'SEED-INV-%')`,
 			`DELETE FROM sales WHERE invoice_no LIKE 'SEED-INV-%'`,
@@ -794,8 +792,8 @@ func applyShiftSummaries(shifts []shiftSeed, sales []saleSeed) {
 		}
 		shift := &shifts[idx]
 		if sale.Status == "voided" {
-			shift.TotalRefunds = round2(shift.TotalRefunds + sale.TotalAmount)
-			shift.RefundCount++
+			shift.TotalVoided = round2(shift.TotalVoided + sale.TotalAmount)
+			shift.VoidCount++
 			continue
 		}
 		shift.TotalSales = round2(shift.TotalSales + sale.TotalAmount)
@@ -838,9 +836,9 @@ func insertShifts(ctx context.Context, tx pgx.Tx, shifts []shiftSeed) error {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO shifts (
 				id, employee_id, started_at, ended_at, opening_cash, closing_cash, expected_cash, cash_difference,
-				total_sales, total_refunds, transaction_count, refund_count, status, notes, created_at, updated_at, closed_by
+				total_sales, total_voided, transaction_count, void_count, status, notes, created_at, updated_at, closed_by
 			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-		`, shift.ID, shift.EmployeeID, shift.StartedAt, shift.EndedAt, money(shift.OpeningCash), nullableMoney(shift.ClosingCash), nullableMoney(shift.ExpectedCash), nullableMoney(shift.CashDifference), money(shift.TotalSales), money(shift.TotalRefunds), shift.TransactionCount, shift.RefundCount, shift.Status, shift.Notes, shift.StartedAt, updatedAt, shift.ClosedBy); err != nil {
+		`, shift.ID, shift.EmployeeID, shift.StartedAt, shift.EndedAt, money(shift.OpeningCash), nullableMoney(shift.ClosingCash), nullableMoney(shift.ExpectedCash), nullableMoney(shift.CashDifference), money(shift.TotalSales), money(shift.TotalVoided), shift.TransactionCount, shift.VoidCount, shift.Status, shift.Notes, shift.StartedAt, updatedAt, shift.ClosedBy); err != nil {
 			return err
 		}
 	}
@@ -985,7 +983,6 @@ func buildAuditLogs(owner userSeed, users []userSeed, products []productSeed, sh
 			ID:          seedUUID("audit", idx),
 			CreatedAt:   now.Add(-time.Duration(idx) * 17 * time.Minute),
 			UserID:      actor.ID,
-			UserEmail:   actor.Email,
 			UserName:    actor.Name,
 			UserRole:    actor.RoleName,
 			Action:      action,
@@ -995,7 +992,6 @@ func buildAuditLogs(owner userSeed, users []userSeed, products []productSeed, sh
 			OldValues:   oldValues,
 			NewValues:   newValues,
 			Metadata:    metadata,
-			RequestID:   fmt.Sprintf("seed-%03d", idx),
 			Status:      "success",
 		})
 	}
@@ -1037,13 +1033,13 @@ func insertAuditLogs(ctx context.Context, tx pgx.Tx, logs []auditSeed) error {
 	for _, entry := range logs {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO audit_logs (
-				id, created_at, user_id, user_email, user_name, user_role, action, entity_type, entity_id,
-				description, old_values, new_values, metadata, ip_address, user_agent, request_id, status
+				id, created_at, user_id, user_name, user_role, action, entity_type, entity_id,
+				description, old_values, new_values, metadata, status
 			) VALUES (
 				$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-				$11::jsonb,$12::jsonb,$13::jsonb,'127.0.0.1','seed-script',$14,$15
+				$11::jsonb,$12::jsonb,$13::jsonb,$14
 			)
-		`, entry.ID, entry.CreatedAt, entry.UserID, entry.UserEmail, entry.UserName, entry.UserRole, entry.Action, entry.EntityType, entry.EntityID, entry.Description, entry.OldValues, entry.NewValues, entry.Metadata, entry.RequestID, entry.Status); err != nil {
+		`, entry.ID, entry.CreatedAt, entry.UserID, entry.UserName, entry.UserRole, entry.Action, entry.EntityType, entry.EntityID, entry.Description, entry.OldValues, entry.NewValues, entry.Metadata, entry.Status); err != nil {
 			return err
 		}
 	}

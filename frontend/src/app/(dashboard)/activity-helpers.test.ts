@@ -29,8 +29,6 @@ const baseLog: AuditLog = {
   entity_id: "p1",
   old_values: {},
   new_values: {},
-  ip_address: "127.0.0.1",
-  user_agent: "test",
   created_at: "2026-05-14T12:00:00Z",
 };
 
