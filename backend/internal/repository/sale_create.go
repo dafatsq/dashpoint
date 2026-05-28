@@ -243,15 +243,8 @@ func insertSalePaymentsTx(ctx context.Context, tx pgx.Tx, sale *models.Sale, pay
 			Amount:         paymentReq.Amount,
 			AmountTendered: paymentReq.AmountTendered,
 			ChangeGiven:    paymentReq.ChangeGiven,
-			CardType:       paymentReq.CardType,
-			CardLastFour:   paymentReq.CardLastFour,
 			ReferenceNo:    paymentReq.ReferenceNo,
-			BankName:       paymentReq.BankName,
-			AccountNo:      paymentReq.AccountNo,
-			VoucherCode:    paymentReq.VoucherCode,
 			Status:         models.PaymentRecordCompleted,
-			Notes:          paymentReq.Notes,
-			ProcessedBy:    &employeeID,
 			CreatedAt:      now,
 		}
 		if err := insertPaymentTx(ctx, tx, payment); err != nil {

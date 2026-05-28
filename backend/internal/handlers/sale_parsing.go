@@ -92,13 +92,7 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 		payment := repository.CreatePaymentRequest{
 			PaymentMethod: method,
 			Amount:        amount,
-			CardType:      paymentReq.CardType,
-			CardLastFour:  paymentReq.CardLastFour,
 			ReferenceNo:   paymentReq.ReferenceNo,
-			BankName:      paymentReq.BankName,
-			AccountNo:     paymentReq.AccountNo,
-			VoucherCode:   paymentReq.VoucherCode,
-			Notes:         paymentReq.Notes,
 		}
 
 		if paymentReq.AmountTendered != nil {

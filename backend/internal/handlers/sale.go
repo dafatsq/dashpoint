@@ -54,13 +54,7 @@ type PaymentRequest struct {
 	Amount         string  `json:"amount"`
 	AmountTendered *string `json:"amount_tendered"`
 	ChangeGiven    *string `json:"change_given"`
-	CardType       *string `json:"card_type"`
-	CardLastFour   *string `json:"card_last_four"`
 	ReferenceNo    *string `json:"reference_no"`
-	BankName       *string `json:"bank_name"`
-	AccountNo      *string `json:"account_no"`
-	VoucherCode    *string `json:"voucher_code"`
-	Notes          *string `json:"notes"`
 }
 
 // CreateSaleRequest represents the request to create a sale.

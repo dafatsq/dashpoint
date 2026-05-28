@@ -60,14 +60,12 @@ func insertPaymentTx(ctx context.Context, tx pgx.Tx, payment models.Payment) err
 	_, err := tx.Exec(ctx, `
 		INSERT INTO payments (
 			id, sale_id, payment_method, amount, amount_tendered, change_given,
-			card_type, card_last_four, reference_no, bank_name, account_no,
-			voucher_code, status, notes, processed_by, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			reference_no, status, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`,
 		payment.ID, payment.SaleID, payment.PaymentMethod, payment.Amount,
-		payment.AmountTendered, payment.ChangeGiven, payment.CardType, payment.CardLastFour,
-		payment.ReferenceNo, payment.BankName, payment.AccountNo, payment.VoucherCode,
-		payment.Status, payment.Notes, payment.ProcessedBy, payment.CreatedAt,
+		payment.AmountTendered, payment.ChangeGiven, payment.ReferenceNo,
+		payment.Status, payment.CreatedAt,
 	)
 	return err
 }

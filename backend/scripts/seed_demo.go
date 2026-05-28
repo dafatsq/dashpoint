@@ -132,15 +132,8 @@ type paymentSeed struct {
 	Amount         float64
 	AmountTendered *float64
 	ChangeGiven    *float64
-	CardType       *string
-	CardLastFour   *string
 	ReferenceNo    *string
-	BankName       *string
-	AccountNo      *string
-	VoucherCode    *string
 	Status         string
-	Notes          string
-	ProcessedBy    uuid.UUID
 	CreatedAt      time.Time
 }
 
@@ -718,26 +711,14 @@ func buildSales(users []userSeed, products []productSeed, shifts []shiftSeed) []
 			Total:          round2(subB + taxB - itemTwoDiscount),
 		}
 
-		var cardType, cardLastFour, referenceNo, bankName, accountNo, voucherCode *string
+		var referenceNo *string
 		switch method {
-		case "card":
-			v := "visa"
-			cardType = &v
-			v = fmt.Sprintf("%04d", 1100+i)
-			cardLastFour = &v
 		case "transfer":
 			v := fmt.Sprintf("SEED-TF-%03d", i+1)
 			referenceNo = &v
-			b := "BCA"
-			bankName = &b
-			a := fmt.Sprintf("0099%06d", i+1)
-			accountNo = &a
 		case "qris":
 			v := fmt.Sprintf("SEED-QR-%03d", i+1)
 			referenceNo = &v
-		case "voucher":
-			v := fmt.Sprintf("SEED-VC-%03d", i+1)
-			voucherCode = &v
 		}
 		paymentStatusRow := "completed"
 		if status == "voided" {
@@ -776,15 +757,8 @@ func buildSales(users []userSeed, products []productSeed, shifts []shiftSeed) []
 				Amount:         total,
 				AmountTendered: nullableFloat(amountTendered, method == "cash"),
 				ChangeGiven:    nullableFloat(change, method == "cash" && change > 0),
-				CardType:       cardType,
-				CardLastFour:   cardLastFour,
 				ReferenceNo:    referenceNo,
-				BankName:       bankName,
-				AccountNo:      accountNo,
-				VoucherCode:    voucherCode,
 				Status:         paymentStatusRow,
-				Notes:          seedMarker + " payment",
-				ProcessedBy:    shift.EmployeeID,
 				CreatedAt:      createdAt,
 			},
 		})
@@ -897,10 +871,9 @@ func insertSales(ctx context.Context, tx pgx.Tx, sales []saleSeed) error {
 		payment := sale.Payment
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO payments (
-				id, sale_id, payment_method, amount, amount_tendered, change_given, card_type, card_last_four,
-				reference_no, bank_name, account_no, voucher_code, status, notes, created_at, processed_by
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-		`, payment.ID, sale.ID, payment.Method, money(payment.Amount), nullableMoney(payment.AmountTendered), nullableMoney(payment.ChangeGiven), payment.CardType, payment.CardLastFour, payment.ReferenceNo, payment.BankName, payment.AccountNo, payment.VoucherCode, payment.Status, payment.Notes, payment.CreatedAt, payment.ProcessedBy); err != nil {
+				id, sale_id, payment_method, amount, amount_tendered, change_given, reference_no, status, created_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		`, payment.ID, sale.ID, payment.Method, money(payment.Amount), nullableMoney(payment.AmountTendered), nullableMoney(payment.ChangeGiven), payment.ReferenceNo, payment.Status, payment.CreatedAt); err != nil {
 			return err
 		}
 	}
