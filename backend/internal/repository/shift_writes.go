@@ -124,7 +124,7 @@ func loadShiftCashTotalsTx(ctx context.Context, tx pgx.Tx, shiftID uuid.UUID) (d
 				SELECT SUM(p.amount)
 				FROM payments p
 				JOIN sales s ON p.sale_id = s.id
-				WHERE s.shift_id = $1 AND p.payment_method = 'cash' AND p.status = 'refunded'
+				WHERE s.shift_id = $1 AND s.status = 'refunded' AND p.payment_method = 'cash' AND p.status = 'refunded'
 			), 0),
 			COALESCE((SELECT SUM(amount) FROM cash_drawer_operations WHERE shift_id = $1 AND type = 'pay_in'), 0),
 			COALESCE((SELECT SUM(amount) FROM cash_drawer_operations WHERE shift_id = $1 AND type = 'pay_out'), 0)
