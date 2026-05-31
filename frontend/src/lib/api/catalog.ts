@@ -1,4 +1,4 @@
-import type { Category, Product } from "@/types";
+import type { Category, Product, ProductInventoryDetails } from "@/types";
 
 import type { ApiTransport } from "./transport";
 import type {
@@ -47,6 +47,11 @@ export function createCatalogApi(transport: ApiTransport): CatalogApi {
       const result = await transport.request<{ product: Product }>(`/products/${id}`);
       if (result.error) return { error: result.error };
       return { data: result.data?.product };
+    },
+    async getProductInventory(id) {
+      const result = await transport.request<ProductInventoryDetails>(`/products/${id}/inventory`);
+      if (result.error) return { error: result.error };
+      return { data: result.data };
     },
     async lookupProduct(code) {
       const result = await transport.request<{ product: Product }>(
