@@ -74,10 +74,11 @@ func (r *InventoryRepository) GetAdjustmentHistory(ctx context.Context, productI
 
 	query := `
 		SELECT sa.id, sa.product_id, sa.adjustment_type, sa.quantity_before, sa.quantity_change, sa.quantity_after,
-		       sa.reason, sa.reference_type, sa.reference_id, sa.adjusted_by, sa.created_at,
-		       u.name
+		       sa.reason, sa.reference_type, sa.reference_id,
+		       COALESCE(sa.adjusted_by, '00000000-0000-0000-0000-000000000000'::uuid),
+		       sa.created_at, COALESCE(u.name, 'Former user')
 		FROM stock_adjustments sa
-		JOIN users u ON sa.adjusted_by = u.id
+		LEFT JOIN users u ON sa.adjusted_by = u.id
 		WHERE sa.product_id = $1
 		ORDER BY sa.created_at DESC
 		LIMIT $2 OFFSET $3

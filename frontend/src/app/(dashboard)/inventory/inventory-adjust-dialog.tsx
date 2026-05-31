@@ -14,10 +14,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { AdjustmentType, Product } from "@/types";
+import type { AdjustmentType, Product, ProductInventoryDetails } from "@/types";
 
 import {
   ADJUSTMENT_TYPE_OPTIONS,
+  getInventoryAdjustmentChangeLabel,
+  getInventoryAdjustmentTypeLabel,
   getInventoryProductQuantity,
   type AdjustmentFormState,
   type InventoryAction,
@@ -26,9 +28,10 @@ import {
 interface InventoryAdjustDialogProps {
   open: boolean;
   product: Product | null;
+  inventoryDetails: ProductInventoryDetails | null;
   formState: AdjustmentFormState;
   allowedActions: InventoryAction[];
-
+  isLoadingInventoryDetails: boolean;
   isSubmitting: boolean;
   onOpenChange: (open: boolean) => void;
   onActionChange: (action: InventoryAction) => void;
@@ -39,9 +42,10 @@ interface InventoryAdjustDialogProps {
 export function InventoryAdjustDialog({
   open,
   product,
+  inventoryDetails,
   formState,
   allowedActions,
-
+  isLoadingInventoryDetails,
   isSubmitting,
   onOpenChange,
   onActionChange,
@@ -54,6 +58,7 @@ export function InventoryAdjustDialog({
     formState.adjustmentType === "count"
       ? quantity
       : currentStock + (formState.action === "add" ? 1 : -1) * quantity;
+  const recentAdjustments = inventoryDetails?.recent_adjustments || [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -165,6 +170,62 @@ export function InventoryAdjustDialog({
               </p>
             </div>
           ) : null}
+
+          <div className="grid gap-2">
+            <Label>Recent Stock History</Label>
+            <div className="rounded-lg border bg-muted/30">
+              {isLoadingInventoryDetails ? (
+                <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading recent adjustments...
+                </div>
+              ) : recentAdjustments.length === 0 ? (
+                <div className="px-3 py-4 text-sm text-muted-foreground">
+                  No recent stock adjustments for this product.
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {recentAdjustments.slice(0, 5).map((adjustment) => (
+                    <div key={adjustment.id} className="px-3 py-3 text-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium">
+                            {getInventoryAdjustmentTypeLabel(adjustment.adjustment_type)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {adjustment.adjusted_by_user?.name || "Former user"} •{" "}
+                            {new Date(adjustment.created_at).toLocaleString("id-ID", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div
+                            className={`font-semibold ${
+                              adjustment.adjustment_type === "count"
+                                ? "text-blue-600"
+                                : adjustment.quantity_change.startsWith("-")
+                                  ? "text-red-600"
+                                  : "text-green-600"
+                            }`}
+                          >
+                            {getInventoryAdjustmentChangeLabel(adjustment)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Stock {adjustment.quantity_before} → {adjustment.quantity_after}
+                          </div>
+                        </div>
+                      </div>
+                      {adjustment.reason ? (
+                        <div className="mt-2 text-xs text-muted-foreground">{adjustment.reason}</div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <DialogFooter>

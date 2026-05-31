@@ -1,5 +1,10 @@
 import { buildBackendUrl } from "@/lib/config";
-import type { AdjustmentType, InventoryAdjustment, Product } from "@/types";
+import type {
+  AdjustmentType,
+  InventoryAdjustment,
+  InventoryAdjustmentRecord,
+  Product,
+} from "@/types";
 
 export type InventoryAction = "add" | "remove" | "count";
 
@@ -142,4 +147,43 @@ export function getInventoryProductImageUrl(
   resolver: (path: string) => string = buildBackendUrl,
 ): string {
   return path ? resolver(path) : "";
+}
+
+export function getInventoryAdjustmentTypeLabel(type: AdjustmentType): string {
+  switch (type) {
+    case "initial":
+      return "Initial Stock";
+    case "purchase":
+      return "Restock";
+    case "sale":
+      return "Sale";
+    case "return":
+      return "Return";
+    case "adjustment":
+      return "Correction";
+    case "damage":
+      return "Damaged";
+    case "loss":
+      return "Lost";
+    case "transfer":
+      return "Transfer";
+    case "count":
+      return "Stock Count";
+    default:
+      return type;
+  }
+}
+
+export function getInventoryAdjustmentChangeLabel(
+  adjustment: Pick<InventoryAdjustmentRecord, "adjustment_type" | "quantity_change" | "quantity_after">,
+): string {
+  const quantityChange = Number.parseFloat(adjustment.quantity_change || "") || 0;
+  const quantityAfter = Number.parseFloat(adjustment.quantity_after || "") || 0;
+
+  if (adjustment.adjustment_type === "count") {
+    return `Set to ${quantityAfter}`;
+  }
+
+  const sign = quantityChange > 0 ? "+" : "";
+  return `${sign}${quantityChange}`;
 }

@@ -15,6 +15,7 @@ import type {
   ExpenseCategory,
   ExpenseSummary,
   InventoryAdjustment,
+  ProductInventoryDetails,
   InventoryValuation,
   LowStockItem,
   Product,
@@ -164,6 +165,7 @@ export interface CatalogApi {
     search?: string;
   }): Promise<ApiResponse<Product[]>>;
   getProduct(id: string): Promise<ApiResponse<Product>>;
+  getProductInventory(id: string): Promise<ApiResponse<ProductInventoryDetails>>;
   lookupProduct(code: string): Promise<ApiResponse<Product>>;
   createProduct(product: CreateProductRequest): Promise<ApiResponse<Product>>;
   updateProduct(

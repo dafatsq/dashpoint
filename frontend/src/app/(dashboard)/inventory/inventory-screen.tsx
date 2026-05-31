@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
 import { useGlobalError } from "@/contexts/error-context";
 import api from "@/lib/api";
-import type { Category, LowStockItem, Product } from "@/types";
+import type { Category, LowStockItem, Product, ProductInventoryDetails } from "@/types";
 
 import { InventoryAdjustDialog } from "./inventory-adjust-dialog";
 import { InventoryControls } from "./inventory-controls";
@@ -52,6 +52,8 @@ export function InventoryScreen() {
 
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [inventoryDetails, setInventoryDetails] = useState<ProductInventoryDetails | null>(null);
+  const [isLoadingInventoryDetails, setIsLoadingInventoryDetails] = useState(false);
   const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormState>(createEmptyAdjustmentFormState("add"));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -193,15 +195,25 @@ export function InventoryScreen() {
   }, [activeTab, fetchProductsPage, hasMore, isFetchingMore, isLoading, page]);
 
   const openAdjustDialog = useCallback(
-    (product: Product) => {
+    async (product: Product) => {
       if (!canModifyStock || allowedActions.length === 0) {
         return;
       }
 
       const defaultAction = allowedActions[0];
       setSelectedProduct(product);
+      setInventoryDetails(null);
+      setIsLoadingInventoryDetails(true);
       setAdjustmentForm(createEmptyAdjustmentFormState(defaultAction));
       setAdjustDialogOpen(true);
+
+      const result = await api.getProductInventory(product.id);
+      if (result.error) {
+        setPageError(result.error);
+      } else {
+        setInventoryDetails(result.data || null);
+      }
+      setIsLoadingInventoryDetails(false);
     },
     [allowedActions, canModifyStock],
   );
@@ -220,7 +232,7 @@ export function InventoryScreen() {
         return;
       }
       if (result.data) {
-        openAdjustDialog(result.data);
+        await openAdjustDialog(result.data);
       }
     },
     [openAdjustDialog, products],
@@ -312,6 +324,7 @@ export function InventoryScreen() {
     await Promise.all([fetchProductsPage(1, true), fetchLowStock()]);
     setAdjustDialogOpen(false);
     setSelectedProduct(null);
+    setInventoryDetails(null);
     setIsSubmitting(false);
   }, [
     adjustmentForm,
@@ -443,13 +456,17 @@ export function InventoryScreen() {
       <InventoryAdjustDialog
         open={adjustDialogOpen}
         product={selectedProduct}
+        inventoryDetails={inventoryDetails}
         formState={adjustmentForm}
         allowedActions={allowedActions}
+        isLoadingInventoryDetails={isLoadingInventoryDetails}
         isSubmitting={isSubmitting}
         onOpenChange={(open) => {
           setAdjustDialogOpen(open);
           if (!open) {
             setSelectedProduct(null);
+            setInventoryDetails(null);
+            setIsLoadingInventoryDetails(false);
           }
         }}
         onActionChange={(action) =>

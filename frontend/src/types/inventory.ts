@@ -11,13 +11,54 @@ export interface LowStockItem {
   is_low_stock: boolean;
 }
 
-export type AdjustmentType = "purchase" | "adjustment" | "damage" | "loss" | "count";
+export type AdjustmentType =
+  | "initial"
+  | "purchase"
+  | "sale"
+  | "return"
+  | "adjustment"
+  | "damage"
+  | "loss"
+  | "transfer"
+  | "count";
 
 export interface InventoryAdjustment {
   product_id: string;
   adjustment_type: AdjustmentType;
   quantity: string;
   reason?: string;
+}
+
+export interface InventoryAdjustmentRecord {
+  id: string;
+  product_id: string;
+  adjustment_type: AdjustmentType;
+  quantity_before: string;
+  quantity_change: string;
+  quantity_after: string;
+  reason?: string;
+  reference_type?: string;
+  reference_id?: string;
+  adjusted_by: string;
+  created_at: string;
+  adjusted_by_user?: {
+    name: string;
+  };
+}
+
+export interface InventoryDetail {
+  product_id: string;
+  quantity: string;
+  available_quantity: string;
+  low_stock_threshold: string;
+  is_low_stock: boolean;
+  updated_at: string;
+}
+
+export interface ProductInventoryDetails {
+  inventory: InventoryDetail;
+  recent_adjustments: InventoryAdjustmentRecord[];
+  total_adjustments: number;
 }
 
 export interface InventoryValuation {

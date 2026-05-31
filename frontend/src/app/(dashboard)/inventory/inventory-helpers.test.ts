@@ -9,6 +9,8 @@ import {
   classifyInventoryStock,
   createEmptyAdjustmentFormState,
   getDefaultAdjustmentType,
+  getInventoryAdjustmentChangeLabel,
+  getInventoryAdjustmentTypeLabel,
   getInventoryProductMinQuantity,
   getInventoryProductPrice,
   getInventoryProductQuantity,
@@ -177,6 +179,40 @@ describe("inventory helpers", () => {
       adjustmentType: "purchase",
       notes: "",
     });
+  });
+
+  test("formats adjustment type and quantity labels for stock history", () => {
+    expect(getInventoryAdjustmentTypeLabel("purchase")).toBe("Restock");
+    expect(getInventoryAdjustmentTypeLabel("sale")).toBe("Sale");
+    expect(getInventoryAdjustmentTypeLabel("return")).toBe("Return");
+    expect(getInventoryAdjustmentTypeLabel("adjustment")).toBe("Correction");
+    expect(getInventoryAdjustmentTypeLabel("initial")).toBe("Initial Stock");
+    expect(getInventoryAdjustmentTypeLabel("transfer")).toBe("Transfer");
+    expect(getInventoryAdjustmentTypeLabel("count")).toBe("Stock Count");
+
+    expect(
+      getInventoryAdjustmentChangeLabel({
+        adjustment_type: "purchase",
+        quantity_change: "4",
+        quantity_after: "9",
+      }),
+    ).toBe("+4");
+
+    expect(
+      getInventoryAdjustmentChangeLabel({
+        adjustment_type: "loss",
+        quantity_change: "-2",
+        quantity_after: "7",
+      }),
+    ).toBe("-2");
+
+    expect(
+      getInventoryAdjustmentChangeLabel({
+        adjustment_type: "count",
+        quantity_change: "3",
+        quantity_after: "12",
+      }),
+    ).toBe("Set to 12");
   });
 
   test("builds image urls only when a path exists", () => {
