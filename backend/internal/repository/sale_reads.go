@@ -158,7 +158,7 @@ func (r *SaleRepository) List(ctx context.Context, filter *SaleFilter) ([]models
 		argIndex++
 	}
 	if filter.EndDate != nil {
-		whereClause += fmt.Sprintf(" AND s.created_at <= $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND s.created_at < $%d", argIndex)
 		args = append(args, *filter.EndDate)
 		argIndex++
 	}

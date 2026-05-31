@@ -41,33 +41,34 @@ func parseShiftListFilter(c *fiber.Ctx) (*repository.ShiftFilter, error) {
 
 	filter := &repository.ShiftFilter{Limit: limit, Offset: offset}
 
-	empIDStr := c.Query("employee_id")
-	if empIDStr == "" {
-		empIDStr = c.Query("user_id")
+	openedByStr := c.Query("opened_by_id")
+	if openedByStr == "" {
+		openedByStr = c.Query("user_id")
 	}
-	if empIDStr != "" {
-		id, err := uuid.Parse(empIDStr)
+	if openedByStr != "" {
+		id, err := uuid.Parse(openedByStr)
 		if err != nil {
-			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_EMPLOYEE_ID", message: "Invalid employee ID format"}
+			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_OPENED_BY_ID", message: "Invalid opened_by ID format"}
 		}
-		filter.EmployeeID = &id
+		filter.OpenedByID = &id
 	}
 
 	if startStr := c.Query("from"); startStr != "" {
-		t, err := time.Parse("2006-01-02", startStr)
+		t, err := parseReportDay(startStr, "from")
 		if err != nil {
 			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_START_DATE", message: "Invalid from date format. Use YYYY-MM-DD"}
 		}
+		t = reportDayStart(t)
 		filter.StartDate = &t
 	}
 
 	if endStr := c.Query("to"); endStr != "" {
-		t, err := time.Parse("2006-01-02", endStr)
+		t, err := parseReportDay(endStr, "to")
 		if err != nil {
 			return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_END_DATE", message: "Invalid to date format. Use YYYY-MM-DD"}
 		}
-		endOfDay := t.Add(24*time.Hour - time.Second)
-		filter.EndDate = &endOfDay
+		exclusiveEnd := reportDayStart(t).Add(24 * time.Hour)
+		filter.EndDate = &exclusiveEnd
 	}
 
 	return filter, nil

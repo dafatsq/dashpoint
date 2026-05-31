@@ -9,8 +9,8 @@ import (
 
 // GetDailySummary gets sales summary for a date.
 func (r *SaleRepository) GetDailySummary(ctx context.Context, date time.Time) (map[string]interface{}, error) {
-	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
-	endOfDay := startOfDay.Add(24 * time.Hour)
+	startOfDay := startOfReportDay(date)
+	endOfDay := exclusiveEndDate(date)
 
 	var totalSales, totalTax, totalDiscount, totalAmount decimal.Decimal
 	var transactionCount, itemCount int
@@ -53,7 +53,7 @@ func (r *SaleRepository) GetDailySummary(ctx context.Context, date time.Time) (m
 	}
 
 	return map[string]interface{}{
-		"date":              date.Format("2006-01-02"),
+		"date":              startOfDay.Format("2006-01-02"),
 		"total_sales":       totalSales.String(),
 		"total_tax":         totalTax.String(),
 		"total_discount":    totalDiscount.String(),

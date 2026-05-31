@@ -49,7 +49,7 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
     },
     async getShifts(params) {
       const result = await transport.request<ShiftsResponse>(`/shifts${buildQuery({
-        user_id: params?.user_id,
+        opened_by_id: params?.opened_by_id,
         from: params?.from,
         to: params?.to,
         limit: params?.limit,

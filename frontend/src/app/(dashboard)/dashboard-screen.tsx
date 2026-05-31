@@ -242,7 +242,7 @@ export function DashboardScreen() {
               <CardTitle>Shift History</CardTitle>
             </div>
             <CardDescription>
-              Recent and active shifts across all employees
+              Recent and active shared store shifts
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 px-0 pb-4 md:px-6 md:pb-6 md:pt-0">

@@ -9,11 +9,11 @@ import (
 
 // GetDailySalesReport gets sales report for a specific date.
 func (r *ReportRepository) GetDailySalesReport(ctx context.Context, date time.Time) (*DailySalesReport, error) {
-	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	startOfDay := startOfReportDay(date)
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
 	report := &DailySalesReport{
-		Date:             date.Format("2006-01-02"),
+		Date:             startOfDay.Format("2006-01-02"),
 		PaymentBreakdown: make(map[string]string),
 	}
 
@@ -72,12 +72,12 @@ func (r *ReportRepository) GetDailySalesReport(ctx context.Context, date time.Ti
 
 	hourlyRows, err := r.pool.Query(ctx, `
 		SELECT
-			EXTRACT(HOUR FROM created_at)::int as hour,
+			EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Jakarta')::int as hour,
 			COALESCE(SUM(total_amount), 0),
 			COUNT(*)
 		FROM sales
 		WHERE created_at >= $1 AND created_at < $2 AND status = 'completed'
-		GROUP BY EXTRACT(HOUR FROM created_at)
+		GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Jakarta')
 		ORDER BY hour
 	`, startOfDay, endOfDay)
 	if err != nil {
@@ -121,7 +121,7 @@ func (r *ReportRepository) GetSalesRangeSummary(ctx context.Context, startDate, 
 			COALESCE(SUM(discount_amount), 0)
 		FROM sales
 		WHERE created_at >= $1 AND created_at < $2 AND status = 'completed'
-	`, startDate, inclusiveEndDate(endDate)).Scan(
+	`, startOfReportDay(startDate), exclusiveEndDate(endDate)).Scan(
 		&summary.TotalTransactions,
 		&summary.TotalItems,
 		&summary.TotalAmount,
@@ -136,8 +136,8 @@ func (r *ReportRepository) GetSalesForExport(ctx context.Context, startDate, end
 	query := `
 		SELECT
 			s.invoice_no,
-			TO_CHAR(s.created_at, 'YYYY-MM-DD') as date,
-			TO_CHAR(s.created_at, 'HH24:MI:SS') as time,
+			TO_CHAR(s.created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') as date,
+			TO_CHAR(s.created_at AT TIME ZONE 'Asia/Jakarta', 'HH24:MI:SS') as time,
 			COALESCE(u.name, 'Unknown') as employee_name,
 			s.item_count,
 			s.subtotal,
@@ -155,7 +155,7 @@ func (r *ReportRepository) GetSalesForExport(ctx context.Context, startDate, end
 		ORDER BY s.created_at DESC
 	`
 
-	rows, err := r.pool.Query(ctx, query, startDate, inclusiveEndDate(endDate))
+	rows, err := r.pool.Query(ctx, query, startOfReportDay(startDate), exclusiveEndDate(endDate))
 	if err != nil {
 		return nil, err
 	}

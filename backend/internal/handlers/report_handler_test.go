@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"encoding/csv"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,16 +105,17 @@ func TestGetInventoryValuationRejectsInvalidCategoryID(t *testing.T) {
 	}
 }
 
-func TestGetCashReportUsesExclusiveNextDayUpperBound(t *testing.T) {
+func TestGetCashReportUsesJakartaLocalDateBounds(t *testing.T) {
+	jakarta := time.FixedZone("WIB", 7*60*60)
 	store := &fakeReportStore{
 		getCashReportFunc: func(_ context.Context, startDate, endDate time.Time) (*repository.CashReport, error) {
-			expectedStart := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-			expectedEnd := expectedStart.Add(24 * time.Hour)
+			expectedStart := time.Date(2026, 5, 1, 0, 0, 0, 0, jakarta)
+			expectedEnd := expectedStart
 			if !startDate.Equal(expectedStart) {
 				t.Fatalf("unexpected startDate: %v", startDate)
 			}
 			if !endDate.Equal(expectedEnd) {
-				t.Fatalf("expected exclusive next-day endDate %v, got %v", expectedEnd, endDate)
+				t.Fatalf("expected inclusive local endDate %v, got %v", expectedEnd, endDate)
 			}
 			return &repository.CashReport{}, nil
 		},
@@ -128,5 +131,69 @@ func TestGetCashReportUsesExclusiveNextDayUpperBound(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestExportInventoryCSVUsesJakartaDateFilename(t *testing.T) {
+	handler := NewReportHandler(&fakeReportStore{})
+	app := fiber.New()
+	app.Get("/reports/export/inventory", handler.ExportInventoryCSV)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/export/inventory", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	expectedFilename := "attachment; filename=inventory_" + time.Now().In(reportBusinessLocation).Format("20060102") + ".csv"
+	if got := resp.Header.Get("Content-Disposition"); got != expectedFilename {
+		t.Fatalf("expected content disposition %q, got %q", expectedFilename, got)
+	}
+}
+
+func TestExportComprehensiveReportIncludesGeneratedLine(t *testing.T) {
+	handler := NewReportHandler(&fakeReportStore{
+		getSalesRangeSummaryFunc: func(context.Context, time.Time, time.Time) (*repository.SalesRangeSummary, error) {
+			return &repository.SalesRangeSummary{}, nil
+		},
+		getSalesRangeReportFunc: func(context.Context, time.Time, time.Time) ([]repository.DailySalesReport, error) {
+			return []repository.DailySalesReport{}, nil
+		},
+		getTopSellersFunc: func(context.Context, time.Time, time.Time, int) ([]repository.TopSellerItem, error) {
+			return []repository.TopSellerItem{}, nil
+		},
+		getEmployeeSalesReportFun: func(context.Context, time.Time, time.Time) ([]map[string]interface{}, error) {
+			return []map[string]interface{}{}, nil
+		},
+		getCategorySalesReportFun: func(context.Context, time.Time, time.Time) ([]map[string]interface{}, error) {
+			return []map[string]interface{}{}, nil
+		},
+	})
+	app := fiber.New()
+	app.Get("/reports/export/comprehensive", handler.ExportComprehensiveReportCSV)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/export/comprehensive?start_date=2026-05-01&end_date=2026-05-01", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	reader := csv.NewReader(resp.Body)
+	reader.FieldsPerRecord = -1
+	rows, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("failed to read csv: %v", err)
+	}
+	if len(rows) < 2 || len(rows[1]) < 2 || rows[1][0] != "Generated:" {
+		t.Fatalf("expected generated row, got %v", rows)
+	}
+	if strings.TrimSpace(rows[1][1]) == "" {
+		t.Fatalf("expected generated timestamp, got %q", rows[1][1])
 	}
 }

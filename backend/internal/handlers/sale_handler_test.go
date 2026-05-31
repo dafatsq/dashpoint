@@ -68,7 +68,7 @@ type fakeShiftLookup struct {
 	err   error
 }
 
-func (f *fakeShiftLookup) GetOpenShiftByEmployee(context.Context, uuid.UUID) (*models.Shift, error) {
+func (f *fakeShiftLookup) GetCurrentOpenShift(context.Context) (*models.Shift, error) {
 	return f.shift, f.err
 }
 
@@ -102,9 +102,9 @@ func TestCreateSaleRejectsInvalidAmountTendered(t *testing.T) {
 	}
 }
 
-func TestCreateSaleRequiresOpenShiftForCashier(t *testing.T) {
+func TestCreateSaleRequiresOpenShift(t *testing.T) {
 	handler := NewSaleHandler(&fakeSaleStore{}, &fakeShiftLookup{})
-	app := saleTestApp(handler, uuid.New(), "cashier")
+	app := saleTestApp(handler, uuid.New(), "owner")
 	body := `{
 		"items":[{"product_id":"00000000-0000-0000-0000-000000000001","quantity":"1","unit_price":"10.00","discount_value":"0","discount_amount":"0"}],
 		"payments":[{"payment_method":"cash","amount":"10.00"}]
@@ -127,6 +127,63 @@ func TestListSalesRejectsInvalidShiftID(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestListSalesUsesJakartaExclusiveDateBounds(t *testing.T) {
+	var got *repository.SaleFilter
+	handler := NewSaleHandler(&fakeSaleStore{
+		listFunc: func(_ context.Context, filter *repository.SaleFilter) ([]models.Sale, int, error) {
+			got = filter
+			return []models.Sale{}, 0, nil
+		},
+	}, &fakeShiftLookup{})
+	app := saleTestApp(handler, uuid.New(), "owner")
+
+	req := httptest.NewRequest(http.MethodGet, "/sales?from=2026-05-29&to=2026-05-29", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	jakarta := time.FixedZone("WIB", 7*60*60)
+	expectedStart := time.Date(2026, 5, 29, 0, 0, 0, 0, jakarta)
+	expectedEnd := expectedStart.Add(24 * time.Hour)
+	if got == nil || got.StartDate == nil || !got.StartDate.Equal(expectedStart) {
+		t.Fatalf("expected startDate %v, got %+v", expectedStart, got)
+	}
+	if got.EndDate == nil || !got.EndDate.Equal(expectedEnd) {
+		t.Fatalf("expected exclusive endDate %v, got %v", expectedEnd, got.EndDate)
+	}
+}
+
+func TestGetDailySummaryParsesDateInJakartaTimezone(t *testing.T) {
+	var got time.Time
+	handler := NewSaleHandler(&fakeSaleStore{
+		getDailySummaryFunc: func(_ context.Context, date time.Time) (map[string]interface{}, error) {
+			got = date
+			return map[string]interface{}{}, nil
+		},
+	}, &fakeShiftLookup{})
+	app := saleTestApp(handler, uuid.New(), "owner")
+	app.Get("/sales/summary/daily", handler.GetDailySummary)
+
+	req := httptest.NewRequest(http.MethodGet, "/sales/summary/daily?date=2026-05-29", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	jakarta := time.FixedZone("WIB", 7*60*60)
+	expected := time.Date(2026, 5, 29, 0, 0, 0, 0, jakarta)
+	if !got.Equal(expected) {
+		t.Fatalf("expected %v, got %v", expected, got)
 	}
 }
 

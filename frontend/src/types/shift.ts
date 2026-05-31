@@ -2,7 +2,7 @@ export type ShiftStatus = "open" | "closed" | "suspended";
 
 export interface Shift {
   id: string;
-  employee_id: string;
+  opened_by: string;
   started_at: string;
   ended_at?: string;
   status: ShiftStatus;
@@ -18,7 +18,7 @@ export interface Shift {
   notes?: string;
   created_at: string;
   updated_at: string;
-  employee_name?: string;
+  opened_by_name?: string;
   closed_by?: string;
   closed_by_name?: string;
   operations?: CashDrawerOperation[];

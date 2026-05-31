@@ -42,7 +42,7 @@ func (f *fakeCashDrawerStore) GetTotalsByShift(ctx context.Context, shiftID uuid
 func TestPayInRejectsMissingReason(t *testing.T) {
 	userID := uuid.New()
 	handler := NewCashDrawerHandler(&fakeCashDrawerStore{}, &fakeShiftLookup{
-		shift: &models.Shift{ID: uuid.New(), EmployeeID: userID},
+		shift: &models.Shift{ID: uuid.New(), OpenedBy: userID},
 	})
 
 	app := fiber.New()

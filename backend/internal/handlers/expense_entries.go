@@ -317,8 +317,8 @@ func (h *ExpenseHandler) Delete(c *fiber.Ctx) error {
 
 // GetSummary handles GET /api/v1/expenses/summary
 func (h *ExpenseHandler) GetSummary(c *fiber.Ctx) error {
-	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	now := time.Now().In(reportBusinessLocation)
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, reportBusinessLocation)
 	endOfMonth := startOfMonth.AddDate(0, 1, -1)
 
 	if startStr := c.Query("start_date"); startStr != "" {

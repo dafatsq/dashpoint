@@ -8,6 +8,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const reportTimezoneName = "Asia/Jakarta"
+
+var reportLocation = loadReportLocation()
+
 // ReportRepository handles report database operations.
 type ReportRepository struct {
 	pool *pgxpool.Pool
@@ -104,8 +108,21 @@ type SalesRangeSummary struct {
 	TotalDiscount     decimal.Decimal `json:"total_discount"`
 }
 
-func inclusiveEndDate(endDate time.Time) time.Time {
-	return endDate.Add(24 * time.Hour)
+func loadReportLocation() *time.Location {
+	location, err := time.LoadLocation(reportTimezoneName)
+	if err != nil {
+		return time.FixedZone("WIB", 7*60*60)
+	}
+	return location
+}
+
+func startOfReportDay(date time.Time) time.Time {
+	localDate := date.In(reportLocation)
+	return time.Date(localDate.Year(), localDate.Month(), localDate.Day(), 0, 0, 0, 0, reportLocation)
+}
+
+func exclusiveEndDate(endDate time.Time) time.Time {
+	return startOfReportDay(endDate).Add(24 * time.Hour)
 }
 
 func inventoryWhereClause(categoryID *uuid.UUID) (string, []interface{}) {

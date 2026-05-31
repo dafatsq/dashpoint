@@ -5,7 +5,7 @@ export interface ShiftQueryParams {
   offset: number;
   from?: string;
   to?: string;
-  user_id?: string;
+  opened_by_id?: string;
 }
 
 export function buildShiftQueryParams(input: {
@@ -21,7 +21,7 @@ export function buildShiftQueryParams(input: {
 
   if (input.dateRange.start) params.from = input.dateRange.start;
   if (input.dateRange.end) params.to = input.dateRange.end;
-  if (input.selectedUser && input.selectedUser !== "all") params.user_id = input.selectedUser;
+  if (input.selectedUser && input.selectedUser !== "all") params.opened_by_id = input.selectedUser;
 
   return params;
 }

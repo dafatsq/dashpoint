@@ -9,7 +9,7 @@ import (
 
 // GetDailySalesReport handles GET /api/v1/reports/daily
 func (h *ReportHandler) GetDailySalesReport(c *fiber.Ctx) error {
-	dateStr := c.Query("date", time.Now().Format(reportDateLayout))
+	dateStr := c.Query("date", time.Now().In(reportBusinessLocation).Format(reportDateLayout))
 	date, err := parseReportDay(dateStr, "date")
 	if err != nil {
 		return reportError(c, fiber.StatusBadRequest, "INVALID_DATE", "Invalid date format. Use YYYY-MM-DD")
@@ -68,12 +68,7 @@ func (h *ReportHandler) GetCashReport(c *fiber.Ctx) error {
 		return err
 	}
 
-	queryEnd := dateRange.end
-	if c.Query("start_date") != "" && c.Query("end_date") != "" {
-		queryEnd = queryEnd.Add(24 * time.Hour)
-	}
-
-	report, err := h.reportRepo.GetCashReport(c.Context(), dateRange.start, queryEnd)
+	report, err := h.reportRepo.GetCashReport(c.Context(), dateRange.start, dateRange.end)
 	if err != nil {
 		return reportInternalError(c, err, "Failed to get cash report")
 	}

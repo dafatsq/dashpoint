@@ -23,9 +23,9 @@ func (r *ShiftRepository) Create(ctx context.Context, shift *models.Shift) error
 
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO shifts (
-			id, employee_id, started_at, opening_cash, status, notes, created_at, updated_at
+			id, opened_by, started_at, opening_cash, status, notes, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, shift.ID, shift.EmployeeID, shift.StartedAt, shift.OpeningCash, shift.Status, shift.Notes, shift.CreatedAt, shift.UpdatedAt)
+	`, shift.ID, shift.OpenedBy, shift.StartedAt, shift.OpeningCash, shift.Status, shift.Notes, shift.CreatedAt, shift.UpdatedAt)
 	return err
 }
 

@@ -158,19 +158,20 @@ func parseSaleFilter(c *fiber.Ctx) (*repository.SaleFilter, error) {
 		filter.Status = &status
 	}
 	if startStr := c.Query("from"); startStr != "" {
-		startDate, err := time.Parse("2006-01-02", startStr)
+		startDate, err := parseReportDay(startStr, "from")
 		if err != nil {
 			return nil, saleValidationAPIError("INVALID_START_DATE", "Invalid from format. Use YYYY-MM-DD")
 		}
+		startDate = reportDayStart(startDate)
 		filter.StartDate = &startDate
 	}
 	if endStr := c.Query("to"); endStr != "" {
-		endDate, err := time.Parse("2006-01-02", endStr)
+		endDate, err := parseReportDay(endStr, "to")
 		if err != nil {
 			return nil, saleValidationAPIError("INVALID_END_DATE", "Invalid to format. Use YYYY-MM-DD")
 		}
-		endOfDay := endDate.Add(24*time.Hour - time.Second)
-		filter.EndDate = &endOfDay
+		exclusiveEnd := reportDayStart(endDate).Add(24 * time.Hour)
+		filter.EndDate = &exclusiveEnd
 	}
 	if invoiceSearch := c.Query("invoice_no"); invoiceSearch != "" {
 		filter.InvoiceSearch = &invoiceSearch

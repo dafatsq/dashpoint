@@ -14,6 +14,8 @@ import (
 
 const reportDateLayout = "2006-01-02"
 
+var reportBusinessLocation = loadReportBusinessLocation()
+
 type reportDateRange struct {
 	start    time.Time
 	end      time.Time
@@ -29,11 +31,24 @@ func reportError(c *fiber.Ctx, status int, code, message string) error {
 }
 
 func parseReportDay(value, field string) (time.Time, error) {
-	parsed, err := time.Parse(reportDateLayout, value)
+	parsed, err := time.ParseInLocation(reportDateLayout, value, reportBusinessLocation)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("%s", field)
 	}
 	return parsed, nil
+}
+
+func loadReportBusinessLocation() *time.Location {
+	location, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		return time.FixedZone("WIB", 7*60*60)
+	}
+	return location
+}
+
+func reportDayStart(date time.Time) time.Time {
+	localDate := date.In(reportBusinessLocation)
+	return time.Date(localDate.Year(), localDate.Month(), localDate.Day(), 0, 0, 0, 0, reportBusinessLocation)
 }
 
 func parseReportRange(c *fiber.Ctx, defaultDays int, requireProvided bool, maxDays int) (*reportDateRange, error) {
@@ -47,7 +62,7 @@ func parseReportRange(c *fiber.Ctx, defaultDays int, requireProvided bool, maxDa
 		if requireProvided {
 			return nil, errors.New("missing")
 		}
-		endDate = time.Now()
+		endDate = reportDayStart(time.Now().In(reportBusinessLocation))
 		startDate = endDate.AddDate(0, 0, -defaultDays)
 		startStr = startDate.Format(reportDateLayout)
 		endStr = endDate.Format(reportDateLayout)

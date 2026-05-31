@@ -19,7 +19,7 @@ const (
 func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
-	existingShift, err := h.shiftRepo.GetOpenShiftByEmployee(c.Context(), userID)
+	existingShift, err := h.shiftRepo.GetCurrentOpenShift(c.Context())
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to check existing shift")
 		return shiftInternalError(c, "Failed to check existing shift")
@@ -27,7 +27,7 @@ func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 	if existingShift != nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 			"code":    "SHIFT_EXISTS",
-			"message": "You already have an open shift",
+			"message": "There is already an open shift",
 			"shift":   existingShift,
 		})
 	}
@@ -38,7 +38,7 @@ func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 	}
 
 	shift := &models.Shift{
-		EmployeeID:  userID,
+		OpenedBy:    userID,
 		OpeningCash: openingCash,
 		Notes:       req.Notes,
 	}
@@ -70,7 +70,7 @@ func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 func (h *ShiftHandler) CloseShift(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
-	shift, err := h.shiftRepo.GetOpenShiftByEmployee(c.Context(), userID)
+	shift, err := h.shiftRepo.GetCurrentOpenShift(c.Context())
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get open shift")
 		return shiftInternalError(c, "Failed to get open shift")

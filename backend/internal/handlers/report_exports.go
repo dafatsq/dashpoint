@@ -105,7 +105,7 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 		return reportExportInternalError(c, err, "Failed to write inventory export")
 	}
 
-	filename := fmt.Sprintf("inventory_%s.csv", time.Now().Format("20060102"))
+	filename := fmt.Sprintf("inventory_%s.csv", time.Now().In(reportBusinessLocation).Format("20060102"))
 	return sendCSV(c, filename, data)
 }
 
@@ -189,7 +189,7 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 
 	rows := [][]string{
 		{"COMPREHENSIVE SALES REPORT"},
-		{"Generated:", time.Now().Format("2006-01-02 15:04:05")},
+		{"Generated:", time.Now().In(reportBusinessLocation).Format("2006-01-02 15:04:05")},
 		{"Period:", fmt.Sprintf("%s to %s", dateRange.start.Format(reportDateLayout), dateRange.end.Format(reportDateLayout))},
 		{""},
 		{"=== SUMMARY STATISTICS ==="},

@@ -21,7 +21,7 @@ type saleStore interface {
 }
 
 type shiftLookupStore interface {
-	GetOpenShiftByEmployee(context.Context, uuid.UUID) (*models.Shift, error)
+	GetCurrentOpenShift(context.Context) (*models.Shift, error)
 }
 
 // SaleHandler handles sale endpoints.

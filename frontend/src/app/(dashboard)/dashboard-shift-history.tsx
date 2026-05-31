@@ -70,7 +70,7 @@ export function DashboardShiftHistory({ shifts, isLoading, error, onRetry }: Das
                 )}
                 <div className="flex items-center gap-1 text-sm font-medium flex-wrap">
                   <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                  <span className="truncate max-w-[120px] sm:max-w-[200px]">{shift.employee_name || "Unknown"}</span>
+                  <span className="truncate max-w-[120px] sm:max-w-[200px]">Opened by {shift.opened_by_name || "Unknown"}</span>
                   {!preview.isOpen && shift.closed_by_name ? (
                     <span className="text-muted-foreground text-[10px] sm:text-xs font-normal">(Closed by {shift.closed_by_name})</span>
                   ) : null}

@@ -8,8 +8,10 @@ import (
 
 // GetCashReport gets cash report for a date range.
 func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate time.Time) (*CashReport, error) {
+	start := startOfReportDay(startDate)
+	end := exclusiveEndDate(endDate)
 	report := &CashReport{
-		Date: fmt.Sprintf("%s to %s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02")),
+		Date: fmt.Sprintf("%s to %s", start.Format("2006-01-02"), startOfReportDay(endDate).Format("2006-01-02")),
 	}
 
 	if err := r.pool.QueryRow(ctx, `
@@ -19,7 +21,7 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate
 			COALESCE(SUM(closing_cash), 0)
 		FROM shifts
 		WHERE started_at >= $1 AND started_at < $2 AND status = 'closed'
-	`, startDate, endDate).Scan(&report.ShiftCount, &report.OpeningCash, &report.ActualCash); err != nil {
+	`, start, end).Scan(&report.ShiftCount, &report.OpeningCash, &report.ActualCash); err != nil {
 		return nil, err
 	}
 
@@ -29,7 +31,7 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate
 		JOIN sales s ON p.sale_id = s.id
 		WHERE s.created_at >= $1 AND s.created_at < $2
 		AND s.status = 'completed' AND p.payment_method = 'cash'
-	`, startDate, endDate).Scan(&report.CashSales); err != nil {
+	`, start, end).Scan(&report.CashSales); err != nil {
 		return nil, err
 	}
 
@@ -39,7 +41,7 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate
 		JOIN sales s ON p.sale_id = s.id
 		WHERE s.created_at >= $1 AND s.created_at < $2
 		AND s.status = 'voided' AND p.payment_method = 'cash' AND p.status = 'refunded'
-	`, startDate, endDate).Scan(&report.CashVoidedSales); err != nil {
+	`, start, end).Scan(&report.CashVoidedSales); err != nil {
 		return nil, err
 	}
 
@@ -50,7 +52,7 @@ func (r *ReportRepository) GetCashReport(ctx context.Context, startDate, endDate
 		FROM cash_drawer_operations cdo
 		JOIN shifts sh ON cdo.shift_id = sh.id
 		WHERE sh.started_at >= $1 AND sh.started_at < $2
-	`, startDate, endDate).Scan(&report.PayInTotal, &report.PayOutTotal); err != nil {
+	`, start, end).Scan(&report.PayInTotal, &report.PayOutTotal); err != nil {
 		return nil, err
 	}
 

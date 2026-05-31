@@ -69,8 +69,8 @@ func (h *SaleHandler) ListSales(c *fiber.Ctx) error {
 
 // GetDailySummary handles GET /api/v1/sales/summary/daily.
 func (h *SaleHandler) GetDailySummary(c *fiber.Ctx) error {
-	dateStr := c.Query("date", time.Now().Format("2006-01-02"))
-	date, err := time.Parse("2006-01-02", dateStr)
+	dateStr := c.Query("date", time.Now().In(reportBusinessLocation).Format("2006-01-02"))
+	date, err := time.ParseInLocation("2006-01-02", dateStr, reportBusinessLocation)
 	if err != nil {
 		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_DATE", "Invalid date format. Use YYYY-MM-DD")
 	}

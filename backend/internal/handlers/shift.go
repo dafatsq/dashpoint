@@ -13,7 +13,7 @@ import (
 type shiftStore interface {
 	Create(context.Context, *models.Shift) error
 	GetByID(context.Context, uuid.UUID) (*models.Shift, error)
-	GetOpenShiftByEmployee(context.Context, uuid.UUID) (*models.Shift, error)
+	GetCurrentOpenShift(context.Context) (*models.Shift, error)
 	CloseShift(context.Context, uuid.UUID, decimal.Decimal, *string, uuid.UUID) error
 	List(context.Context, *repository.ShiftFilter) ([]models.Shift, int, error)
 }
