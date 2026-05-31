@@ -28,14 +28,14 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
 	var shiftID *uuid.UUID
-	shift, err := h.shiftRepo.GetOpenShiftByEmployee(c.Context(), userID)
+	shift, err := h.shiftRepo.GetCurrentOpenShift(c.Context())
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get open shift")
 		return saleInternalError(c, "Failed to get open shift")
 	}
 	if shift != nil {
 		shiftID = &shift.ID
-	} else if middleware.GetRoleName(c) == "cashier" {
+	} else {
 		return middleware.JSONError(c, fiber.StatusConflict, "NO_OPEN_SHIFT", "You must start a shift before processing sales")
 	}
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -16,11 +17,11 @@ import (
 )
 
 type fakeShiftStore struct {
-	createFunc                func(context.Context, *models.Shift) error
-	getByIDFunc               func(context.Context, uuid.UUID) (*models.Shift, error)
-	getOpenShiftByEmployeeFun func(context.Context, uuid.UUID) (*models.Shift, error)
-	closeShiftFunc            func(context.Context, uuid.UUID, decimal.Decimal, *string, uuid.UUID) error
-	listFunc                  func(context.Context, *repository.ShiftFilter) ([]models.Shift, int, error)
+	createFunc            func(context.Context, *models.Shift) error
+	getByIDFunc           func(context.Context, uuid.UUID) (*models.Shift, error)
+	getCurrentOpenShiftFn func(context.Context) (*models.Shift, error)
+	closeShiftFunc        func(context.Context, uuid.UUID, decimal.Decimal, *string, uuid.UUID) error
+	listFunc              func(context.Context, *repository.ShiftFilter) ([]models.Shift, int, error)
 }
 
 func (f *fakeShiftStore) Create(ctx context.Context, shift *models.Shift) error {
@@ -35,9 +36,9 @@ func (f *fakeShiftStore) GetByID(ctx context.Context, id uuid.UUID) (*models.Shi
 	}
 	return nil, nil
 }
-func (f *fakeShiftStore) GetOpenShiftByEmployee(ctx context.Context, userID uuid.UUID) (*models.Shift, error) {
-	if f.getOpenShiftByEmployeeFun != nil {
-		return f.getOpenShiftByEmployeeFun(ctx, userID)
+func (f *fakeShiftStore) GetCurrentOpenShift(ctx context.Context) (*models.Shift, error) {
+	if f.getCurrentOpenShiftFn != nil {
+		return f.getCurrentOpenShiftFn(ctx)
 	}
 	return nil, nil
 }
@@ -54,12 +55,12 @@ func (f *fakeShiftStore) List(ctx context.Context, filter *repository.ShiftFilte
 	return nil, 0, nil
 }
 
-func TestListShiftsRejectsInvalidUserID(t *testing.T) {
+func TestListShiftsRejectsInvalidOpenedByID(t *testing.T) {
 	handler := NewShiftHandler(&fakeShiftStore{})
 	app := fiber.New()
 	app.Get("/shifts", handler.ListShifts)
 
-	req := httptest.NewRequest(http.MethodGet, "/shifts?user_id=bad-uuid", nil)
+	req := httptest.NewRequest(http.MethodGet, "/shifts?opened_by_id=bad-uuid", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
@@ -69,11 +70,42 @@ func TestListShiftsRejectsInvalidUserID(t *testing.T) {
 	}
 }
 
+func TestListShiftsUsesJakartaExclusiveDateBounds(t *testing.T) {
+	var got *repository.ShiftFilter
+	handler := NewShiftHandler(&fakeShiftStore{
+		listFunc: func(_ context.Context, filter *repository.ShiftFilter) ([]models.Shift, int, error) {
+			got = filter
+			return []models.Shift{}, 0, nil
+		},
+	})
+	app := fiber.New()
+	app.Get("/shifts", handler.ListShifts)
+
+	req := httptest.NewRequest(http.MethodGet, "/shifts?from=2026-05-29&to=2026-05-29", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	jakarta := time.FixedZone("WIB", 7*60*60)
+	expectedStart := time.Date(2026, 5, 29, 0, 0, 0, 0, jakarta)
+	expectedEnd := expectedStart.Add(24 * time.Hour)
+	if got == nil || got.StartDate == nil || !got.StartDate.Equal(expectedStart) {
+		t.Fatalf("expected startDate %v, got %+v", expectedStart, got)
+	}
+	if got.EndDate == nil || !got.EndDate.Equal(expectedEnd) {
+		t.Fatalf("expected exclusive endDate %v, got %v", expectedEnd, got.EndDate)
+	}
+}
+
 func TestGetCurrentShiftBlindMasksSensitiveFields(t *testing.T) {
 	userID := uuid.New()
 	shift := &models.Shift{
 		ID:               uuid.New(),
-		EmployeeID:       userID,
+		OpenedBy:         userID,
 		OpeningCash:      decimal.RequireFromString("100"),
 		TotalSales:       decimal.RequireFromString("55"),
 		TotalVoided:      decimal.RequireFromString("5"),
@@ -84,7 +116,7 @@ func TestGetCurrentShiftBlindMasksSensitiveFields(t *testing.T) {
 	shift.ExpectedCash = &expectedCash
 
 	handler := NewShiftHandler(&fakeShiftStore{
-		getOpenShiftByEmployeeFun: func(context.Context, uuid.UUID) (*models.Shift, error) {
+		getCurrentOpenShiftFn: func(context.Context) (*models.Shift, error) {
 			return shift, nil
 		},
 	})

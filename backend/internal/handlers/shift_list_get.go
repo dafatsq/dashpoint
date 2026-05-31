@@ -9,9 +9,7 @@ import (
 
 // GetCurrentShift handles GET /api/v1/shifts/current.
 func (h *ShiftHandler) GetCurrentShift(c *fiber.Ctx) error {
-	userID := middleware.GetUserID(c)
-
-	shift, err := h.shiftRepo.GetOpenShiftByEmployee(c.Context(), userID)
+	shift, err := h.shiftRepo.GetCurrentOpenShift(c.Context())
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get current shift")
 		return shiftInternalError(c, "Failed to get current shift")

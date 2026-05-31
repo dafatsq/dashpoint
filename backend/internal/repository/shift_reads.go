@@ -11,7 +11,7 @@ import (
 
 const shiftSelectColumns = `
 	SELECT
-		s.id, s.employee_id, s.started_at, s.ended_at, s.opening_cash, s.closing_cash,
+		s.id, s.opened_by, s.started_at, s.ended_at, s.opening_cash, s.closing_cash,
 		s.expected_cash, s.cash_difference, s.total_sales, s.total_voided,
 		(
 			SELECT COALESCE(SUM(p.amount), 0)
@@ -20,7 +20,7 @@ const shiftSelectColumns = `
 			WHERE s2.shift_id = s.id AND p.payment_method = 'cash' AND p.status = 'completed'
 		) as total_cash_sales,
 		s.transaction_count, s.void_count, s.status, s.notes, s.created_at, s.updated_at,
-		u.name as employee_name,
+		u.name as opened_by_name,
 		s.closed_by, cu.name as closed_by_name,
 		(
 			SELECT COALESCE(
@@ -43,7 +43,7 @@ const shiftSelectColumns = `
 			WHERE c.shift_id = s.id
 		) as operations
 	FROM shifts s
-	LEFT JOIN users u ON s.employee_id = u.id
+	LEFT JOIN users u ON s.opened_by = u.id
 	LEFT JOIN users cu ON s.closed_by = cu.id
 `
 
@@ -53,24 +53,14 @@ func (r *ShiftRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Sh
 	return querySingleShift(ctx, r.pool, query, id)
 }
 
-// GetOpenShiftByEmployee gets the current open shift for an employee, or falls back to any open shift.
-func (r *ShiftRepository) GetOpenShiftByEmployee(ctx context.Context, employeeID uuid.UUID) (*models.Shift, error) {
-	primaryQuery := shiftSelectColumns + `
-		WHERE s.employee_id = $1 AND s.status = 'open'
-		ORDER BY s.started_at DESC
-		LIMIT 1
-	`
-	shift, err := querySingleShift(ctx, r.pool, primaryQuery, employeeID)
-	if err != nil || shift != nil {
-		return shift, err
-	}
-
-	fallbackQuery := shiftSelectColumns + `
+// GetCurrentOpenShift gets the current shared open shift.
+func (r *ShiftRepository) GetCurrentOpenShift(ctx context.Context) (*models.Shift, error) {
+	query := shiftSelectColumns + `
 		WHERE s.status = 'open'
 		ORDER BY s.started_at DESC
 		LIMIT 1
 	`
-	return querySingleShift(ctx, r.pool, fallbackQuery)
+	return querySingleShift(ctx, r.pool, query)
 }
 
 // List retrieves shifts with pagination.
@@ -78,24 +68,24 @@ func (r *ShiftRepository) List(ctx context.Context, filter *ShiftFilter) ([]mode
 	countQuery := `
 		SELECT COUNT(*)
 		FROM shifts
-		WHERE ($1::uuid IS NULL OR employee_id = $1)
+		WHERE ($1::uuid IS NULL OR opened_by = $1)
 		AND ($2::timestamp IS NULL OR started_at >= $2)
-		AND ($3::timestamp IS NULL OR started_at <= $3)
+		AND ($3::timestamp IS NULL OR started_at < $3)
 	`
 
 	var total int
-	if err := r.pool.QueryRow(ctx, countQuery, filter.EmployeeID, filter.StartDate, filter.EndDate).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, countQuery, filter.OpenedByID, filter.StartDate, filter.EndDate).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	query := shiftSelectColumns + `
-		WHERE ($1::uuid IS NULL OR s.employee_id = $1)
+		WHERE ($1::uuid IS NULL OR s.opened_by = $1)
 		AND ($2::timestamp IS NULL OR s.started_at >= $2)
-		AND ($3::timestamp IS NULL OR s.started_at <= $3)
+		AND ($3::timestamp IS NULL OR s.started_at < $3)
 		ORDER BY s.started_at DESC
 		LIMIT $4 OFFSET $5
 	`
-	rows, err := r.pool.Query(ctx, query, filter.EmployeeID, filter.StartDate, filter.EndDate, filter.Limit, filter.Offset)
+	rows, err := r.pool.Query(ctx, query, filter.OpenedByID, filter.StartDate, filter.EndDate, filter.Limit, filter.Offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -133,7 +123,7 @@ func scanShift(scanner shiftRowScanner) (*models.Shift, error) {
 	shift := &models.Shift{}
 	err := scanner.Scan(
 		&shift.ID,
-		&shift.EmployeeID,
+		&shift.OpenedBy,
 		&shift.StartedAt,
 		&shift.EndedAt,
 		&shift.OpeningCash,
@@ -149,7 +139,7 @@ func scanShift(scanner shiftRowScanner) (*models.Shift, error) {
 		&shift.Notes,
 		&shift.CreatedAt,
 		&shift.UpdatedAt,
-		&shift.EmployeeName,
+		&shift.OpenedByName,
 		&shift.ClosedBy,
 		&shift.ClosedByName,
 		&shift.Operations,

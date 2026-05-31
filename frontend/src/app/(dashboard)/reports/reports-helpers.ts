@@ -1,4 +1,5 @@
 import type { CategorySales, ExpenseSummary, SalesRangeReport } from '@/types';
+import { getJakartaDateString } from '@/lib/date-local';
 
 import type { DatePresetKey, ReportDateRange, ReportType } from './reports-types';
 
@@ -117,7 +118,7 @@ export function calculateCategoryRevenuePercentages(
 export function buildExportFilename(
   tab: ReportType,
   dateRange: ReportDateRange,
-  today = new Date().toISOString().split('T')[0],
+  today = getJakartaDateString(),
 ): string {
   switch (tab) {
     case 'overview':

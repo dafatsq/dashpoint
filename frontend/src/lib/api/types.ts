@@ -58,6 +58,7 @@ export interface DateRangeFilterParams {
 
 export interface UserScopedFilterParams {
   user_id?: string;
+  opened_by_id?: string;
 }
 
 export interface ProductsResponse {

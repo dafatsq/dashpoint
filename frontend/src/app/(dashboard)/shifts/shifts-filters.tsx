@@ -41,14 +41,14 @@ export function ShiftsFilters({
         </div>
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">
-            Employee
+            Opened By
           </label>
           <Select value={selectedUser} onValueChange={onSelectedUserChange}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="All Employees" />
+              <SelectValue placeholder="All Users" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Employees</SelectItem>
+              <SelectItem value="all">All Users</SelectItem>
               {users.map((user) => (
                 <SelectItem key={user.id} value={user.id}>
                   {user.name}

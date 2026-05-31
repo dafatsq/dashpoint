@@ -86,3 +86,66 @@ func TestAuditListRejectsInvalidStartDate(t *testing.T) {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
 }
+
+func TestAuditListUsesJakartaExclusiveEndDate(t *testing.T) {
+	var got repository.AuditFilter
+	handler := NewAuditHandler(&fakeAuditStore{
+		listFunc: func(_ context.Context, filter repository.AuditFilter) ([]models.AuditLog, int, error) {
+			got = filter
+			return []models.AuditLog{}, 0, nil
+		},
+	})
+	app := fiber.New()
+	app.Get("/logs", handler.List)
+
+	req := httptest.NewRequest(http.MethodGet, "/logs?start_date=2026-05-29&end_date=2026-05-29", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	jakarta := time.FixedZone("WIB", 7*60*60)
+	expectedStart := time.Date(2026, 5, 29, 0, 0, 0, 0, jakarta)
+	expectedEnd := expectedStart.Add(24 * time.Hour)
+	if got.StartDate == nil || !got.StartDate.Equal(expectedStart) {
+		t.Fatalf("expected startDate %v, got %v", expectedStart, got.StartDate)
+	}
+	if got.EndDate == nil || !got.EndDate.Equal(expectedEnd) {
+		t.Fatalf("expected exclusive endDate %v, got %v", expectedEnd, got.EndDate)
+	}
+}
+
+func TestAuditSummaryUsesJakartaExclusiveEndDate(t *testing.T) {
+	var gotStart, gotEnd time.Time
+	handler := NewAuditHandler(&fakeAuditStore{
+		getActionSummaryFunc: func(_ context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+			gotStart = startDate
+			gotEnd = endDate
+			return []map[string]interface{}{}, nil
+		},
+	})
+	app := fiber.New()
+	app.Get("/logs/summary", handler.GetSummary)
+
+	req := httptest.NewRequest(http.MethodGet, "/logs/summary?start_date=2026-05-29&end_date=2026-05-29", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	jakarta := time.FixedZone("WIB", 7*60*60)
+	expectedStart := time.Date(2026, 5, 29, 0, 0, 0, 0, jakarta)
+	expectedEnd := expectedStart.Add(24 * time.Hour)
+	if !gotStart.Equal(expectedStart) {
+		t.Fatalf("expected startDate %v, got %v", expectedStart, gotStart)
+	}
+	if !gotEnd.Equal(expectedEnd) {
+		t.Fatalf("expected exclusive endDate %v, got %v", expectedEnd, gotEnd)
+	}
+}

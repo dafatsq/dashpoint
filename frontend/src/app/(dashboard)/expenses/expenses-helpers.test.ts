@@ -11,6 +11,7 @@ import {
   hasExpenseFormChanges,
   isInventoryPurchaseCategory,
   mapExpenseToFormData,
+  todayDateString,
 } from "./expenses-helpers";
 
 function buildCategory(overrides: Partial<ExpenseCategory> = {}): ExpenseCategory {
@@ -99,6 +100,10 @@ describe("expenses helpers", () => {
 
     expect(hasExpenseFormChanges(sameForm, expense)).toBe(false);
     expect(hasExpenseFormChanges(changedForm, expense)).toBe(true);
+  });
+
+  test("derives today using Jakarta local date semantics", () => {
+    expect(todayDateString(new Date("2026-05-28T20:00:00.000Z"))).toBe("2026-05-29");
   });
 
   test("builds expense request with optional empty fields removed", () => {

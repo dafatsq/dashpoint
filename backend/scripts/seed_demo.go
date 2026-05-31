@@ -45,20 +45,20 @@ type userSeed struct {
 }
 
 type productSeed struct {
-	ID             uuid.UUID
-	SKU            string
-	Barcode        string
-	Name           string
-	Description    string
-	CategoryID     uuid.UUID
-	Price          float64
-	Cost           float64
-	TaxRate        float64
-	IsActive       bool
-	ImageURL       string
-	Quantity       float64
-	Threshold      float64
-	CreatedAt      time.Time
+	ID          uuid.UUID
+	SKU         string
+	Barcode     string
+	Name        string
+	Description string
+	CategoryID  uuid.UUID
+	Price       float64
+	Cost        float64
+	TaxRate     float64
+	IsActive    bool
+	ImageURL    string
+	Quantity    float64
+	Threshold   float64
+	CreatedAt   time.Time
 }
 
 type shiftSeed struct {
@@ -490,20 +490,20 @@ func buildProducts(categories []category) []productSeed {
 		}
 		threshold := float64(4 + (i % 5))
 		product := productSeed{
-			ID:             seedUUID("product", i+1),
-			SKU:            fmt.Sprintf("SEED-SKU-%03d", i+1),
-			Barcode:        fmt.Sprintf("880000000%03d", i+1),
-			Name:           fmt.Sprintf("%s Demo Item %02d", category.Name, (i%6)+1),
-			Description:    fmt.Sprintf("%s demo catalog item %02d %s", seedMarker, i+1, stringsForCategory(category.Name, i)),
-			CategoryID:     category.ID,
-			Price:          price,
-			Cost:           cost,
-			TaxRate:        []float64{0, 5, 10}[i%3],
-			IsActive:       i%13 != 0,
-			ImageURL:       "",
-			Quantity:       qty,
-			Threshold:      threshold,
-			CreatedAt:      now.Add(-time.Duration((i+1)*6) * time.Hour),
+			ID:          seedUUID("product", i+1),
+			SKU:         fmt.Sprintf("SEED-SKU-%03d", i+1),
+			Barcode:     fmt.Sprintf("880000000%03d", i+1),
+			Name:        fmt.Sprintf("%s Demo Item %02d", category.Name, (i%6)+1),
+			Description: fmt.Sprintf("%s demo catalog item %02d %s", seedMarker, i+1, stringsForCategory(category.Name, i)),
+			CategoryID:  category.ID,
+			Price:       price,
+			Cost:        cost,
+			TaxRate:     []float64{0, 5, 10}[i%3],
+			IsActive:    i%13 != 0,
+			ImageURL:    "",
+			Quantity:    qty,
+			Threshold:   threshold,
+			CreatedAt:   now.Add(-time.Duration((i+1)*6) * time.Hour),
 		}
 		products = append(products, product)
 	}
@@ -835,7 +835,7 @@ func insertShifts(ctx context.Context, tx pgx.Tx, shifts []shiftSeed) error {
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO shifts (
-				id, employee_id, started_at, ended_at, opening_cash, closing_cash, expected_cash, cash_difference,
+				id, opened_by, started_at, ended_at, opening_cash, closing_cash, expected_cash, cash_difference,
 				total_sales, total_voided, transaction_count, void_count, status, notes, created_at, updated_at, closed_by
 			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
 		`, shift.ID, shift.EmployeeID, shift.StartedAt, shift.EndedAt, money(shift.OpeningCash), nullableMoney(shift.ClosingCash), nullableMoney(shift.ExpectedCash), nullableMoney(shift.CashDifference), money(shift.TotalSales), money(shift.TotalVoided), shift.TransactionCount, shift.VoidCount, shift.Status, shift.Notes, shift.StartedAt, updatedAt, shift.ClosedBy); err != nil {

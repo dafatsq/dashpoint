@@ -77,7 +77,7 @@ func (h *CashDrawerHandler) ListOperations(c *fiber.Ctx) error {
 
 func (h *CashDrawerHandler) recordCashDrawerOperation(c *fiber.Ctx, opType models.CashDrawerOpType, auditAction models.AuditAction, successMessage string) error {
 	userID := middleware.GetUserID(c)
-	shift, err := h.shiftRepo.GetOpenShiftByEmployee(c.Context(), userID)
+	shift, err := h.shiftRepo.GetCurrentOpenShift(c.Context())
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get open shift")
 		return middleware.JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get open shift")

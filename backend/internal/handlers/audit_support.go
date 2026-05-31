@@ -66,7 +66,7 @@ func parseAuditFilter(c *fiber.Ctx) (repository.AuditFilter, error) {
 	}
 
 	if startStr := c.Query("start_date"); startStr != "" {
-		startDate, parseErr := time.Parse(reportDateLayout, startStr)
+		startDate, parseErr := parseReportDay(startStr, "start_date")
 		if parseErr != nil {
 			return repository.AuditFilter{}, auditError(c, fiber.StatusBadRequest, "INVALID_DATE", "Invalid start_date format")
 		}
@@ -74,12 +74,12 @@ func parseAuditFilter(c *fiber.Ctx) (repository.AuditFilter, error) {
 	}
 
 	if endStr := c.Query("end_date"); endStr != "" {
-		endDate, parseErr := time.Parse(reportDateLayout, endStr)
+		endDate, parseErr := parseReportDay(endStr, "end_date")
 		if parseErr != nil {
 			return repository.AuditFilter{}, auditError(c, fiber.StatusBadRequest, "INVALID_DATE", "Invalid end_date format")
 		}
-		endOfDay := endDate.Add(24*time.Hour - time.Second)
-		filter.EndDate = &endOfDay
+		exclusiveEndDate := reportDayStart(endDate).Add(24 * time.Hour)
+		filter.EndDate = &exclusiveEndDate
 	}
 
 	return filter, nil

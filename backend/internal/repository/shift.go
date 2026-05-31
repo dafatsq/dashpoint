@@ -14,7 +14,7 @@ type ShiftRepository struct {
 
 // ShiftFilter contains shift list filters.
 type ShiftFilter struct {
-	EmployeeID *uuid.UUID
+	OpenedByID *uuid.UUID
 	StartDate  *time.Time
 	EndDate    *time.Time
 	Limit      int

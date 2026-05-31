@@ -32,7 +32,7 @@ func (r *ReportRepository) GetTopSellers(ctx context.Context, startDate, endDate
 		LIMIT $3
 	`
 
-	rows, err := r.pool.Query(ctx, query, startDate, inclusiveEndDate(endDate), limit)
+	rows, err := r.pool.Query(ctx, query, startOfReportDay(startDate), exclusiveEndDate(endDate), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (r *ReportRepository) GetEmployeeSalesReport(ctx context.Context, startDate
 		ORDER BY total_sales DESC
 	`
 
-	rows, err := r.pool.Query(ctx, query, startDate, inclusiveEndDate(endDate))
+	rows, err := r.pool.Query(ctx, query, startOfReportDay(startDate), exclusiveEndDate(endDate))
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (r *ReportRepository) GetCategorySalesReport(ctx context.Context, startDate
 		ORDER BY total_revenue DESC
 	`
 
-	rows, err := r.pool.Query(ctx, query, startDate, inclusiveEndDate(endDate))
+	rows, err := r.pool.Query(ctx, query, startOfReportDay(startDate), exclusiveEndDate(endDate))
 	if err != nil {
 		return nil, err
 	}

@@ -102,7 +102,7 @@ func parseRequiredAmount(value string) (decimal.Decimal, error) {
 }
 
 func parseExpenseDateField(value string, fieldMessage string) (time.Time, error) {
-	parsed, err := time.Parse(reportDateLayout, value)
+	parsed, err := parseReportDay(value, fieldMessage)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("%s", fieldMessage)
 	}

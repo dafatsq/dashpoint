@@ -92,7 +92,7 @@ func (h *AuditHandler) GetSummary(c *fiber.Ctx) error {
 		return err
 	}
 
-	summary, err := h.auditRepo.GetActionSummary(c.Context(), dateRange.start, dateRange.end.Add(24*time.Hour))
+	summary, err := h.auditRepo.GetActionSummary(c.Context(), dateRange.start, reportDayStart(dateRange.end).Add(24*time.Hour))
 	if err != nil {
 		return auditInternalError(c, err, "Failed to get audit summary", "Failed to retrieve audit summary")
 	}

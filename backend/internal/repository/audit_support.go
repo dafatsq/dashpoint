@@ -70,7 +70,7 @@ func buildAuditWhereClause(filter AuditFilter) (string, []interface{}, int) {
 		argIndex++
 	}
 	if filter.EndDate != nil {
-		whereClause += fmt.Sprintf(" AND audit_logs.created_at <= $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND audit_logs.created_at < $%d", argIndex)
 		args = append(args, *filter.EndDate)
 		argIndex++
 	}

@@ -13,7 +13,7 @@ import {
 function buildShift(overrides: Partial<Shift> = {}): Shift {
   return {
     id: "shift-1",
-    employee_id: "user-1",
+    opened_by: "user-1",
     started_at: "2026-01-01T00:00:00Z",
     status: "closed",
     opening_cash: "100000",
@@ -46,7 +46,7 @@ describe("shifts helpers", () => {
       offset: 10,
       from: "2026-01-01",
       to: "2026-01-02",
-      user_id: "user-1",
+      opened_by_id: "user-1",
     });
   });
 

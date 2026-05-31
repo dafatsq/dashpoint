@@ -18,11 +18,11 @@ const (
 
 // Shift represents a cashier shift.
 type Shift struct {
-	ID         uuid.UUID   `json:"id"`
-	EmployeeID uuid.UUID   `json:"employee_id"`
-	StartedAt  time.Time   `json:"started_at"`
-	EndedAt    *time.Time  `json:"ended_at,omitempty"`
-	Status     ShiftStatus `json:"status"`
+	ID        uuid.UUID   `json:"id"`
+	OpenedBy  uuid.UUID   `json:"opened_by"`
+	StartedAt time.Time   `json:"started_at"`
+	EndedAt   *time.Time  `json:"ended_at,omitempty"`
+	Status    ShiftStatus `json:"status"`
 
 	OpeningCash    decimal.Decimal  `json:"opening_cash"`
 	ClosingCash    *decimal.Decimal `json:"closing_cash,omitempty"`
@@ -40,7 +40,7 @@ type Shift struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
-	EmployeeName *string               `json:"employee_name,omitempty"`
+	OpenedByName *string               `json:"opened_by_name,omitempty"`
 	ClosedBy     *uuid.UUID            `json:"closed_by,omitempty"`
 	ClosedByName *string               `json:"closed_by_name,omitempty"`
 	Operations   []CashDrawerOperation `json:"operations,omitempty"`

@@ -1,7 +1,8 @@
 import { CreateExpenseRequest, Expense, ExpenseCategory, Product } from "@/types";
+import { getJakartaDateString } from "@/lib/date-local";
 
-export function todayDateString(): string {
-  return new Date().toISOString().split("T")[0];
+export function todayDateString(date = new Date()): string {
+  return getJakartaDateString(date);
 }
 
 export function createEmptyExpenseFormData(expenseDate = todayDateString()): CreateExpenseRequest {
