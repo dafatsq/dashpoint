@@ -34,6 +34,11 @@ export function InventoryThresholdDialog({
   onValueChange,
   onSubmit,
 }: InventoryThresholdDialogProps) {
+  const parsedThreshold = Number.parseFloat(value);
+  const isThresholdValid = value.trim() !== "" && !Number.isNaN(parsedThreshold) && parsedThreshold >= 0;
+  const thresholdMessage =
+    value.trim() === "" ? "Enter a low stock threshold to continue." : "Low stock threshold must be zero or greater.";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -55,13 +60,16 @@ export function InventoryThresholdDialog({
             onChange={(event) => onValueChange(event.target.value)}
             placeholder="Enter threshold"
           />
+          <p className={`text-xs ${isThresholdValid ? "text-muted-foreground" : "text-destructive"}`}>
+            {isThresholdValid ? "Use zero or greater for the low stock threshold." : thresholdMessage}
+          </p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting}>
+          <Button onClick={onSubmit} disabled={isSubmitting || !isThresholdValid}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

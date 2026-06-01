@@ -266,6 +266,26 @@ export function InventoryScreen() {
     [canEditThreshold],
   );
 
+  const openThresholdDialogFromLowStock = useCallback(
+    async (productId: string) => {
+      const existing = products.find((product) => product.id === productId);
+      if (existing) {
+        openThresholdDialog(existing);
+        return;
+      }
+
+      const result = await api.getProduct(productId);
+      if (result.error) {
+        setPageError(result.error);
+        return;
+      }
+      if (result.data) {
+        openThresholdDialog(result.data);
+      }
+    },
+    [openThresholdDialog, products],
+  );
+
   const loadHistoryPage = useCallback(
     async (product: Product, offset: number, adjustmentType: InventoryHistoryFilter) => {
       setIsLoadingHistoryDetails(true);
@@ -558,7 +578,9 @@ export function InventoryScreen() {
             items={lowStockItems}
             products={products}
             canModifyStock={canModifyStock}
+            canEditThreshold={canEditThreshold}
             onAdjust={(id) => void openAdjustDialogFromLowStock(id)}
+            onEditThreshold={(id) => void openThresholdDialogFromLowStock(id)}
           />
         ) : (
           <InventoryList
