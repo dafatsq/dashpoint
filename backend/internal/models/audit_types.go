@@ -24,8 +24,9 @@ const (
 	AuditActionProductArchive AuditAction = "product.archive"
 	AuditActionProductRestore AuditAction = "product.restore"
 
-	AuditActionStockAdjust AuditAction = "inventory.adjust"
-	AuditActionStockCount  AuditAction = "inventory.count"
+	AuditActionStockAdjust     AuditAction = "inventory.adjust"
+	AuditActionStockCount      AuditAction = "inventory.count"
+	AuditActionThresholdUpdate AuditAction = "inventory.threshold_update"
 
 	AuditActionCategoryCreate  AuditAction = "category.create"
 	AuditActionCategoryUpdate  AuditAction = "category.update"

@@ -100,39 +100,45 @@ func prepareSaleItems(ctx context.Context, tx pgx.Tx, items []CreateSaleItemRequ
 			return nil, decimal.Zero, decimal.Zero, decimal.Zero, fmt.Errorf("insufficient stock for %s: available %s, requested %s", product.Name, productQty.String(), item.Quantity.String())
 		}
 
-		itemSubtotal := item.UnitPrice.Mul(item.Quantity)
-		itemTax := itemSubtotal.Mul(product.TaxRate).Div(decimal.NewFromInt(100))
-		itemTotal := itemSubtotal.Add(itemTax).Sub(item.DiscountAmount)
+		prepared := buildPreparedSaleItem(product, item, productQty, now)
+		preparedItems = append(preparedItems, prepared)
 
-		preparedItems = append(preparedItems, salePreparedItem{
-			SaleItem: models.SaleItem{
-				ID:             uuid.New(),
-				ProductID:      product.ID,
-				ProductName:    product.Name,
-				ProductSKU:     product.SKU,
-				ProductBarcode: product.Barcode,
-				Quantity:       item.Quantity,
-				UnitPrice:      item.UnitPrice,
-				CostPrice:      product.Cost,
-				DiscountType:   item.DiscountType,
-				DiscountValue:  item.DiscountValue,
-				DiscountAmount: item.DiscountAmount,
-				TaxRate:        product.TaxRate,
-				TaxAmount:      itemTax,
-				Subtotal:       itemSubtotal,
-				Total:          itemTotal,
-				CreatedAt:      now,
-			},
-			ProductQty: productQty,
-			NewQty:     productQty.Sub(item.Quantity),
-		})
-
-		subtotal = subtotal.Add(itemSubtotal)
-		taxAmount = taxAmount.Add(itemTax)
+		subtotal = subtotal.Add(prepared.SaleItem.Subtotal)
+		taxAmount = taxAmount.Add(prepared.SaleItem.TaxAmount)
 		itemDiscountAmount = itemDiscountAmount.Add(item.DiscountAmount)
 	}
 
 	return preparedItems, subtotal, taxAmount, itemDiscountAmount, nil
+}
+
+func buildPreparedSaleItem(product *models.Product, item *CreateSaleItemRequest, productQty decimal.Decimal, now time.Time) salePreparedItem {
+	unitPrice := product.Price
+	itemSubtotal := unitPrice.Mul(item.Quantity)
+	itemTax := itemSubtotal.Mul(product.TaxRate).Div(decimal.NewFromInt(100))
+	itemTotal := itemSubtotal.Add(itemTax).Sub(item.DiscountAmount)
+
+	return salePreparedItem{
+		SaleItem: models.SaleItem{
+			ID:             uuid.New(),
+			ProductID:      product.ID,
+			ProductName:    product.Name,
+			ProductSKU:     product.SKU,
+			ProductBarcode: product.Barcode,
+			Quantity:       item.Quantity,
+			UnitPrice:      unitPrice,
+			CostPrice:      product.Cost,
+			DiscountType:   item.DiscountType,
+			DiscountValue:  item.DiscountValue,
+			DiscountAmount: item.DiscountAmount,
+			TaxRate:        product.TaxRate,
+			TaxAmount:      itemTax,
+			Subtotal:       itemSubtotal,
+			Total:          itemTotal,
+			CreatedAt:      now,
+		},
+		ProductQty: productQty,
+		NewQty:     productQty.Sub(item.Quantity),
+	}
 }
 
 func loadSaleProductForUpdate(ctx context.Context, tx pgx.Tx, productID uuid.UUID) (*models.Product, error) {

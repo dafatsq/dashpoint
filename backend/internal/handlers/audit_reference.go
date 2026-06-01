@@ -21,6 +21,7 @@ func (h *AuditHandler) GetActions(c *fiber.Ctx) error {
 		{"action": "product.delete", "description": "Product deleted"},
 		{"action": "inventory.adjust", "description": "Stock adjusted"},
 		{"action": "inventory.count", "description": "Stock count"},
+		{"action": "inventory.threshold_update", "description": "Low stock threshold updated"},
 		{"action": "category.create", "description": "Category created"},
 		{"action": "category.update", "description": "Category updated"},
 		{"action": "category.delete", "description": "Category deleted"},

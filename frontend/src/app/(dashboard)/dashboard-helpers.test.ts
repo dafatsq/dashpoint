@@ -31,6 +31,7 @@ function buildAuditLog(overrides: Partial<AuditLog> = {}): AuditLog {
 describe("dashboard helpers", () => {
   test("parses the action verb from dotted actions", () => {
     expect(getDashboardActionVerb("product.create")).toBe("create");
+    expect(getDashboardActionVerb("inventory.threshold_update")).toBe("threshold_update");
     expect(getDashboardActionVerb("archive")).toBe("archive");
   });
 
@@ -50,6 +51,16 @@ describe("dashboard helpers", () => {
         }),
       ),
     ).toContain("Beans");
+    expect(
+      getDashboardChangeDescription(
+        buildAuditLog({
+          entity_type: "inventory",
+          action: "inventory.threshold_update",
+          old_values: { product_name: "Beans", low_stock_threshold: "5" },
+          new_values: { product_name: "Beans", low_stock_threshold: "12" },
+        }),
+      ),
+    ).toBe("Updated low stock threshold: Beans (5 → 12)");
     expect(
       getDashboardChangeDescription(
         buildAuditLog({

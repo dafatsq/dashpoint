@@ -14,6 +14,7 @@ export const DASHBOARD_ACTION_LABELS: Record<string, string> = {
   void: "Voided",
   adjust: "Adjusted",
   count: "Counted",
+  threshold_update: "Updated",
   start: "Started",
   close: "Closed",
   archive: "Archived",
@@ -123,9 +124,21 @@ export function getDashboardChangeDescription(log: AuditLog): string {
     const adjustmentType = newVals.adjustment_type as string | undefined;
     const qty = newVals.quantity;
     const newQty = newVals.new_quantity;
+    const oldThreshold = oldVals.low_stock_threshold;
+    const newThreshold = newVals.low_stock_threshold;
     const adjustmentLabel = adjustmentType
       ? adjustmentType.charAt(0).toUpperCase() + adjustmentType.slice(1)
       : "Adjusted";
+
+    if (verb === "threshold_update") {
+      if (productName && oldThreshold !== undefined && newThreshold !== undefined) {
+        return `Updated low stock threshold: ${productName} (${oldThreshold} → ${newThreshold})`;
+      }
+      if (productName) {
+        return `Updated low stock threshold: ${productName}`;
+      }
+      return "Updated low stock threshold";
+    }
 
     if (productName && qty !== undefined && newQty !== undefined) {
       return `${adjustmentLabel}: ${productName} → ${newQty} (Δ${qty})`;

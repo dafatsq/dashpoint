@@ -134,6 +134,9 @@ func (h *ExpenseHandler) UpdateCategory(c *fiber.Ctx) error {
 	if category == nil {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense category not found")
 	}
+	if !category.IsActive && (req.IsActive == nil || !*req.IsActive) {
+		return middleware.JSONError(c, fiber.StatusConflict, "CATEGORY_INACTIVE", "Archived expense categories cannot be changed")
+	}
 
 	oldValues := map[string]interface{}{
 		"affected_category": category.Name,
@@ -188,6 +191,9 @@ func (h *ExpenseHandler) DeleteCategory(c *fiber.Ctx) error {
 
 	category, _ := h.repo.GetCategoryByID(c.Context(), id)
 	categoryName := expenseCategoryName(category)
+	if category != nil && !category.IsActive {
+		return middleware.JSONError(c, fiber.StatusConflict, "CATEGORY_INACTIVE", "Expense category is already archived")
+	}
 
 	if repoErr := h.repo.DeleteCategory(c.Context(), id); repoErr != nil {
 		return expenseInternalError(c, repoErr, "Failed to delete expense category")

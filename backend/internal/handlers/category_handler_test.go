@@ -207,3 +207,51 @@ func TestCategoryHandlerListReturnsInternalErrorOnFailure(t *testing.T) {
 		t.Fatalf("expected status 500, got %d", resp.StatusCode)
 	}
 }
+
+func TestCategoryHandlerUpdateRejectsArchivedCategoryWithoutRestore(t *testing.T) {
+	categoryID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	handler := NewCategoryHandler(&fakeManagedCategoryStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
+			return &models.Category{ID: categoryID, Name: "Coffee", IsActive: false}, nil
+		},
+		updateFunc: func(context.Context, *models.Category) error {
+			t.Fatal("expected update not to be called for archived category")
+			return nil
+		},
+	})
+	app := fiber.New()
+	app.Patch("/categories/:id", handler.Update)
+
+	req := httptest.NewRequest(http.MethodPatch, "/categories/"+categoryID.String(), strings.NewReader(`{"name":"Tea"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected status 409, got %d", resp.StatusCode)
+	}
+}
+
+func TestCategoryHandlerDeleteRejectsAlreadyArchivedCategory(t *testing.T) {
+	categoryID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	handler := NewCategoryHandler(&fakeManagedCategoryStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
+			return &models.Category{ID: categoryID, Name: "Coffee", IsActive: false}, nil
+		},
+		deleteFunc: func(context.Context, uuid.UUID) error {
+			t.Fatal("expected delete not to be called for archived category")
+			return nil
+		},
+	})
+	app := fiber.New()
+	app.Delete("/categories/:id", handler.Delete)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/categories/"+categoryID.String(), nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected status 409, got %d", resp.StatusCode)
+	}
+}

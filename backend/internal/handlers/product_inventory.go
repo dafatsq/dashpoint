@@ -89,6 +89,9 @@ func (h *ProductHandler) UpdateInventoryThreshold(c *fiber.Ctx) error {
 	if product == nil {
 		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Product not found")
 	}
+	if !product.IsActive {
+		return productJSONError(c, fiber.StatusConflict, "PRODUCT_INACTIVE", "Archived products cannot be changed")
+	}
 
 	inventory, repoErr := h.inventoryRepo.GetByProductID(c.Context(), id)
 	if repoErr != nil {
@@ -113,7 +116,7 @@ func (h *ProductHandler) UpdateInventoryThreshold(c *fiber.Ctx) error {
 
 	audit.LogWithValues(
 		c,
-		models.AuditActionStockAdjust,
+		models.AuditActionThresholdUpdate,
 		models.AuditEntityInventory,
 		id.String(),
 		"Updated low stock threshold: "+product.Name,
@@ -151,6 +154,17 @@ func (h *ProductHandler) AdjustStock(c *fiber.Ctx) error {
 		return err
 	}
 
+	product, repoErr := h.productRepo.GetByID(c.Context(), req.ProductID)
+	if repoErr != nil {
+		return productInternalError(c, repoErr, "Failed to get product", "Failed to retrieve product")
+	}
+	if product == nil {
+		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Product not found")
+	}
+	if !product.IsActive {
+		return productJSONError(c, fiber.StatusConflict, "PRODUCT_INACTIVE", "Archived products cannot be changed")
+	}
+
 	userID := middleware.GetUserID(c)
 	quantity := req.Quantity
 	var adjustment *models.StockAdjustment
@@ -167,11 +181,7 @@ func (h *ProductHandler) AdjustStock(c *fiber.Ctx) error {
 		return productJSONError(c, fiber.StatusBadRequest, "ADJUSTMENT_FAILED", err.Error())
 	}
 
-	product, _ := h.productRepo.GetByID(c.Context(), req.ProductID)
-	productName := ""
-	if product != nil {
-		productName = product.Name
-	}
+	productName := product.Name
 	auditAction := models.AuditActionStockAdjust
 	if req.AdjustmentType == models.AdjustmentCount {
 		auditAction = models.AuditActionStockCount

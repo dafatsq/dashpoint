@@ -19,6 +19,7 @@ import (
 type fakeExpenseStore struct {
 	getCategoryByIDFunc func(context.Context, uuid.UUID) (*models.ExpenseCategory, error)
 	deleteCategoryFunc  func(context.Context, uuid.UUID) error
+	updateCategoryFunc  func(context.Context, *models.ExpenseCategory) (*models.ExpenseCategory, error)
 }
 
 func (f *fakeExpenseStore) ListCategories(context.Context, string) ([]models.ExpenseCategory, error) {
@@ -38,7 +39,10 @@ func (f *fakeExpenseStore) GetCategoryByID(ctx context.Context, id uuid.UUID) (*
 	}
 	return nil, nil
 }
-func (f *fakeExpenseStore) UpdateCategory(context.Context, *models.ExpenseCategory) (*models.ExpenseCategory, error) {
+func (f *fakeExpenseStore) UpdateCategory(ctx context.Context, category *models.ExpenseCategory) (*models.ExpenseCategory, error) {
+	if f.updateCategoryFunc != nil {
+		return f.updateCategoryFunc(ctx, category)
+	}
 	return nil, nil
 }
 func (f *fakeExpenseStore) DeleteCategory(ctx context.Context, id uuid.UUID) error {
@@ -254,6 +258,62 @@ func TestDeleteCategoryAllowsArchivingInventoryPurchaseCategory(t *testing.T) {
 	}
 	if !deleteCalled {
 		t.Fatalf("expected delete repository method to be called")
+	}
+}
+
+func TestUpdateExpenseCategoryRejectsArchivedCategoryWithoutRestore(t *testing.T) {
+	categoryID := uuid.New()
+	store := &fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: false}, nil
+		},
+		updateCategoryFunc: func(context.Context, *models.ExpenseCategory) (*models.ExpenseCategory, error) {
+			t.Fatal("expected update not to be called for archived expense category")
+			return nil, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+
+	app := fiber.New()
+	app.Patch("/expenses/categories/:id", func(c *fiber.Ctx) error {
+		return handler.UpdateCategory(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/expenses/categories/"+categoryID.String(), strings.NewReader(`{"name":"Office Supplies"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteExpenseCategoryRejectsAlreadyArchivedCategory(t *testing.T) {
+	categoryID := uuid.New()
+	store := &fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: false}, nil
+		},
+		deleteCategoryFunc: func(context.Context, uuid.UUID) error {
+			t.Fatal("expected delete not to be called for archived expense category")
+			return nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+
+	app := fiber.New()
+	app.Delete("/expenses/categories/:id", func(c *fiber.Ctx) error {
+		return handler.DeleteCategory(c)
+	})
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/expenses/categories/"+categoryID.String(), nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
 	}
 }
 

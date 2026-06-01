@@ -20,6 +20,9 @@ func (h *ProductHandler) Delete(c *fiber.Ctx) error {
 	if productToDelete == nil {
 		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Product not found")
 	}
+	if !productToDelete.IsActive {
+		return productJSONError(c, fiber.StatusConflict, "PRODUCT_INACTIVE", "Product is already archived")
+	}
 
 	if err := h.productRepo.Delete(c.Context(), id); err != nil {
 		return productInternalError(c, err, "Failed to delete product", "Failed to delete product")
