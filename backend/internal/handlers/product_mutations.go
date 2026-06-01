@@ -119,6 +119,9 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 	}
+	if !product.IsActive && (req.IsActive == nil || !*req.IsActive) {
+		return productJSONError(c, fiber.StatusConflict, "PRODUCT_INACTIVE", "Archived products cannot be changed")
+	}
 
 	if req.Name != nil && *req.Name != "" {
 		if err := h.ensureProductNameAvailable(c, *req.Name, &id); err != nil {

@@ -45,6 +45,7 @@ export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   "product.restore": "Restore Product",
   "inventory.adjust": "Adjust Stock",
   "inventory.count": "Stock Count",
+  "inventory.threshold_update": "Update Threshold",
   "category.create": "Create Category",
   "category.update": "Update Category",
   "category.delete": "Delete Category",
@@ -89,6 +90,7 @@ const ACTIVITY_CREATE_LIKE_VERBS = new Set([
   "start",
   "adjust",
   "count",
+  "threshold_update",
   "void",
 ]);
 const ACTIVITY_DELETE_LIKE_VERBS = new Set(["delete", "archive"]);
@@ -282,9 +284,21 @@ export function buildActivityDescription(log: AuditLog): string {
     const adjustmentType = newVals.adjustment_type as string | undefined;
     const quantity = newVals.quantity;
     const newQuantity = newVals.new_quantity;
+    const oldThreshold = oldVals.low_stock_threshold;
+    const newThreshold = newVals.low_stock_threshold;
     const adjustmentLabel = adjustmentType
       ? adjustmentType.charAt(0).toUpperCase() + adjustmentType.slice(1)
       : "Adjusted";
+
+    if (verb === "threshold_update") {
+      if (productName && oldThreshold !== undefined && newThreshold !== undefined) {
+        return `Updated low stock threshold: ${productName} (${oldThreshold} → ${newThreshold})`;
+      }
+      if (productName) {
+        return `Updated low stock threshold: ${productName}`;
+      }
+      return "Updated low stock threshold";
+    }
 
     if (productName && quantity !== undefined && newQuantity !== undefined) {
       return `${adjustmentLabel} stock: ${productName} -> ${newQuantity} (Δ${quantity})`;

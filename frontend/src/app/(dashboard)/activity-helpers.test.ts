@@ -35,6 +35,7 @@ const baseLog: AuditLog = {
 describe("activity helpers", () => {
   test("parses dotted action verbs and labels", () => {
     expect(getActivityActionVerb("inventory.adjust")).toBe("adjust");
+    expect(getActivityActionLabel("inventory.threshold_update")).toBe("Update Threshold");
     expect(getActivityActionLabel("auth.login_failed")).toBe("Login Failed");
   });
 
@@ -60,6 +61,22 @@ describe("activity helpers", () => {
         },
       }),
     ).toBe("Restock stock: Milk -> 12 (Δ5)");
+
+    expect(
+      buildActivityDescription({
+        ...baseLog,
+        entity_type: "inventory",
+        action: "inventory.threshold_update",
+        old_values: {
+          product_name: "Milk",
+          low_stock_threshold: "5",
+        },
+        new_values: {
+          product_name: "Milk",
+          low_stock_threshold: "12",
+        },
+      }),
+    ).toBe("Updated low stock threshold: Milk (5 → 12)");
 
     expect(
       buildActivityDescription({

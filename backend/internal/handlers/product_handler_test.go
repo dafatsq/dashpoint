@@ -13,9 +13,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
 )
+
+type stubAuditRepository struct {
+	calls int
+	last  *models.AuditLogEntry
+}
+
+func (s *stubAuditRepository) Create(_ context.Context, entry *models.AuditLogEntry) error {
+	s.calls++
+	s.last = entry
+	return nil
+}
 
 func TestParseCreateProductInputRejectsInvalidOptionalFields(t *testing.T) {
 	invalidCategory := "not-a-uuid"
@@ -225,6 +237,8 @@ func TestGetInventoryRejectsInvalidAdjustmentTypeFilter(t *testing.T) {
 func TestUpdateInventoryThreshold(t *testing.T) {
 	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	updateCalls := 0
+	auditRepo := &stubAuditRepository{}
+	audit.Init(auditRepo)
 
 	handler := NewProductHandler(&fakeProductStore{
 		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
@@ -277,6 +291,18 @@ func TestUpdateInventoryThreshold(t *testing.T) {
 	}
 	if updateCalls != 1 {
 		t.Fatalf("expected one update call, got %d", updateCalls)
+	}
+	if auditRepo.calls != 1 {
+		t.Fatalf("expected one audit call, got %d", auditRepo.calls)
+	}
+	if auditRepo.last == nil {
+		t.Fatal("expected captured audit entry")
+	}
+	if auditRepo.last.Action != models.AuditActionThresholdUpdate {
+		t.Fatalf("expected audit action %q, got %q", models.AuditActionThresholdUpdate, auditRepo.last.Action)
+	}
+	if auditRepo.last.EntityType != models.AuditEntityInventory {
+		t.Fatalf("expected inventory audit entity, got %q", auditRepo.last.EntityType)
 	}
 
 	var payload struct {
@@ -344,14 +370,85 @@ func TestUpdateInventoryThresholdRejectsNegativeThreshold(t *testing.T) {
 	}
 }
 
+func TestUpdateInventoryThresholdRejectsArchivedProduct(t *testing.T) {
+	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	updateCalled := false
+	handler := NewProductHandler(&fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = id
+			product.IsActive = false
+			return product, nil
+		},
+	}, &fakeInventoryStore{
+		updateThresholdsFunc: func(context.Context, uuid.UUID, decimal.Decimal) error {
+			updateCalled = true
+			return nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id/inventory", handler.UpdateInventoryThreshold)
+
+	req := httptest.NewRequest(http.MethodPatch, "/products/"+productID.String()+"/inventory", strings.NewReader(`{"low_stock_threshold":"7"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+	if updateCalled {
+		t.Fatalf("expected threshold update to be blocked for archived product")
+	}
+}
+
+func TestAdjustStockRejectsArchivedProduct(t *testing.T) {
+	adjustCalled := false
+	handler := NewProductHandler(&fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = id
+			product.IsActive = false
+			return product, nil
+		},
+	}, &fakeInventoryStore{
+		adjustStockFunc: func(context.Context, uuid.UUID, models.AdjustmentType, decimal.Decimal, *string, *string, *uuid.UUID, uuid.UUID) (*models.StockAdjustment, error) {
+			adjustCalled = true
+			return nil, nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", uuid.New())
+		return c.Next()
+	})
+	app.Post("/inventory/adjust", handler.AdjustStock)
+
+	req := httptest.NewRequest(http.MethodPost, "/inventory/adjust", strings.NewReader(`{"product_id":"00000000-0000-0000-0000-000000000001","adjustment_type":"purchase","quantity":"2"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+	if adjustCalled {
+		t.Fatalf("expected stock adjustment to be blocked for archived product")
+	}
+}
+
 func testProduct() *models.Product {
 	return &models.Product{
-		ID:                 uuid.MustParse("00000000-0000-0000-0000-000000000001"),
-		Name:               "Test Product",
-		Price:              decimal.RequireFromString("10.00"),
-		Cost:               decimal.RequireFromString("5.00"),
-		TaxRate:            decimal.RequireFromString("11.00"),
-		IsActive:           true,
+		ID:       uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		Name:     "Test Product",
+		Price:    decimal.RequireFromString("10.00"),
+		Cost:     decimal.RequireFromString("5.00"),
+		TaxRate:  decimal.RequireFromString("11.00"),
+		IsActive: true,
 	}
 }
 
@@ -444,6 +541,37 @@ func TestUpdateAllowsClearingSKU(t *testing.T) {
 	}
 	if *payload.Product.SKU != "" {
 		t.Fatalf("expected sku to be cleared to empty string, got %q", *payload.Product.SKU)
+	}
+}
+
+func TestUpdateRejectsArchivedProductWithoutRestore(t *testing.T) {
+	current := testProduct()
+	current.IsActive = false
+
+	productRepo := &fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := *current
+			product.ID = id
+			return &product, nil
+		},
+		updateFunc: func(_ context.Context, product *models.Product) error {
+			t.Fatalf("expected update not to be called for archived product")
+			return nil
+		},
+	}
+	handler := NewProductHandler(productRepo, &fakeInventoryStore{}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id", handler.Update)
+
+	req := httptest.NewRequest(http.MethodPatch, "/products/00000000-0000-0000-0000-000000000001", strings.NewReader(`{"name":"Renamed"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
 	}
 }
 

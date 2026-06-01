@@ -92,6 +92,14 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 	if err := parseCategoryBody(c, &req); err != nil {
 		return err
 	}
+	if !category.IsActive && (req.IsActive == nil || !*req.IsActive) {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": fiber.Map{
+				"code":    "CATEGORY_INACTIVE",
+				"message": "Archived categories cannot be changed",
+			},
+		})
+	}
 
 	if req.Name != nil {
 		if apiErr := validateCategoryName(*req.Name); apiErr != nil {
@@ -148,6 +156,14 @@ func (h *CategoryHandler) Delete(c *fiber.Ctx) error {
 			return categoryNotFoundResponse(c)
 		}
 		return respondCategoryInternalError(c, "Failed to fetch category")
+	}
+	if !category.IsActive {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": fiber.Map{
+				"code":    "CATEGORY_INACTIVE",
+				"message": "Category is already archived",
+			},
+		})
 	}
 
 	if err := h.categoryRepo.Delete(c.UserContext(), id); err != nil {
