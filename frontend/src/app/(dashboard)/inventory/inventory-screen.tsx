@@ -13,6 +13,7 @@ import type { Category, LowStockItem, Product, ProductInventoryDetails } from "@
 import { InventoryAdjustDialog } from "./inventory-adjust-dialog";
 import { InventoryControls } from "./inventory-controls";
 import { InventoryHistoryDrawer } from "./inventory-history-drawer";
+import { InventoryThresholdDialog } from "./inventory-threshold-dialog";
 import {
   buildInventoryAdjustmentRequest,
   canSubmitInventoryAdjustment,
@@ -35,6 +36,7 @@ export function InventoryScreen() {
   const canAddStock = hasPermission(PERMISSIONS.INVENTORY_ADD_STOCK);
   const canRemoveStock = hasPermission(PERMISSIONS.INVENTORY_REMOVE_STOCK);
   const canAdjustStock = hasPermission(PERMISSIONS.INVENTORY_ADJUST_STOCK);
+  const canEditThreshold = hasPermission(PERMISSIONS.INVENTORY_EDIT);
   const canModifyStock = canAddStock || canRemoveStock || canAdjustStock;
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -66,6 +68,10 @@ export function InventoryScreen() {
   const [historyFilter, setHistoryFilter] = useState<InventoryHistoryFilter>("all");
   const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormState>(createEmptyAdjustmentFormState("add"));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [thresholdDialogOpen, setThresholdDialogOpen] = useState(false);
+  const [thresholdProduct, setThresholdProduct] = useState<Product | null>(null);
+  const [thresholdValue, setThresholdValue] = useState("");
+  const [isSubmittingThreshold, setIsSubmittingThreshold] = useState(false);
 
   const allowedActions = useMemo(
     () => getPermittedInventoryActions({ canAddStock, canRemoveStock, canAdjustStock }),
@@ -248,6 +254,18 @@ export function InventoryScreen() {
     [openAdjustDialog, products],
   );
 
+  const openThresholdDialog = useCallback(
+    (product: Product) => {
+      if (!canEditThreshold) {
+        return;
+      }
+      setThresholdProduct(product);
+      setThresholdValue(product.inventory?.low_stock_threshold || "0");
+      setThresholdDialogOpen(true);
+    },
+    [canEditThreshold],
+  );
+
   const loadHistoryPage = useCallback(
     async (product: Product, offset: number, adjustmentType: InventoryHistoryFilter) => {
       setIsLoadingHistoryDetails(true);
@@ -401,6 +419,44 @@ export function InventoryScreen() {
     showError,
   ]);
 
+  const handleThresholdUpdate = useCallback(async () => {
+    if (!thresholdProduct) {
+      showError("Product Required", "Select a product before saving.");
+      return;
+    }
+    if (isSubmittingThreshold) {
+      return;
+    }
+    if (!thresholdValue.trim()) {
+      showError("Threshold Required", "Enter a low stock threshold before saving.");
+      return;
+    }
+
+    const parsedThreshold = Number.parseFloat(thresholdValue);
+    if (Number.isNaN(parsedThreshold) || parsedThreshold < 0) {
+      showError("Invalid Threshold", "Low stock threshold must be zero or greater.");
+      return;
+    }
+
+    setIsSubmittingThreshold(true);
+    const result = await api.updateProductInventoryThreshold(thresholdProduct.id, {
+      low_stock_threshold: thresholdValue,
+    });
+    if (result.error) {
+      setPageError(result.error);
+      setIsSubmittingThreshold(false);
+      return;
+    }
+
+    setPageError(null);
+    resetProductPagination();
+    await Promise.all([fetchProductsPage(1, true), fetchLowStock()]);
+    setThresholdDialogOpen(false);
+    setThresholdProduct(null);
+    setThresholdValue("");
+    setIsSubmittingThreshold(false);
+  }, [fetchLowStock, fetchProductsPage, isSubmittingThreshold, resetProductPagination, showError, thresholdProduct, thresholdValue]);
+
   const totalStock = products.reduce((sum, product) => sum + getInventoryProductQuantity(product), 0);
   const totalValue = products.reduce(
     (sum, product) => sum + getInventoryProductPrice(product) * getInventoryProductQuantity(product),
@@ -511,9 +567,11 @@ export function InventoryScreen() {
             hasMore={hasMore}
             isFetchingMore={isFetchingMore}
             canModifyStock={canModifyStock}
+            canEditThreshold={canEditThreshold}
             loadMoreRef={loadMoreRef}
             onAdjust={openAdjustDialog}
             onHistory={(product) => void openHistoryDrawer(product)}
+            onEditThreshold={openThresholdDialog}
           />
         )}
       </div>
@@ -573,6 +631,23 @@ export function InventoryScreen() {
             void loadHistoryPage(historyProduct, historyOffset + HISTORY_PAGE_SIZE, historyFilter);
           }
         }}
+      />
+
+      <InventoryThresholdDialog
+        open={thresholdDialogOpen}
+        product={thresholdProduct}
+        value={thresholdValue}
+        isSubmitting={isSubmittingThreshold}
+        onOpenChange={(open) => {
+          setThresholdDialogOpen(open);
+          if (!open) {
+            setThresholdProduct(null);
+            setThresholdValue("");
+            setIsSubmittingThreshold(false);
+          }
+        }}
+        onValueChange={setThresholdValue}
+        onSubmit={() => void handleThresholdUpdate()}
       />
     </div>
   );

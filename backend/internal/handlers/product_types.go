@@ -127,3 +127,7 @@ type stockAdjustmentRequest struct {
 	Quantity       decimal.Decimal
 	Reason         *string
 }
+
+type inventoryThresholdUpdateRequest struct {
+	LowStockThreshold decimal.Decimal
+}

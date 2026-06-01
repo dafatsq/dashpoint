@@ -64,6 +64,14 @@ export function createCatalogApi(transport: ApiTransport): CatalogApi {
       if (result.error) return { error: result.error };
       return { data: result.data };
     },
+    async updateProductInventoryThreshold(id, payload) {
+      const result = await transport.request<{ inventory: ProductInventoryDetails["inventory"] }>(`/products/${id}/inventory`, {
+        method: "PATCH",
+        body: payload,
+      });
+      if (result.error) return { error: result.error };
+      return { data: result.data?.inventory };
+    },
     async lookupProduct(code) {
       const result = await transport.request<{ product: Product }>(
         `/products/lookup?code=${encodeURIComponent(code)}`,

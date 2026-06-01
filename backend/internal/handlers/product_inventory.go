@@ -39,14 +39,7 @@ func (h *ProductHandler) GetInventory(c *fiber.Ctx) error {
 	adjustments, total, _ := h.inventoryRepo.GetAdjustmentHistory(c.Context(), id, limit, offset, adjustmentType)
 
 	return c.JSON(fiber.Map{
-		"inventory": fiber.Map{
-			"product_id":          inventory.ProductID.String(),
-			"quantity":            inventory.Quantity.String(),
-			"available_quantity":  inventory.AvailableQuantity().String(),
-			"low_stock_threshold": inventory.LowStockThreshold.String(),
-			"is_low_stock":        inventory.IsLowStock(),
-			"updated_at":          inventory.UpdatedAt,
-		},
+		"inventory":          inventoryResponse(inventory),
 		"recent_adjustments": adjustments,
 		"total_adjustments":  total,
 	})
@@ -71,6 +64,83 @@ func parseInventoryAdjustmentTypeFilter(value string) (*models.AdjustmentType, e
 		return &adjustmentType, nil
 	default:
 		return nil, fiber.NewError(fiber.StatusBadRequest, "Invalid adjustment_type value")
+	}
+}
+
+// UpdateInventoryThreshold handles PATCH /api/v1/products/:id/inventory
+func (h *ProductHandler) UpdateInventoryThreshold(c *fiber.Ctx) error {
+	id, err := parseUUIDParam(c, "id", "INVALID_ID", "Invalid product ID format")
+	if err != nil {
+		return err
+	}
+
+	req, err := parseInventoryThresholdUpdateRequest(c)
+	if err != nil {
+		return err
+	}
+	if req == nil {
+		return nil
+	}
+
+	product, repoErr := h.productRepo.GetByID(c.Context(), id)
+	if repoErr != nil {
+		return productInternalError(c, repoErr, "Failed to get product", "Failed to retrieve product")
+	}
+	if product == nil {
+		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Product not found")
+	}
+
+	inventory, repoErr := h.inventoryRepo.GetByProductID(c.Context(), id)
+	if repoErr != nil {
+		return productInternalError(c, repoErr, "Failed to get inventory", "Failed to retrieve inventory")
+	}
+	if inventory == nil {
+		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Inventory not found")
+	}
+
+	oldThreshold := inventory.LowStockThreshold
+	if err := h.inventoryRepo.UpdateThresholds(c.Context(), id, req.LowStockThreshold); err != nil {
+		return productInternalError(c, err, "Failed to update threshold", "Failed to update low stock threshold")
+	}
+
+	updatedInventory, repoErr := h.inventoryRepo.GetByProductID(c.Context(), id)
+	if repoErr != nil {
+		return productInternalError(c, repoErr, "Failed to get updated inventory", "Failed to retrieve inventory")
+	}
+	if updatedInventory == nil {
+		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Inventory not found")
+	}
+
+	audit.LogWithValues(
+		c,
+		models.AuditActionStockAdjust,
+		models.AuditEntityInventory,
+		id.String(),
+		"Updated low stock threshold: "+product.Name,
+		map[string]interface{}{
+			"low_stock_threshold": oldThreshold.String(),
+		},
+		map[string]interface{}{
+			"affected_product":    product.Name,
+			"product_name":        product.Name,
+			"low_stock_threshold": updatedInventory.LowStockThreshold.String(),
+		},
+	)
+
+	return c.JSON(fiber.Map{
+		"message":   "Low stock threshold updated successfully",
+		"inventory": inventoryResponse(updatedInventory),
+	})
+}
+
+func inventoryResponse(inventory *models.InventoryItem) fiber.Map {
+	return fiber.Map{
+		"product_id":          inventory.ProductID.String(),
+		"quantity":            inventory.Quantity.String(),
+		"available_quantity":  inventory.AvailableQuantity().String(),
+		"low_stock_threshold": inventory.LowStockThreshold.String(),
+		"is_low_stock":        inventory.IsLowStock(),
+		"updated_at":          inventory.UpdatedAt,
 	}
 }
 

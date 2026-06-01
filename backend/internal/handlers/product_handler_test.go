@@ -222,6 +222,128 @@ func TestGetInventoryRejectsInvalidAdjustmentTypeFilter(t *testing.T) {
 	}
 }
 
+func TestUpdateInventoryThreshold(t *testing.T) {
+	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	updateCalls := 0
+
+	handler := NewProductHandler(&fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			if id != productID {
+				t.Fatalf("expected product id %s, got %s", productID, id)
+			}
+			product := testProduct()
+			product.ID = id
+			return product, nil
+		},
+	}, &fakeInventoryStore{
+		getByProductIDFunc: func(_ context.Context, id uuid.UUID) (*models.InventoryItem, error) {
+			if id != productID {
+				t.Fatalf("expected product id %s, got %s", productID, id)
+			}
+			threshold := "2"
+			if updateCalls > 0 {
+				threshold = "7"
+			}
+			return &models.InventoryItem{
+				ProductID:         productID,
+				Quantity:          decimal.RequireFromString("5"),
+				LowStockThreshold: decimal.RequireFromString(threshold),
+				UpdatedAt:         time.Now(),
+			}, nil
+		},
+		updateThresholdsFunc: func(_ context.Context, id uuid.UUID, threshold decimal.Decimal) error {
+			if id != productID {
+				t.Fatalf("expected product id %s, got %s", productID, id)
+			}
+			if !threshold.Equal(decimal.RequireFromString("7")) {
+				t.Fatalf("expected threshold 7, got %s", threshold.String())
+			}
+			updateCalls++
+			return nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id/inventory", handler.UpdateInventoryThreshold)
+
+	req := httptest.NewRequest(http.MethodPatch, "/products/00000000-0000-0000-0000-000000000001/inventory", strings.NewReader(`{"low_stock_threshold":"7"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if updateCalls != 1 {
+		t.Fatalf("expected one update call, got %d", updateCalls)
+	}
+
+	var payload struct {
+		Message   string `json:"message"`
+		Inventory struct {
+			LowStockThreshold string `json:"low_stock_threshold"`
+		} `json:"inventory"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if payload.Inventory.LowStockThreshold != "7" {
+		t.Fatalf("expected updated threshold 7, got %q", payload.Inventory.LowStockThreshold)
+	}
+}
+
+func TestUpdateInventoryThresholdRejectsInvalidThreshold(t *testing.T) {
+	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id/inventory", handler.UpdateInventoryThreshold)
+
+	req := httptest.NewRequest(http.MethodPatch, "/products/00000000-0000-0000-0000-000000000001/inventory", strings.NewReader(`{"low_stock_threshold":"bad"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateInventoryThresholdRequiresThreshold(t *testing.T) {
+	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id/inventory", handler.UpdateInventoryThreshold)
+
+	req := httptest.NewRequest(http.MethodPatch, "/products/00000000-0000-0000-0000-000000000001/inventory", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateInventoryThresholdRejectsNegativeThreshold(t *testing.T) {
+	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id/inventory", handler.UpdateInventoryThreshold)
+
+	req := httptest.NewRequest(http.MethodPatch, "/products/00000000-0000-0000-0000-000000000001/inventory", strings.NewReader(`{"low_stock_threshold":"-1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
 func testProduct() *models.Product {
 	return &models.Product{
 		ID:                 uuid.MustParse("00000000-0000-0000-0000-000000000001"),

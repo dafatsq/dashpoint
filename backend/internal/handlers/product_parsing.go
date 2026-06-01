@@ -205,3 +205,26 @@ func parseStockAdjustmentRequest(c *fiber.Ctx) (*stockAdjustmentRequest, error) 
 		Reason:         reason,
 	}, nil
 }
+
+func parseInventoryThresholdUpdateRequest(c *fiber.Ctx) (*inventoryThresholdUpdateRequest, error) {
+	var req struct {
+		LowStockThreshold string `json:"low_stock_threshold"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	}
+
+	if strings.TrimSpace(req.LowStockThreshold) == "" {
+		return nil, productJSONError(c, fiber.StatusBadRequest, "LOW_STOCK_THRESHOLD_REQUIRED", "low_stock_threshold is required")
+	}
+
+	threshold, err := parseDecimalField(req.LowStockThreshold, "low_stock_threshold", false)
+	if err != nil {
+		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_LOW_STOCK_THRESHOLD", "Invalid low_stock_threshold")
+	}
+
+	return &inventoryThresholdUpdateRequest{
+		LowStockThreshold: threshold,
+	}, nil
+}
