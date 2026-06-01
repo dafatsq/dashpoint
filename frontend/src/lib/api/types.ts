@@ -1,4 +1,5 @@
 import type {
+  AdjustmentType,
   AuditLog,
   CashDrawerOperation,
   CashDrawerOperationsResponse,
@@ -165,7 +166,10 @@ export interface CatalogApi {
     search?: string;
   }): Promise<ApiResponse<Product[]>>;
   getProduct(id: string): Promise<ApiResponse<Product>>;
-  getProductInventory(id: string): Promise<ApiResponse<ProductInventoryDetails>>;
+  getProductInventory(
+    id: string,
+    params?: { limit?: number; offset?: number; adjustment_type?: AdjustmentType },
+  ): Promise<ApiResponse<ProductInventoryDetails>>;
   lookupProduct(code: string): Promise<ApiResponse<Product>>;
   createProduct(product: CreateProductRequest): Promise<ApiResponse<Product>>;
   updateProduct(

@@ -32,7 +32,7 @@ type inventoryStore interface {
 	SetQuantity(context.Context, uuid.UUID, decimal.Decimal, *string, uuid.UUID) (*models.StockAdjustment, error)
 	UpdateThresholds(context.Context, uuid.UUID, decimal.Decimal) error
 	GetLowStockProducts(context.Context) ([]*models.ProductWithInventory, error)
-	GetAdjustmentHistory(context.Context, uuid.UUID, int, int) ([]*models.StockAdjustment, int, error)
+	GetAdjustmentHistory(context.Context, uuid.UUID, int, int, *models.AdjustmentType) ([]*models.StockAdjustment, int, error)
 }
 
 type categoryStore interface {

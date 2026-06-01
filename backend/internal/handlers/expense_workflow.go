@@ -11,6 +11,10 @@ import (
 	"dashpoint/backend/internal/models"
 )
 
+func expenseInventoryReason(action string, expenseID uuid.UUID) *string {
+	return stringPtr(fmt.Sprintf("Expense inventory %s %s", action, expenseID.String()))
+}
+
 func (h *ExpenseHandler) isInventoryPurchaseCategory(ctx context.Context, categoryID *uuid.UUID) (bool, error) {
 	if categoryID == nil {
 		return false, nil
@@ -103,7 +107,7 @@ func (h *ExpenseHandler) createExpense(ctx context.Context, expense *models.Expe
 		*created.ProductID,
 		models.AdjustmentPurchase,
 		*created.Quantity,
-		stringPtr("Inventory purchase - Expense ID: "+created.ID.String()),
+		expenseInventoryReason("purchase", created.ID),
 		stringPtr("expense"),
 		&created.ID,
 		userID,
@@ -160,7 +164,7 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 			*finalProductID,
 			models.AdjustmentPurchase,
 			delta,
-			stringPtr("Update purchase qty - Expense: "+expenseID.String()),
+			expenseInventoryReason("quantity update", expenseID),
 			stringPtr("expense"),
 			&expenseID,
 			userID,
@@ -178,7 +182,7 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 			*existing.ProductID,
 			models.AdjustmentPurchase,
 			existing.Quantity.Neg(),
-			stringPtr("Revert purchase (edit) - Expense: "+expenseID.String()),
+			expenseInventoryReason("revert", expenseID),
 			stringPtr("expense"),
 			&expenseID,
 			userID,
@@ -195,7 +199,7 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 			*finalProductID,
 			models.AdjustmentPurchase,
 			*finalQuantity,
-			stringPtr("Apply purchase (edit) - Expense: "+expenseID.String()),
+			expenseInventoryReason("apply", expenseID),
 			stringPtr("expense"),
 			&expenseID,
 			userID,

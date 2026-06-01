@@ -66,9 +66,16 @@ func (r *InventoryRepository) GetLowStockProducts(ctx context.Context) ([]*model
 }
 
 // GetAdjustmentHistory retrieves stock adjustment history for a product
-func (r *InventoryRepository) GetAdjustmentHistory(ctx context.Context, productID uuid.UUID, limit, offset int) ([]*models.StockAdjustment, int, error) {
+func (r *InventoryRepository) GetAdjustmentHistory(ctx context.Context, productID uuid.UUID, limit, offset int, adjustmentType *models.AdjustmentType) ([]*models.StockAdjustment, int, error) {
+	countQuery := `SELECT COUNT(*) FROM stock_adjustments WHERE product_id = $1`
+	countArgs := []interface{}{productID}
+	if adjustmentType != nil {
+		countQuery += ` AND adjustment_type = $2`
+		countArgs = append(countArgs, *adjustmentType)
+	}
+
 	var total int
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM stock_adjustments WHERE product_id = $1`, productID).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("failed to count adjustments: %w", err)
 	}
 
@@ -80,10 +87,18 @@ func (r *InventoryRepository) GetAdjustmentHistory(ctx context.Context, productI
 		FROM stock_adjustments sa
 		LEFT JOIN users u ON sa.adjusted_by = u.id
 		WHERE sa.product_id = $1
-		ORDER BY sa.created_at DESC
-		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.pool.Query(ctx, query, productID, limit, offset)
+	queryArgs := []interface{}{productID}
+	if adjustmentType != nil {
+		query += ` AND sa.adjustment_type = $2`
+		queryArgs = append(queryArgs, *adjustmentType)
+	}
+	query += `
+		ORDER BY sa.created_at DESC
+		LIMIT $` + fmt.Sprint(len(queryArgs)+1) + ` OFFSET $` + fmt.Sprint(len(queryArgs)+2)
+	queryArgs = append(queryArgs, limit, offset)
+
+	rows, err := r.pool.Query(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query adjustments: %w", err)
 	}

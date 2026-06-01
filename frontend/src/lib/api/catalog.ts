@@ -48,8 +48,19 @@ export function createCatalogApi(transport: ApiTransport): CatalogApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.product };
     },
-    async getProductInventory(id) {
-      const result = await transport.request<ProductInventoryDetails>(`/products/${id}/inventory`);
+    async getProductInventory(id, params) {
+      const searchParams = new URLSearchParams();
+      if (params?.limit !== undefined) {
+        searchParams.set("limit", String(params.limit));
+      }
+      if (params?.offset !== undefined) {
+        searchParams.set("offset", String(params.offset));
+      }
+      if (params?.adjustment_type) {
+        searchParams.set("adjustment_type", params.adjustment_type);
+      }
+      const query = searchParams.toString();
+      const result = await transport.request<ProductInventoryDetails>(`/products/${id}/inventory${query ? `?${query}` : ""}`);
       if (result.error) return { error: result.error };
       return { data: result.data };
     },

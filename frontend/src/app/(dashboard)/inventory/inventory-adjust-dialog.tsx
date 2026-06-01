@@ -21,6 +21,7 @@ import {
   getInventoryAdjustmentChangeLabel,
   getInventoryAdjustmentTypeLabel,
   getInventoryProductQuantity,
+  requiresInventoryAdjustmentReason,
   type AdjustmentFormState,
   type InventoryAction,
 } from "./inventory-helpers";
@@ -59,6 +60,7 @@ export function InventoryAdjustDialog({
       ? quantity
       : currentStock + (formState.action === "add" ? 1 : -1) * quantity;
   const recentAdjustments = inventoryDetails?.recent_adjustments || [];
+  const reasonRequired = requiresInventoryAdjustmentReason(formState.adjustmentType, formState.action);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -145,13 +147,18 @@ export function InventoryAdjustDialog({
           ) : null}
 
           <div className="grid gap-2">
-            <Label htmlFor="notes">Notes (optional)</Label>
+            <Label htmlFor="notes">Notes {reasonRequired ? "(required)" : "(optional)"}</Label>
             <Input
               id="notes"
               value={formState.notes}
               onChange={(event) => onFormStateChange({ ...formState, notes: event.target.value })}
-              placeholder="Additional notes..."
+              placeholder={reasonRequired ? "Required reason for this adjustment" : "Additional notes..."}
             />
+            {reasonRequired ? (
+              <p className="text-xs text-muted-foreground">
+                A reason is required for damaged, lost, or correction removals.
+              </p>
+            ) : null}
           </div>
 
           {formState.quantity ? (
@@ -234,7 +241,7 @@ export function InventoryAdjustDialog({
           </Button>
           <Button
             onClick={onSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || (reasonRequired && !formState.notes.trim())}
             variant={formState.action === "remove" ? "destructive" : "default"}
           >
             {isSubmitting ? (

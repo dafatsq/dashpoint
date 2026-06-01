@@ -295,7 +295,7 @@ func (h *ExpenseHandler) Delete(c *fiber.Ctx) error {
 			*expense.ProductID,
 			models.AdjustmentPurchase,
 			expense.Quantity.Neg(),
-			stringPtr("Revert purchase - Expense Deleted: "+expense.ID.String()),
+			expenseInventoryReason("delete revert", expense.ID),
 			stringPtr("expense"),
 			&expense.ID,
 			userID,

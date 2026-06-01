@@ -7,6 +7,20 @@ import type {
 } from "@/types";
 
 export type InventoryAction = "add" | "remove" | "count";
+export type InventoryHistoryFilter = "all" | AdjustmentType;
+
+export const INVENTORY_HISTORY_FILTER_OPTIONS: { value: InventoryHistoryFilter; label: string }[] = [
+  { value: "all", label: "All Activity" },
+  { value: "purchase", label: "Restock" },
+  { value: "sale", label: "Sale" },
+  { value: "return", label: "Return" },
+  { value: "adjustment", label: "Correction" },
+  { value: "damage", label: "Damaged" },
+  { value: "loss", label: "Lost" },
+  { value: "count", label: "Stock Count" },
+  { value: "initial", label: "Initial Stock" },
+  { value: "transfer", label: "Transfer" },
+];
 
 export const ADJUSTMENT_TYPE_OPTIONS: Record<
   InventoryAction,
@@ -81,6 +95,8 @@ export function canSubmitInventoryAdjustment(input: {
   allowedActions: InventoryAction[];
   action: InventoryAction;
   quantity: string;
+  notes?: string;
+  adjustmentType: AdjustmentType;
   isSubmitting: boolean;
 }): boolean {
   if (input.isSubmitting) {
@@ -92,6 +108,10 @@ export function canSubmitInventoryAdjustment(input: {
   }
 
   if (input.allowedActions.length === 0) {
+    return false;
+  }
+
+  if (requiresInventoryAdjustmentReason(input.adjustmentType, input.action) && !input.notes?.trim()) {
     return false;
   }
 
@@ -186,4 +206,19 @@ export function getInventoryAdjustmentChangeLabel(
 
   const sign = quantityChange > 0 ? "+" : "";
   return `${sign}${quantityChange}`;
+}
+
+export function requiresInventoryAdjustmentReason(
+  adjustmentType: AdjustmentType,
+  action: InventoryAction,
+): boolean {
+  if (adjustmentType === "damage" || adjustmentType === "loss") {
+    return true;
+  }
+
+  if (adjustmentType === "adjustment" && action === "remove") {
+    return true;
+  }
+
+  return false;
 }

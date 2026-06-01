@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -186,6 +187,10 @@ func parseStockAdjustmentRequest(c *fiber.Ctx) (*stockAdjustmentRequest, error) 
 	quantity, err := parseDecimalField(req.Quantity, "quantity", false)
 	if err != nil {
 		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_QUANTITY", "Invalid quantity")
+	}
+
+	if (adjType == models.AdjustmentDamage || adjType == models.AdjustmentLoss || (adjType == models.AdjustmentAdjustment && quantity.LessThan(decimal.Zero))) && strings.TrimSpace(req.Reason) == "" {
+		return nil, productJSONError(c, fiber.StatusBadRequest, "REASON_REQUIRED", "Reason is required for damaged, lost, or correction removals")
 	}
 
 	var reason *string

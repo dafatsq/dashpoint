@@ -21,6 +21,7 @@ interface InventoryListProps {
   canModifyStock: boolean;
   loadMoreRef: React.RefObject<HTMLDivElement | null>;
   onAdjust: (product: Product) => void;
+  onHistory: (product: Product) => void;
 }
 
 export function InventoryList({
@@ -31,6 +32,7 @@ export function InventoryList({
   canModifyStock,
   loadMoreRef,
   onAdjust,
+  onHistory,
 }: InventoryListProps) {
   return (
     <>
@@ -90,14 +92,17 @@ export function InventoryList({
                     </div>
                   </div>
 
-                  {canModifyStock ? (
-                    <div className="flex items-center justify-end gap-2 border-t pt-3 mt-1">
+                  <div className="flex items-center justify-end gap-2 border-t pt-3 mt-1">
+                    <Button variant="outline" size="sm" onClick={() => onHistory(product)} className="h-8">
+                      History
+                    </Button>
+                    {canModifyStock ? (
                       <Button variant="outline" size="sm" onClick={() => onAdjust(product)} className="h-8">
                         <Settings2 className="h-3.5 w-3.5 mr-1" />
                         Adjust
                       </Button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -119,7 +124,7 @@ export function InventoryList({
                   <th className="pb-3 font-medium text-right">Stock</th>
                   <th className="pb-3 font-medium text-right hidden lg:table-cell">Min</th>
                   <th className="pb-3 font-medium text-center">Status</th>
-                  {canModifyStock ? <th className="pb-3 font-medium text-right">Actions</th> : null}
+                  <th className="pb-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -175,14 +180,19 @@ export function InventoryList({
                           {isOutOfStock ? "Out of Stock" : isLowStock ? "Low Stock" : "In Stock"}
                         </span>
                       </td>
-                      {canModifyStock ? (
-                        <td className="py-3 text-right">
-                          <Button variant="outline" size="sm" onClick={() => onAdjust(product)}>
-                            <Settings2 className="h-3 w-3 mr-1" />
-                            Adjust
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => onHistory(product)}>
+                            History
                           </Button>
-                        </td>
-                      ) : null}
+                          {canModifyStock ? (
+                            <Button variant="outline" size="sm" onClick={() => onAdjust(product)}>
+                              <Settings2 className="h-3 w-3 mr-1" />
+                              Adjust
+                            </Button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
