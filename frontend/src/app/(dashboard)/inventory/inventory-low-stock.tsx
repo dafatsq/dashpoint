@@ -12,10 +12,19 @@ interface InventoryLowStockProps {
   items: LowStockItem[];
   products: Product[];
   canModifyStock: boolean;
+  canEditThreshold: boolean;
   onAdjust: (productId: string) => void;
+  onEditThreshold: (productId: string) => void;
 }
 
-export function InventoryLowStock({ items, products, canModifyStock, onAdjust }: InventoryLowStockProps) {
+export function InventoryLowStock({
+  items,
+  products,
+  canModifyStock,
+  canEditThreshold,
+  onAdjust,
+  onEditThreshold,
+}: InventoryLowStockProps) {
   if (items.length === 0) {
     return (
       <Card>
@@ -71,6 +80,11 @@ export function InventoryLowStock({ items, products, canModifyStock, onAdjust }:
                     <p className="font-bold text-destructive">{Number.parseFloat(item.quantity)} left</p>
                     <p className="text-xs text-muted-foreground">Available: {Number.parseFloat(item.available_quantity)}</p>
                   </div>
+                  {canEditThreshold ? (
+                    <Button size="sm" variant="outline" onClick={() => onEditThreshold(item.id)}>
+                      Edit Threshold
+                    </Button>
+                  ) : null}
                   {canModifyStock ? (
                     <Button size="sm" variant="outline" onClick={() => onAdjust(item.id)}>
                       <Settings2 className="h-4 w-4 mr-1" />
