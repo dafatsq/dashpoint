@@ -19,9 +19,11 @@ interface InventoryListProps {
   hasMore: boolean;
   isFetchingMore: boolean;
   canModifyStock: boolean;
+  canEditThreshold: boolean;
   loadMoreRef: React.RefObject<HTMLDivElement | null>;
   onAdjust: (product: Product) => void;
   onHistory: (product: Product) => void;
+  onEditThreshold: (product: Product) => void;
 }
 
 export function InventoryList({
@@ -30,9 +32,11 @@ export function InventoryList({
   hasMore,
   isFetchingMore,
   canModifyStock,
+  canEditThreshold,
   loadMoreRef,
   onAdjust,
   onHistory,
+  onEditThreshold,
 }: InventoryListProps) {
   return (
     <>
@@ -96,6 +100,11 @@ export function InventoryList({
                     <Button variant="outline" size="sm" onClick={() => onHistory(product)} className="h-8">
                       History
                     </Button>
+                    {canEditThreshold ? (
+                      <Button variant="outline" size="sm" onClick={() => onEditThreshold(product)} className="h-8">
+                        Edit Threshold
+                      </Button>
+                    ) : null}
                     {canModifyStock ? (
                       <Button variant="outline" size="sm" onClick={() => onAdjust(product)} className="h-8">
                         <Settings2 className="h-3.5 w-3.5 mr-1" />
@@ -185,6 +194,11 @@ export function InventoryList({
                           <Button variant="outline" size="sm" onClick={() => onHistory(product)}>
                             History
                           </Button>
+                          {canEditThreshold ? (
+                            <Button variant="outline" size="sm" onClick={() => onEditThreshold(product)}>
+                              Edit Threshold
+                            </Button>
+                          ) : null}
                           {canModifyStock ? (
                             <Button variant="outline" size="sm" onClick={() => onAdjust(product)}>
                               <Settings2 className="h-3 w-3 mr-1" />

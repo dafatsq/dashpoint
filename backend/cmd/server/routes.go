@@ -126,6 +126,7 @@ func registerProductRoutes(protected fiber.Router, deps *serverDependencies) {
 	products.Get("/lookup", deps.productHandler.Lookup)
 	products.Get("/:id", deps.productHandler.Get)
 	products.Get("/:id/inventory", deps.productHandler.GetInventory)
+	products.Patch("/:id/inventory", middleware.RequirePermission(deps.permissionChecker, "can_edit_inventory"), deps.productHandler.UpdateInventoryThreshold)
 	products.Post("/", middleware.RequirePermission(deps.permissionChecker, "can_create_product"), deps.productHandler.Create)
 	products.Patch("/:id", middleware.RequirePermission(deps.permissionChecker, "can_edit_product"), deps.productHandler.Update)
 	products.Delete("/:id", middleware.RequirePermission(deps.permissionChecker, "can_delete_product"), deps.productHandler.Delete)

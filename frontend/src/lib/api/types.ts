@@ -17,6 +17,7 @@ import type {
   ExpenseSummary,
   InventoryAdjustment,
   ProductInventoryDetails,
+  InventoryDetail,
   InventoryValuation,
   LowStockItem,
   Product,
@@ -78,6 +79,10 @@ export interface CategoriesResponse {
 export interface LowStockResponse {
   products: LowStockItem[];
   count: number;
+}
+
+export interface UpdateInventoryThresholdRequest {
+  low_stock_threshold: string;
 }
 
 export interface UsersResponse {
@@ -170,6 +175,10 @@ export interface CatalogApi {
     id: string,
     params?: { limit?: number; offset?: number; adjustment_type?: AdjustmentType },
   ): Promise<ApiResponse<ProductInventoryDetails>>;
+  updateProductInventoryThreshold(
+    id: string,
+    payload: UpdateInventoryThresholdRequest,
+  ): Promise<ApiResponse<InventoryDetail>>;
   lookupProduct(code: string): Promise<ApiResponse<Product>>;
   createProduct(product: CreateProductRequest): Promise<ApiResponse<Product>>;
   updateProduct(
