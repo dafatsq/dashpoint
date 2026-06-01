@@ -21,7 +21,7 @@ func (r *SaleRepository) VoidSale(ctx context.Context, saleID, voidedBy uuid.UUI
 	defer tx.Rollback(ctx)
 
 	now := time.Now()
-	status, shiftID, totalAmount, err := loadVoidableSaleTx(ctx, tx, saleID)
+	status, invoiceNo, shiftID, totalAmount, err := loadVoidableSaleTx(ctx, tx, saleID)
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func (r *SaleRepository) VoidSale(ctx context.Context, saleID, voidedBy uuid.UUI
 	if err != nil {
 		return err
 	}
-	if err := restoreSaleInventoryTx(ctx, tx, itemsToRestore, saleID, voidedBy, reason, now); err != nil {
+	if err := restoreSaleInventoryTx(ctx, tx, itemsToRestore, saleID, invoiceNo, voidedBy, now); err != nil {
 		return err
 	}
 	if err := updateVoidedSaleTx(ctx, tx, saleID, voidedBy, reason, now); err != nil {
@@ -55,20 +55,21 @@ type saleRestoreItem struct {
 	Quantity  decimal.Decimal
 }
 
-func loadVoidableSaleTx(ctx context.Context, tx pgx.Tx, saleID uuid.UUID) (string, *uuid.UUID, decimal.Decimal, error) {
+func loadVoidableSaleTx(ctx context.Context, tx pgx.Tx, saleID uuid.UUID) (string, string, *uuid.UUID, decimal.Decimal, error) {
 	var status string
+	var invoiceNo string
 	var shiftID *uuid.UUID
 	var totalAmount decimal.Decimal
 	err := tx.QueryRow(ctx, `
-		SELECT status, shift_id, total_amount FROM sales WHERE id = $1 FOR UPDATE
-	`, saleID).Scan(&status, &shiftID, &totalAmount)
+		SELECT status, invoice_no, shift_id, total_amount FROM sales WHERE id = $1 FOR UPDATE
+	`, saleID).Scan(&status, &invoiceNo, &shiftID, &totalAmount)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return "", nil, decimal.Zero, fmt.Errorf("sale not found")
+			return "", "", nil, decimal.Zero, fmt.Errorf("sale not found")
 		}
-		return "", nil, decimal.Zero, err
+		return "", "", nil, decimal.Zero, err
 	}
-	return status, shiftID, totalAmount, nil
+	return status, invoiceNo, shiftID, totalAmount, nil
 }
 
 func loadSaleRestoreItemsTx(ctx context.Context, tx pgx.Tx, saleID uuid.UUID) ([]saleRestoreItem, error) {
@@ -89,7 +90,7 @@ func loadSaleRestoreItemsTx(ctx context.Context, tx pgx.Tx, saleID uuid.UUID) ([
 	return items, nil
 }
 
-func restoreSaleInventoryTx(ctx context.Context, tx pgx.Tx, items []saleRestoreItem, saleID, voidedBy uuid.UUID, reason string, now time.Time) error {
+func restoreSaleInventoryTx(ctx context.Context, tx pgx.Tx, items []saleRestoreItem, saleID uuid.UUID, invoiceNo string, voidedBy uuid.UUID, now time.Time) error {
 	for _, item := range items {
 		currentQty, err := getInventoryQuantityForUpdateTx(ctx, tx, item.ProductID)
 		if err != nil {
@@ -105,7 +106,7 @@ func restoreSaleInventoryTx(ctx context.Context, tx pgx.Tx, items []saleRestoreI
 			QuantityBefore: currentQty,
 			QuantityChange: item.Quantity,
 			QuantityAfter:  newQty,
-			Reason:         fmt.Sprintf("Void sale: %s", reason),
+			Reason:         voidedSaleInventoryReason(invoiceNo),
 			ReferenceType:  "sale_void",
 			ReferenceID:    saleID,
 			AdjustedBy:     voidedBy,

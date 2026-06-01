@@ -25,6 +25,14 @@ type stockAdjustmentRecord struct {
 	CreatedAt      time.Time
 }
 
+func saleInventoryReason(invoiceNo string) string {
+	return fmt.Sprintf("Sale invoice %s", invoiceNo)
+}
+
+func voidedSaleInventoryReason(invoiceNo string) string {
+	return fmt.Sprintf("Voided sale invoice %s", invoiceNo)
+}
+
 func generateInvoiceNumber(ctx context.Context, tx pgx.Tx, t time.Time) (string, error) {
 	dateStr := t.Format("20060102")
 	prefix := "INV-" + dateStr + "-"

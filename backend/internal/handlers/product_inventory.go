@@ -15,6 +15,19 @@ func (h *ProductHandler) GetInventory(c *fiber.Ctx) error {
 		return err
 	}
 
+	limit := c.QueryInt("limit", 10)
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+	offset := c.QueryInt("offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
+	adjustmentType, err := parseInventoryAdjustmentTypeFilter(c.Query("adjustment_type"))
+	if err != nil {
+		return productJSONError(c, fiber.StatusBadRequest, "INVALID_ADJUSTMENT_TYPE", err.Error())
+	}
+
 	inventory, repoErr := h.inventoryRepo.GetByProductID(c.Context(), id)
 	if repoErr != nil {
 		return productInternalError(c, repoErr, "Failed to get inventory", "Failed to retrieve inventory")
@@ -23,7 +36,7 @@ func (h *ProductHandler) GetInventory(c *fiber.Ctx) error {
 		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Inventory not found")
 	}
 
-	adjustments, total, _ := h.inventoryRepo.GetAdjustmentHistory(c.Context(), id, 10, 0)
+	adjustments, total, _ := h.inventoryRepo.GetAdjustmentHistory(c.Context(), id, limit, offset, adjustmentType)
 
 	return c.JSON(fiber.Map{
 		"inventory": fiber.Map{
@@ -37,6 +50,28 @@ func (h *ProductHandler) GetInventory(c *fiber.Ctx) error {
 		"recent_adjustments": adjustments,
 		"total_adjustments":  total,
 	})
+}
+
+func parseInventoryAdjustmentTypeFilter(value string) (*models.AdjustmentType, error) {
+	if value == "" || value == "all" {
+		return nil, nil
+	}
+
+	adjustmentType := models.AdjustmentType(value)
+	switch adjustmentType {
+	case models.AdjustmentInitial,
+		models.AdjustmentPurchase,
+		models.AdjustmentSale,
+		models.AdjustmentReturn,
+		models.AdjustmentAdjustment,
+		models.AdjustmentDamage,
+		models.AdjustmentLoss,
+		models.AdjustmentTransfer,
+		models.AdjustmentCount:
+		return &adjustmentType, nil
+	default:
+		return nil, fiber.NewError(fiber.StatusBadRequest, "Invalid adjustment_type value")
+	}
 }
 
 // AdjustStock handles POST /api/v1/inventory/adjust

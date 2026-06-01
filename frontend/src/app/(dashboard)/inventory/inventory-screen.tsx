@@ -12,6 +12,7 @@ import type { Category, LowStockItem, Product, ProductInventoryDetails } from "@
 
 import { InventoryAdjustDialog } from "./inventory-adjust-dialog";
 import { InventoryControls } from "./inventory-controls";
+import { InventoryHistoryDrawer } from "./inventory-history-drawer";
 import {
   buildInventoryAdjustmentRequest,
   canSubmitInventoryAdjustment,
@@ -20,13 +21,16 @@ import {
   getInventoryProductQuantity,
   getPermittedInventoryActions,
   isInventoryActionAllowed,
+  requiresInventoryAdjustmentReason,
   type AdjustmentFormState,
+  type InventoryHistoryFilter,
 } from "./inventory-helpers";
 import { InventoryList } from "./inventory-list";
 import { InventoryLowStock } from "./inventory-low-stock";
 
 export function InventoryScreen() {
   const PAGE_SIZE = 24;
+  const HISTORY_PAGE_SIZE = 20;
   const { hasPermission } = useAuth();
   const canAddStock = hasPermission(PERMISSIONS.INVENTORY_ADD_STOCK);
   const canRemoveStock = hasPermission(PERMISSIONS.INVENTORY_REMOVE_STOCK);
@@ -54,6 +58,12 @@ export function InventoryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [inventoryDetails, setInventoryDetails] = useState<ProductInventoryDetails | null>(null);
   const [isLoadingInventoryDetails, setIsLoadingInventoryDetails] = useState(false);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
+  const [historyDetails, setHistoryDetails] = useState<ProductInventoryDetails | null>(null);
+  const [isLoadingHistoryDetails, setIsLoadingHistoryDetails] = useState(false);
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const [historyFilter, setHistoryFilter] = useState<InventoryHistoryFilter>("all");
   const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormState>(createEmptyAdjustmentFormState("add"));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -238,6 +248,54 @@ export function InventoryScreen() {
     [openAdjustDialog, products],
   );
 
+  const loadHistoryPage = useCallback(
+    async (product: Product, offset: number, adjustmentType: InventoryHistoryFilter) => {
+      setIsLoadingHistoryDetails(true);
+      const result = await api.getProductInventory(product.id, {
+        limit: HISTORY_PAGE_SIZE,
+        offset,
+        adjustment_type: adjustmentType === "all" ? undefined : adjustmentType,
+      });
+      if (result.error) {
+        setPageError(result.error);
+        setHistoryDrawerOpen(false);
+        setHistoryProduct(null);
+        setHistoryDetails(null);
+        setHistoryOffset(0);
+        setHistoryFilter("all");
+      } else {
+        setPageError(null);
+        setHistoryDetails(result.data || null);
+        setHistoryOffset(offset);
+      }
+      setIsLoadingHistoryDetails(false);
+    },
+    [],
+  );
+
+  const openHistoryDrawer = useCallback(
+    async (product: Product) => {
+      setHistoryProduct(product);
+      setHistoryDetails(null);
+      setHistoryOffset(0);
+      setHistoryFilter("all");
+      setHistoryDrawerOpen(true);
+      await loadHistoryPage(product, 0, "all");
+    },
+    [loadHistoryPage],
+  );
+
+  const handleHistoryFilterChange = useCallback(
+    async (value: InventoryHistoryFilter) => {
+      if (!historyProduct) {
+        return;
+      }
+      setHistoryFilter(value);
+      await loadHistoryPage(historyProduct, 0, value);
+    },
+    [historyProduct, loadHistoryPage],
+  );
+
   const handleAdjustment = useCallback(async () => {
     if (!selectedProduct) {
       showError("Product Required", "Select a product before saving.");
@@ -263,6 +321,8 @@ export function InventoryScreen() {
         allowedActions,
         action: adjustmentForm.action,
         quantity: adjustmentForm.quantity,
+        adjustmentType: adjustmentForm.adjustmentType,
+        notes: adjustmentForm.notes,
         isSubmitting,
       })
     ) {
@@ -279,6 +339,10 @@ export function InventoryScreen() {
 
     if (Number.isNaN(inputQuantity) || inputQuantity <= 0) {
       showError("Invalid Quantity", "Quantity must be greater than zero");
+      return;
+    }
+    if (requiresInventoryAdjustmentReason(adjustmentForm.adjustmentType, adjustmentForm.action) && !adjustmentForm.notes.trim()) {
+      showError("Reason Required", "Enter a reason for damaged, lost, or correction removals.");
       return;
     }
     if (adjustmentForm.adjustmentType === "count" && inputQuantity < 0) {
@@ -449,6 +513,7 @@ export function InventoryScreen() {
             canModifyStock={canModifyStock}
             loadMoreRef={loadMoreRef}
             onAdjust={openAdjustDialog}
+            onHistory={(product) => void openHistoryDrawer(product)}
           />
         )}
       </div>
@@ -477,6 +542,37 @@ export function InventoryScreen() {
         }
         onFormStateChange={setAdjustmentForm}
         onSubmit={() => void handleAdjustment()}
+      />
+
+      <InventoryHistoryDrawer
+        open={historyDrawerOpen}
+        product={historyProduct}
+        inventoryDetails={historyDetails}
+        isLoading={isLoadingHistoryDetails}
+        pageSize={HISTORY_PAGE_SIZE}
+        offset={historyOffset}
+        selectedType={historyFilter}
+        onOpenChange={(open) => {
+          setHistoryDrawerOpen(open);
+          if (!open) {
+            setHistoryProduct(null);
+            setHistoryDetails(null);
+            setHistoryOffset(0);
+            setHistoryFilter("all");
+            setIsLoadingHistoryDetails(false);
+          }
+        }}
+        onTypeChange={(value) => void handleHistoryFilterChange(value)}
+        onPrevious={() => {
+          if (historyProduct && historyOffset > 0) {
+            void loadHistoryPage(historyProduct, Math.max(0, historyOffset - HISTORY_PAGE_SIZE), historyFilter);
+          }
+        }}
+        onNext={() => {
+          if (historyProduct && historyDetails && historyOffset + historyDetails.recent_adjustments.length < historyDetails.total_adjustments) {
+            void loadHistoryPage(historyProduct, historyOffset + HISTORY_PAGE_SIZE, historyFilter);
+          }
+        }}
       />
     </div>
   );

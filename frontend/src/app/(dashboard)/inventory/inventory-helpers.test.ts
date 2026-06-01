@@ -4,6 +4,7 @@ import type { Product } from "@/types";
 
 import {
   ADJUSTMENT_TYPE_OPTIONS,
+  INVENTORY_HISTORY_FILTER_OPTIONS,
   buildInventoryAdjustmentRequest,
   canSubmitInventoryAdjustment,
   classifyInventoryStock,
@@ -16,6 +17,7 @@ import {
   getInventoryProductQuantity,
   getInventoryProductImageUrl,
   getPermittedInventoryActions,
+  requiresInventoryAdjustmentReason,
 } from "./inventory-helpers";
 
 function buildProduct(overrides: Partial<Product> = {}): Product {
@@ -76,7 +78,9 @@ describe("inventory helpers", () => {
       canSubmitInventoryAdjustment({
         allowedActions: [],
         action: "add",
+        adjustmentType: "purchase",
         quantity: "5",
+        notes: "",
         isSubmitting: false,
       }),
     ).toBe(false);
@@ -85,7 +89,9 @@ describe("inventory helpers", () => {
       canSubmitInventoryAdjustment({
         allowedActions: ["count"],
         action: "add",
+        adjustmentType: "purchase",
         quantity: "5",
+        notes: "",
         isSubmitting: false,
       }),
     ).toBe(false);
@@ -94,7 +100,9 @@ describe("inventory helpers", () => {
       canSubmitInventoryAdjustment({
         allowedActions: ["count"],
         action: "count",
+        adjustmentType: "count",
         quantity: "5",
+        notes: "",
         isSubmitting: false,
       }),
     ).toBe(true);
@@ -102,10 +110,42 @@ describe("inventory helpers", () => {
       canSubmitInventoryAdjustment({
         allowedActions: ["count"],
         action: "count",
+        adjustmentType: "count",
         quantity: "",
+        notes: "",
         isSubmitting: false,
       }),
     ).toBe(false);
+  });
+
+  test("requires notes for destructive inventory adjustments", () => {
+    expect(requiresInventoryAdjustmentReason("damage", "remove")).toBe(true);
+    expect(requiresInventoryAdjustmentReason("loss", "remove")).toBe(true);
+    expect(requiresInventoryAdjustmentReason("adjustment", "remove")).toBe(true);
+    expect(requiresInventoryAdjustmentReason("purchase", "add")).toBe(false);
+    expect(requiresInventoryAdjustmentReason("adjustment", "add")).toBe(false);
+
+    expect(
+      canSubmitInventoryAdjustment({
+        allowedActions: ["remove"],
+        action: "remove",
+        adjustmentType: "damage",
+        quantity: "2",
+        notes: "",
+        isSubmitting: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      canSubmitInventoryAdjustment({
+        allowedActions: ["remove"],
+        action: "remove",
+        adjustmentType: "damage",
+        quantity: "2",
+        notes: "Broken seal",
+        isSubmitting: false,
+      }),
+    ).toBe(true);
   });
 
   test("returns the correct default backend adjustment type", () => {
@@ -118,6 +158,21 @@ describe("inventory helpers", () => {
     expect(ADJUSTMENT_TYPE_OPTIONS.add.map((item) => item.value)).toEqual(["purchase", "adjustment"]);
     expect(ADJUSTMENT_TYPE_OPTIONS.remove.map((item) => item.value)).toEqual(["damage", "loss", "adjustment"]);
     expect(ADJUSTMENT_TYPE_OPTIONS.count.map((item) => item.value)).toEqual(["count"]);
+  });
+
+  test("exposes history filter options for the drawer", () => {
+    expect(INVENTORY_HISTORY_FILTER_OPTIONS.map((item) => item.value)).toEqual([
+      "all",
+      "purchase",
+      "sale",
+      "return",
+      "adjustment",
+      "damage",
+      "loss",
+      "count",
+      "initial",
+      "transfer",
+    ]);
   });
 
   test("builds stock-count requests as absolute quantity", () => {

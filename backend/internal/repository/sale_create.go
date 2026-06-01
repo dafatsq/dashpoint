@@ -220,7 +220,7 @@ func insertSaleItemsAndAdjustInventoryTx(ctx context.Context, tx pgx.Tx, sale *m
 			QuantityBefore: prepared.ProductQty,
 			QuantityChange: saleItem.Quantity.Neg(),
 			QuantityAfter:  prepared.NewQty,
-			Reason:         fmt.Sprintf("Sale: %s", invoiceNo),
+			Reason:         saleInventoryReason(invoiceNo),
 			ReferenceType:  "sale",
 			ReferenceID:    sale.ID,
 			AdjustedBy:     employeeID,

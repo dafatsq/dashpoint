@@ -206,6 +206,17 @@ func TestCreateExpenseModelSetsAppliesInventoryOnlyWhenRequested(t *testing.T) {
 	}
 }
 
+func TestExpenseInventoryReason(t *testing.T) {
+	expenseID := uuid.MustParse("00000000-0000-0000-0000-000000000321")
+
+	if got := expenseInventoryReason("purchase", expenseID); got == nil || *got != "Expense inventory purchase 00000000-0000-0000-0000-000000000321" {
+		t.Fatalf("unexpected purchase reason: %v", got)
+	}
+	if got := expenseInventoryReason("delete revert", expenseID); got == nil || *got != "Expense inventory delete revert 00000000-0000-0000-0000-000000000321" {
+		t.Fatalf("unexpected delete revert reason: %v", got)
+	}
+}
+
 func TestDeleteCategoryAllowsArchivingInventoryPurchaseCategory(t *testing.T) {
 	categoryID := uuid.New()
 	deleteCalled := false
