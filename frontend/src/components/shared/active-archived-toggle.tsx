@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive } from "lucide-react";
+import { Archive, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ActiveArchivedValue = "active" | "archived";
@@ -16,7 +16,7 @@ const activeArchivedOptions: Array<{
   label: string;
   icon?: typeof Archive;
 }> = [
-  { value: "active", label: "Active" },
+  { value: "active", label: "Active", icon: Check },
   { value: "archived", label: "Archived", icon: Archive },
 ];
 
@@ -36,7 +36,7 @@ export function ActiveArchivedToggle({
             key={option.value}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+              "flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
               isSelected
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",

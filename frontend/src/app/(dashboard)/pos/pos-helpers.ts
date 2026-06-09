@@ -1,5 +1,5 @@
 import { buildBackendUrl } from "@/lib/config";
-import type { CartItem, CreateSaleRequest, PaymentMethod, Product } from "@/types";
+import type { CartItem, CreateSaleRequest, PaymentMethod, Product, ValidateSaleCartRequest } from "@/types";
 
 export const QUICK_CASH_AMOUNTS = [10000, 20000, 50000, 100000] as const;
 
@@ -157,10 +157,11 @@ export function buildSaleRequest(
   discount: number,
   total: number,
   amountPaid: number,
+  shiftId?: string,
 ): CreateSaleRequest {
   const change = amountPaid - total;
 
-  return {
+  const request: CreateSaleRequest = {
     items: cartItems.map((item) => ({
       product_id: item.product.id,
       quantity: item.quantity.toString(),
@@ -177,4 +178,25 @@ export function buildSaleRequest(
     discount_value: discount > 0 ? discount.toString() : undefined,
     discount_type: discount > 0 ? "percentage" : undefined,
   };
+  if (shiftId) {
+    request.shift_id = shiftId;
+  }
+  return request;
+}
+
+export function buildSaleCartValidationRequest(
+  cartItems: CartItem[],
+  shiftId?: string,
+): ValidateSaleCartRequest {
+  const request: ValidateSaleCartRequest = {
+    items: cartItems.map((item) => ({
+      product_id: item.product.id,
+      quantity: item.quantity.toString(),
+      unit_price: item.product.price,
+    })),
+  };
+  if (shiftId) {
+    request.shift_id = shiftId;
+  }
+  return request;
 }

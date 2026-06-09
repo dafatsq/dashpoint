@@ -30,6 +30,9 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	}
+	if !h.validateActiveProductCategory(c, input.product.CategoryID) {
+		return nil
+	}
 
 	if req.Name != "" {
 		if err := h.ensureProductNameAvailable(c, req.Name, nil); err != nil {
@@ -47,6 +50,9 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 				reactivated, reactivateErr := h.reactivateProduct(c, existingProduct, req, input.product.Price)
 				if reactivateErr != nil {
 					return reactivateErr
+				}
+				if reactivated == nil {
+					return nil
 				}
 				return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 					"message": "Product reactivated successfully",
@@ -73,6 +79,9 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 	}
 
 	if err := h.productRepo.Create(c.Context(), input.product, input.initialQuantity); err != nil {
+		if responseErr := productCategoryWriteError(c, err); responseErr != nil {
+			return responseErr
+		}
 		return productInternalError(c, err, "Failed to create product", "Failed to create product")
 	}
 
@@ -114,10 +123,18 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	}
 
 	oldValues := buildProductAuditValues(product)
+	originalCategoryID := product.CategoryID
 
 	var req UpdateProductRequest
 	if err := c.BodyParser(&req); err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, product.UpdatedAt)
+	if staleErr != nil {
+		return productJSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return productJSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
 	}
 	if !product.IsActive && (req.IsActive == nil || !*req.IsActive) {
 		return productJSONError(c, fiber.StatusConflict, "PRODUCT_INACTIVE", "Archived products cannot be changed")
@@ -158,6 +175,9 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	if err := applyUpdateProductRequest(product, req); err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	}
+	if req.CategoryID != nil && !sameUUIDPointer(originalCategoryID, product.CategoryID) && !h.validateActiveProductCategory(c, product.CategoryID) {
+		return nil
+	}
 
 	if req.ImageURL != nil {
 		oldImageURL := ""
@@ -179,6 +199,9 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	}
 
 	if err := h.productRepo.Update(c.Context(), product); err != nil {
+		if responseErr := productCategoryWriteError(c, err); responseErr != nil {
+			return responseErr
+		}
 		return productInternalError(c, err, "Failed to update product", "Failed to update product")
 	}
 

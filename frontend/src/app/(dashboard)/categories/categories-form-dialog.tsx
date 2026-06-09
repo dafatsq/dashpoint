@@ -23,6 +23,7 @@ interface CategoriesFormDialogProps {
   formData: CategoryFormData;
 
   isSubmitting: boolean;
+  hasChanges: boolean;
   onOpenChange: (open: boolean) => void;
   onFormDataChange: (formData: CategoryFormData) => void;
   onSubmit: () => void;
@@ -34,6 +35,7 @@ export function CategoriesFormDialog({
   editing,
   formData,
   isSubmitting,
+  hasChanges,
   onOpenChange,
   onFormDataChange,
   onSubmit,
@@ -81,7 +83,7 @@ export function CategoriesFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting}>
+          <Button onClick={onSubmit} disabled={isSubmitting || (editing && !hasChanges)}>
             {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             {editing ? "Update" : "Create"} Category
           </Button>

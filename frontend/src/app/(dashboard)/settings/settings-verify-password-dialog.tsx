@@ -51,16 +51,17 @@ export function SettingsVerifyPasswordDialog({
             disabled={isSubmitting}
             autoFocus
           />
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse gap-2">
             <Button
               type="button"
               variant="outline"
+              className="w-full"
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

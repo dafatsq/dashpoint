@@ -181,6 +181,14 @@ export function ProductsScreen() {
   const hasChanges = useMemo(() => hasProductFormChanges(formData, editingProduct), [editingProduct, formData]);
 
   const handleSubmit = async () => {
+    if (editingProduct && !canEdit) {
+      showError("Permission Denied", "You do not have permission to edit products");
+      return;
+    }
+    if (!editingProduct && !canCreate) {
+      showError("Permission Denied", "You do not have permission to create products");
+      return;
+    }
     if (editingProduct && !hasChanges) {
       showError("No Changes", "Make a change before saving.");
       return;
@@ -200,7 +208,10 @@ export function ProductsScreen() {
 
     try {
       if (editingProduct) {
-        const result = await api.updateProduct(editingProduct.id, buildProductUpdateRequest(formData));
+        const result = await api.updateProduct(editingProduct.id, {
+          ...buildProductUpdateRequest(formData),
+          expected_updated_at: editingProduct.updated_at,
+        });
         if (result.error) {
           if (result.error.includes("SKU")) {
             showError("SKU Error", result.error);
@@ -245,7 +256,12 @@ export function ProductsScreen() {
     if (!deletingProduct) {
       return;
     }
-    const result = await api.deleteProduct(deletingProduct.id);
+    if (!canDelete) {
+      showError("Permission Denied", "You do not have permission to archive products");
+      return;
+    }
+    setIsSubmitting(true);
+    const result = await api.deleteProduct(deletingProduct.id, deletingProduct.updated_at);
     if (result.error) {
       showError("Archive Failed", result.error);
     } else {
@@ -259,7 +275,15 @@ export function ProductsScreen() {
   };
 
   const handleRestore = async (product: Product) => {
-    const result = await api.updateProduct(product.id, { is_active: true });
+    if (!canEdit) {
+      showError("Permission Denied", "You do not have permission to restore products");
+      return;
+    }
+    setIsSubmitting(true);
+    const result = await api.updateProduct(product.id, {
+      is_active: true,
+      expected_updated_at: product.updated_at,
+    });
     if (result.error) {
       showError("Restore Failed", result.error);
     } else if (result.data) {
@@ -274,8 +298,15 @@ export function ProductsScreen() {
     if (!deletingProduct) {
       return;
     }
+    if (!canDelete) {
+      showError("Permission Denied", "You do not have permission to delete products");
+      return;
+    }
     setIsSubmitting(true);
-    const result = await api.permanentDeleteProduct(deletingProduct.id);
+    const result = await api.permanentDeleteProduct(
+      deletingProduct.id,
+      deletingProduct.updated_at,
+    );
     if (result.error) {
       showError("Delete Failed", result.error);
     } else {
@@ -355,6 +386,7 @@ export function ProductsScreen() {
         formData={formData}
         formErrors={formErrors}
         isSubmitting={isSubmitting}
+        hasChanges={hasChanges}
         onOpenChange={setDialogOpen}
         onFormDataChange={setFormData}
         onFormErrorsChange={setFormErrors}

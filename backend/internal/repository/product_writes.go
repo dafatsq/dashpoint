@@ -13,6 +13,10 @@ import (
 
 // Create creates a new product with optional inventory
 func (r *ProductRepository) Create(ctx context.Context, product *models.Product, initialQuantity *decimal.Decimal) error {
+	if err := r.ensureActiveProductCategory(ctx, product.CategoryID); err != nil {
+		return err
+	}
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -57,6 +61,10 @@ func (r *ProductRepository) Create(ctx context.Context, product *models.Product,
 
 // Update updates a product
 func (r *ProductRepository) Update(ctx context.Context, product *models.Product) error {
+	if err := r.ensureProductUpdateCategoryAllowed(ctx, product.ID, product.CategoryID); err != nil {
+		return err
+	}
+
 	product.UpdatedAt = time.Now()
 	query := `
 		UPDATE products 

@@ -258,7 +258,10 @@ export function ExpensesScreen() {
     try {
       const expenseData = buildExpenseRequest(formData);
       if (editingExpense) {
-        const result = await api.updateExpense(editingExpense.id, expenseData);
+        const result = await api.updateExpense(editingExpense.id, {
+          ...expenseData,
+          expected_updated_at: editingExpense.updated_at,
+        });
         if (result.error) {
           showError("Save Failed", result.error);
           return;
@@ -288,12 +291,19 @@ export function ExpensesScreen() {
   };
 
   const handleDelete = async () => {
-    if (!deletingExpense || !canDeleteExpense) {
+    if (!deletingExpense) {
+      return;
+    }
+    if (!canDeleteExpense) {
+      showError("Permission Denied", "You do not have permission to delete expenses");
       return;
     }
 
     setIsSubmitting(true);
-    const result = await api.deleteExpense(deletingExpense.id);
+    const result = await api.deleteExpense(
+      deletingExpense.id,
+      deletingExpense.updated_at,
+    );
     if (result.error) {
       showError("Delete Failed", result.error);
       setIsSubmitting(false);
@@ -400,6 +410,7 @@ export function ExpensesScreen() {
         formData={formData}
         formErrors={formErrors}
         isSubmitting={isSubmitting}
+        hasChanges={hasChanges}
         isInventoryPurchase={inventoryPurchase}
         isManualAmount={isManualAmount}
         isManualDescription={isManualDescription}

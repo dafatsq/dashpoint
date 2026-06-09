@@ -9,7 +9,6 @@ import (
 
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/auth"
-	"dashpoint/backend/internal/authz"
 	"dashpoint/backend/internal/models"
 )
 
@@ -104,11 +103,17 @@ func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, token
 		})
 	}
 
+	permissions, err := w.userRepo.GetUserPermissions(c.Context(), user.ID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get user permissions")
+		return authInternalError(c, "Failed to retrieve user permissions")
+	}
+
 	return c.JSON(AuthResponse{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.AccessTokenExpiresAt,
-		User:         authUserResponse(user, authz.PermissionsForRole(roleNameOfUser(user)), false),
+		User:         authUserResponse(user, permissions, false),
 	})
 }
 

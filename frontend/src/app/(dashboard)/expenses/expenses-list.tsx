@@ -66,7 +66,7 @@ export function ExpensesList({
   return (
     <>
       <div className="hidden lg:block overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-max">
           <thead>
             <tr className="border-b text-left text-sm text-muted-foreground">
               <th className="pb-3 font-medium">Date</th>
@@ -97,7 +97,7 @@ export function ExpensesList({
                 </td>
                 <td className="py-3 text-sm">{expense.created_by_name || "Unknown"}</td>
                 <td className="py-3 text-sm text-muted-foreground">{expense.vendor || "-"}</td>
-                <td className="py-3 text-right font-medium text-destructive">{formatCurrency(expense.amount)}</td>
+                <td className="py-3 text-right font-medium text-destructive font-mono">{formatCurrency(expense.amount)}</td>
                 {canManageAnyExpense && (
                   <td className="py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -122,11 +122,11 @@ export function ExpensesList({
 
       <div className="space-y-4 lg:hidden">
         {expenses.map((expense) => (
-          <Card key={expense.id}>
+          <Card key={expense.id} className="@container">
             <CardContent className="space-y-3 p-4">
               <div className="flex items-start justify-between border-b pb-2">
                 <div>
-                  <span className="text-sm font-bold text-destructive">{formatCurrency(expense.amount)}</span>
+                  <span className="text-sm font-bold text-destructive font-mono">{formatCurrency(expense.amount)}</span>
                   <span className="block text-xs text-muted-foreground">{formatDate(expense.expense_date)}</span>
                 </div>
                 <span className="inline-flex items-center rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white dark:bg-blue-600/90 dark:text-white">
@@ -152,9 +152,15 @@ export function ExpensesList({
               {canManageAnyExpense && (
                 <div className="flex justify-end gap-2 border-t pt-2">
                   {canEditExpense && (
-                    <Button variant="outline" size="sm" onClick={() => onEdit(expense)} className="h-8">
-                      <Pencil className="mr-1 h-3.5 w-3.5" />
-                      Edit
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onEdit(expense)}
+                      className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3"
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5 @[250px]:mr-1" />
+                      <span className="hidden @[250px]:inline">Edit</span>
                     </Button>
                   )}
                   {canDeleteExpense && (
@@ -162,10 +168,11 @@ export function ExpensesList({
                       variant="outline"
                       size="sm"
                       onClick={() => onDelete(expense)}
-                      className="h-8 text-destructive hover:text-destructive"
+                      className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      title="Delete"
                     >
-                      <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      Delete
+                      <Trash2 className="h-3.5 w-3.5 @[250px]:mr-1" />
+                      <span className="hidden @[250px]:inline">Delete</span>
                     </Button>
                   )}
                 </div>

@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 
 	"dashpoint/backend/internal/models"
@@ -20,6 +21,10 @@ type fakeExpenseStore struct {
 	getCategoryByIDFunc func(context.Context, uuid.UUID) (*models.ExpenseCategory, error)
 	deleteCategoryFunc  func(context.Context, uuid.UUID) error
 	updateCategoryFunc  func(context.Context, *models.ExpenseCategory) (*models.ExpenseCategory, error)
+	beginTxFunc         func(context.Context) (pgx.Tx, error)
+	getByIDFunc         func(context.Context, uuid.UUID) (*models.Expense, error)
+	getByIDWithTxFunc   func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error)
+	updateWithTxFunc    func(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error)
 }
 
 func (f *fakeExpenseStore) ListCategories(context.Context, string) ([]models.ExpenseCategory, error) {
@@ -57,16 +62,25 @@ func (f *fakeExpenseStore) PermanentDeleteCategory(context.Context, uuid.UUID) e
 func (f *fakeExpenseStore) Create(context.Context, *models.Expense) (*models.Expense, error) {
 	return nil, nil
 }
-func (f *fakeExpenseStore) BeginTx(context.Context) (pgx.Tx, error) {
+func (f *fakeExpenseStore) BeginTx(ctx context.Context) (pgx.Tx, error) {
+	if f.beginTxFunc != nil {
+		return f.beginTxFunc(ctx)
+	}
 	return nil, nil
 }
 func (f *fakeExpenseStore) CreateWithTx(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error) {
 	return nil, nil
 }
-func (f *fakeExpenseStore) GetByIDWithTx(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error) {
+func (f *fakeExpenseStore) GetByIDWithTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*models.Expense, error) {
+	if f.getByIDWithTxFunc != nil {
+		return f.getByIDWithTxFunc(ctx, tx, id)
+	}
 	return nil, nil
 }
-func (f *fakeExpenseStore) GetByID(context.Context, uuid.UUID) (*models.Expense, error) {
+func (f *fakeExpenseStore) GetByID(ctx context.Context, id uuid.UUID) (*models.Expense, error) {
+	if f.getByIDFunc != nil {
+		return f.getByIDFunc(ctx, id)
+	}
 	return nil, nil
 }
 func (f *fakeExpenseStore) List(context.Context, *uuid.UUID, *time.Time, *time.Time, int, int) ([]models.Expense, int, error) {
@@ -75,7 +89,10 @@ func (f *fakeExpenseStore) List(context.Context, *uuid.UUID, *time.Time, *time.T
 func (f *fakeExpenseStore) Update(context.Context, *models.Expense) (*models.Expense, error) {
 	return nil, nil
 }
-func (f *fakeExpenseStore) UpdateWithTx(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error) {
+func (f *fakeExpenseStore) UpdateWithTx(ctx context.Context, tx pgx.Tx, expense *models.Expense) (*models.Expense, error) {
+	if f.updateWithTxFunc != nil {
+		return f.updateWithTxFunc(ctx, tx, expense)
+	}
 	return nil, nil
 }
 func (f *fakeExpenseStore) Delete(context.Context, uuid.UUID) error {
@@ -98,6 +115,42 @@ type fakeInventoryAdjuster struct {
 func (f *fakeInventoryAdjuster) AdjustStockWithTx(ctx context.Context, tx pgx.Tx, productID uuid.UUID, adjustmentType models.AdjustmentType, quantity decimal.Decimal, reason *string, referenceType *string, referenceID *uuid.UUID, adjustedBy uuid.UUID) (*models.StockAdjustment, error) {
 	if f.adjustStockWithTxFunc != nil {
 		return f.adjustStockWithTxFunc(ctx, tx, productID, adjustmentType, quantity, reason, referenceType, referenceID, adjustedBy)
+	}
+	return nil, nil
+}
+
+type fakeExpenseProductStore struct {
+	getByIDFunc func(context.Context, uuid.UUID) (*models.Product, error)
+}
+
+type fakeExpenseTx struct {
+	committed bool
+}
+
+func (f *fakeExpenseTx) Begin(context.Context) (pgx.Tx, error) { return f, nil }
+func (f *fakeExpenseTx) Commit(context.Context) error {
+	f.committed = true
+	return nil
+}
+func (f *fakeExpenseTx) Rollback(context.Context) error { return nil }
+func (f *fakeExpenseTx) CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error) {
+	return 0, nil
+}
+func (f *fakeExpenseTx) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults { return nil }
+func (f *fakeExpenseTx) LargeObjects() pgx.LargeObjects                         { return pgx.LargeObjects{} }
+func (f *fakeExpenseTx) Prepare(context.Context, string, string) (*pgconn.StatementDescription, error) {
+	return nil, nil
+}
+func (f *fakeExpenseTx) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, nil
+}
+func (f *fakeExpenseTx) Query(context.Context, string, ...any) (pgx.Rows, error) { return nil, nil }
+func (f *fakeExpenseTx) QueryRow(context.Context, string, ...any) pgx.Row        { return nil }
+func (f *fakeExpenseTx) Conn() *pgx.Conn                                         { return nil }
+
+func (f *fakeExpenseProductStore) GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error) {
+	if f.getByIDFunc != nil {
+		return f.getByIDFunc(ctx, id)
 	}
 	return nil, nil
 }
@@ -127,6 +180,25 @@ func TestCreateExpenseRejectsInvalidCategoryID(t *testing.T) {
 	}
 }
 
+func TestCreateExpenseModelRejectsArchivedExpenseCategory(t *testing.T) {
+	categoryID := uuid.New()
+	handler := NewExpenseHandler(&fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Archived", IsActive: false}, nil
+		},
+	}, &fakeInventoryAdjuster{}, nil)
+
+	_, err := handler.createExpenseModel(context.Background(), CreateExpenseRequest{
+		CategoryID:  stringPtr(categoryID.String()),
+		Amount:      "10.00",
+		Description: "Taxi",
+		ExpenseDate: "2026-05-14",
+	}, uuid.New())
+	if err == nil || err.Error() != "Archived expense categories cannot be used" {
+		t.Fatalf("expected archived category error, got %v", err)
+	}
+}
+
 func TestCreateExpenseRejectsInvalidProductID(t *testing.T) {
 	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
 	app := expenseHandlerTestApp(handler)
@@ -152,9 +224,13 @@ func TestCreateExpenseModelRequiresProductAndQuantityForInventoryPurchase(t *tes
 	handler := NewExpenseHandler(&fakeExpenseStore{
 		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
 			systemKey := inventoryPurchaseCategorySystemKey
-			return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey}, nil
+			return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey, IsActive: true}, nil
 		},
-	}, &fakeInventoryAdjuster{}, nil)
+	}, &fakeInventoryAdjuster{}, &fakeExpenseProductStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
+			return testProduct(), nil
+		},
+	})
 
 	_, err := handler.createExpenseModel(context.Background(), CreateExpenseRequest{
 		CategoryID:  stringPtr(categoryID.String()),
@@ -186,9 +262,13 @@ func TestCreateExpenseModelSetsAppliesInventoryOnlyWhenRequested(t *testing.T) {
 	handler := NewExpenseHandler(&fakeExpenseStore{
 		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
 			systemKey := inventoryPurchaseCategorySystemKey
-			return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey}, nil
+			return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey, IsActive: true}, nil
 		},
-	}, &fakeInventoryAdjuster{}, nil)
+	}, &fakeInventoryAdjuster{}, &fakeExpenseProductStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
+			return testProduct(), nil
+		},
+	})
 
 	expense, err := handler.createExpenseModel(context.Background(), CreateExpenseRequest{
 		CategoryID:       stringPtr(categoryID.String()),
@@ -207,6 +287,37 @@ func TestCreateExpenseModelSetsAppliesInventoryOnlyWhenRequested(t *testing.T) {
 	}
 	if expense.ProductID == nil || expense.Quantity == nil {
 		t.Fatalf("expected product and quantity to be preserved")
+	}
+}
+
+func TestCreateExpenseModelRejectsArchivedProduct(t *testing.T) {
+	categoryID := uuid.New()
+	productID := uuid.New().String()
+	quantity := "2"
+	handler := NewExpenseHandler(&fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			systemKey := inventoryPurchaseCategorySystemKey
+			return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey, IsActive: true}, nil
+		},
+	}, &fakeInventoryAdjuster{}, &fakeExpenseProductStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.IsActive = false
+			return product, nil
+		},
+	})
+
+	_, err := handler.createExpenseModel(context.Background(), CreateExpenseRequest{
+		CategoryID:       stringPtr(categoryID.String()),
+		ProductID:        &productID,
+		Quantity:         &quantity,
+		AppliesInventory: true,
+		Amount:           "10.00",
+		Description:      "Restock",
+		ExpenseDate:      "2026-05-14",
+	}, uuid.New())
+	if err == nil || err.Error() != "Archived products cannot be changed" {
+		t.Fatalf("expected archived product error, got %v", err)
 	}
 }
 
@@ -258,6 +369,147 @@ func TestDeleteCategoryAllowsArchivingInventoryPurchaseCategory(t *testing.T) {
 	}
 	if !deleteCalled {
 		t.Fatalf("expected delete repository method to be called")
+	}
+}
+
+func TestSyncExpenseInventoryRejectsArchivedProduct(t *testing.T) {
+	expenseID := uuid.New()
+	productID := uuid.New()
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{
+		adjustStockWithTxFunc: func(context.Context, pgx.Tx, uuid.UUID, models.AdjustmentType, decimal.Decimal, *string, *string, *uuid.UUID, uuid.UUID) (*models.StockAdjustment, error) {
+			t.Fatal("expected inventory adjustment not to run for archived product")
+			return nil, nil
+		},
+	}, &fakeExpenseProductStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = productID
+			product.IsActive = false
+			return product, nil
+		},
+	})
+
+	err := handler.syncExpenseInventory(context.Background(), nil, expenseID, uuid.New(), &models.Expense{
+		ID:               expenseID,
+		ProductID:        &productID,
+		Quantity:         decimalPtr("2"),
+		AppliesInventory: true,
+	}, false, nil, nil)
+	if err == nil || err.Error() != "Archived products cannot be changed" {
+		t.Fatalf("expected archived product error, got %v", err)
+	}
+}
+
+func TestUpdateExpenseAllowsUnchangedArchivedExpenseCategory(t *testing.T) {
+	expenseID := uuid.New()
+	categoryID := uuid.New()
+	userID := uuid.New()
+	tx := &fakeExpenseTx{}
+	updateCalled := false
+
+	store := &fakeExpenseStore{
+		beginTxFunc: func(context.Context) (pgx.Tx, error) {
+			return tx, nil
+		},
+		getByIDWithTxFunc: func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error) {
+			return &models.Expense{
+				ID:          expenseID,
+				CategoryID:  &categoryID,
+				Amount:      decimal.RequireFromString("10"),
+				Description: "Old description",
+				ExpenseDate: time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
+				CreatedBy:   userID,
+				UpdatedAt:   time.Now(),
+			}, nil
+		},
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Archived Supplies", IsActive: false}, nil
+		},
+		updateWithTxFunc: func(_ context.Context, _ pgx.Tx, expense *models.Expense) (*models.Expense, error) {
+			updateCalled = true
+			if expense.CategoryID == nil || *expense.CategoryID != categoryID {
+				t.Fatalf("expected category id to stay %s, got %v", categoryID, expense.CategoryID)
+			}
+			if expense.Description != "New description" {
+				t.Fatalf("expected description update, got %q", expense.Description)
+			}
+			return expense, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", userID)
+		return c.Next()
+	})
+	app.Patch("/expenses/:id", handler.Update)
+
+	body := `{"description":"New description","category_id":"` + categoryID.String() + `"}`
+	req := httptest.NewRequest(http.MethodPatch, "/expenses/"+expenseID.String(), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if !updateCalled {
+		t.Fatalf("expected expense update to be called")
+	}
+	if !tx.committed {
+		t.Fatalf("expected transaction to commit")
+	}
+}
+
+func TestUpdateExpenseRejectsChangedArchivedExpenseCategory(t *testing.T) {
+	expenseID := uuid.New()
+	currentCategoryID := uuid.New()
+	archivedCategoryID := uuid.New()
+	userID := uuid.New()
+
+	store := &fakeExpenseStore{
+		beginTxFunc: func(context.Context) (pgx.Tx, error) {
+			return &fakeExpenseTx{}, nil
+		},
+		getByIDWithTxFunc: func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error) {
+			return &models.Expense{
+				ID:          expenseID,
+				CategoryID:  &currentCategoryID,
+				Amount:      decimal.RequireFromString("10"),
+				Description: "Old description",
+				ExpenseDate: time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
+				CreatedBy:   userID,
+				UpdatedAt:   time.Now(),
+			}, nil
+		},
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: archivedCategoryID, Name: "Archived Supplies", IsActive: false}, nil
+		},
+		updateWithTxFunc: func(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error) {
+			t.Fatal("expected update not to be called with changed archived category")
+			return nil, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", userID)
+		return c.Next()
+	})
+	app.Patch("/expenses/:id", handler.Update)
+
+	body := `{"description":"New description","category_id":"` + archivedCategoryID.String() + `"}`
+	req := httptest.NewRequest(http.MethodPatch, "/expenses/"+expenseID.String(), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
 }
 
@@ -337,4 +589,9 @@ func performExpenseJSONRequest(t *testing.T, app *fiber.App, method, path, body 
 		t.Fatalf("app.Test returned error: %v", err)
 	}
 	return resp
+}
+
+func decimalPtr(value string) *decimal.Decimal {
+	parsed := decimal.RequireFromString(value)
+	return &parsed
 }

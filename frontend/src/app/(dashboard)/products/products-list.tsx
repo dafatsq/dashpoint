@@ -73,14 +73,14 @@ export function ProductsList({
 
   return (
     <>
-      <div className="grid gap-4 md:hidden">
+      <div className="grid gap-4 lg:hidden">
         {products.map((product) => {
           const quantity = getProductQuantityValue(product);
           const minQuantity = getProductLowStockThreshold(product);
           const isLowStock = quantity <= minQuantity;
 
           return (
-            <Card key={product.id}>
+            <Card key={product.id} className="@container">
               <CardContent className="p-4">
                 <div className="flex items-start gap-4">
                   {product.image_url ? (
@@ -106,24 +106,18 @@ export function ProductsList({
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex items-start justify-between">
                       <div>
-                        <h3 className="line-clamp-1 font-semibold">{product.name}</h3>
+                        <h3 className="break-words font-semibold">{product.name}</h3>
                         <p className="text-sm text-muted-foreground">{product.sku || "-"}</p>
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                          product.is_active
-                            ? "bg-green-600 text-white dark:bg-green-600/90 dark:text-white"
-                            : "bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white"
-                        }`}
-                      >
-                        {product.is_active ? "Active" : "Inactive"}
+                      <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-blue-600/90 dark:text-white">
+                        {product.category_name || "Uncategorized"}
                       </span>
                     </div>
 
                     <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <span className="text-muted-foreground">Price: </span>
-                        <span className="font-medium">{formatCurrency(getProductPriceValue(product))}</span>
+                        <span className="font-medium font-mono">{formatCurrency(getProductPriceValue(product))}</span>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Stock: </span>
@@ -144,20 +138,27 @@ export function ProductsList({
                         {viewMode === "active" ? (
                           <>
                             {canEdit && (
-                              <Button variant="outline" size="sm" className="h-8" onClick={() => onEdit(product)}>
-                                <Pencil className="mr-1 h-3.5 w-3.5" />
-                                Edit
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3"
+                                onClick={() => onEdit(product)}
+                                title="Edit"
+                              >
+                                <Pencil className="h-3.5 w-3.5 @[250px]:mr-1" />
+                                <span className="hidden @[250px]:inline">Edit</span>
                               </Button>
                             )}
                             {canDelete && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-500 dark:hover:bg-amber-950/20"
+                                className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-500 dark:hover:bg-amber-950/20"
                                 onClick={() => onArchive(product)}
+                                title="Archive"
                               >
-                                <Archive className="mr-1 h-3.5 w-3.5" />
-                                Archive
+                                <Archive className="h-3.5 w-3.5 @[250px]:mr-1" />
+                                <span className="hidden @[250px]:inline">Archive</span>
                               </Button>
                             )}
                           </>
@@ -167,23 +168,25 @@ export function ProductsList({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8"
+                                className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3"
                                 onClick={() => onRestore(product)}
                                 disabled={isSubmitting}
+                                title="Restore"
                               >
-                                <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                                Restore
+                                <RotateCcw className="h-3.5 w-3.5 @[250px]:mr-1" />
+                                <span className="hidden @[250px]:inline">Restore</span>
                               </Button>
                             )}
                             {canDelete && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
                                 onClick={() => onPermanentDelete(product)}
+                                title="Delete"
                               >
-                                <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                Delete
+                                <Trash2 className="h-3.5 w-3.5 @[250px]:mr-1" />
+                                <span className="hidden @[250px]:inline">Delete</span>
                               </Button>
                             )}
                           </>
@@ -198,10 +201,10 @@ export function ProductsList({
         })}
       </div>
 
-      <Card className="hidden md:block">
+      <Card className="hidden lg:block">
         <CardContent className="p-6">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b text-left text-sm text-muted-foreground">
                   <th className="pb-3 font-medium">Product</th>
@@ -210,7 +213,6 @@ export function ProductsList({
                   <th className="pb-3 text-right font-medium">Price</th>
                   <th className="pb-3 text-right font-medium">Tax Rate</th>
                   <th className="pb-3 text-right font-medium">Stock</th>
-                  {viewMode !== "active" && <th className="pb-3 text-center font-medium">Status</th>}
                   {(canEdit || canDelete) && <th className="pb-3 text-right font-medium">Actions</th>}
                 </tr>
               </thead>
@@ -253,27 +255,18 @@ export function ProductsList({
                         </div>
                       </td>
                       <td className="py-3 text-sm text-muted-foreground">{product.sku || "-"}</td>
-                      <td className="py-3 text-sm">{product.category_name || "-"}</td>
-                      <td className="py-3 text-right font-medium">{formatCurrency(getProductPriceValue(product))}</td>
+                      <td className="py-3 text-sm">
+                        <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-blue-600/90 dark:text-white">
+                          {product.category_name || "Uncategorized"}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right font-medium font-mono">{formatCurrency(getProductPriceValue(product))}</td>
                       <td className="py-3 text-right font-medium text-muted-foreground">
                         {product.tax_rate ? `${parseFloat(product.tax_rate)}%` : "0%"}
                       </td>
                       <td className="py-3 text-right">
                         <span className={isLowStock ? "font-medium text-destructive" : ""}>{quantity}</span>
                       </td>
-                      {viewMode !== "active" && (
-                        <td className="py-3 text-center">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                              product.is_active
-                                ? "bg-green-600 text-white dark:bg-green-600/90 dark:text-white"
-                                : "bg-gray-600 text-white dark:bg-gray-600/90 dark:text-white"
-                            }`}
-                          >
-                            {product.is_active ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                      )}
                       {(canEdit || canDelete) && (
                         <td className="py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -300,23 +293,23 @@ export function ProductsList({
                                 {canEdit && (
                                   <Button
                                     variant="ghost"
-                                    size="sm"
+                                    size="icon"
                                     onClick={() => onRestore(product)}
                                     disabled={isSubmitting}
+                                    title="Restore product"
                                   >
-                                    <RotateCcw className="mr-1 h-4 w-4" />
-                                    Restore
+                                    <RotateCcw className="h-4 w-4" />
                                   </Button>
                                 )}
                                 {canDelete && (
                                   <Button
                                     variant="ghost"
-                                    size="sm"
+                                    size="icon"
                                     className="text-destructive hover:text-destructive"
                                     onClick={() => onPermanentDelete(product)}
+                                    title="Delete product permanently"
                                   >
-                                    <Trash2 className="mr-1 h-4 w-4" />
-                                    Delete
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
                                 )}
                               </>

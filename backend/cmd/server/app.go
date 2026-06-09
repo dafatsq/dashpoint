@@ -11,7 +11,6 @@ import (
 
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/auth"
-	"dashpoint/backend/internal/authz"
 	"dashpoint/backend/internal/config"
 	"dashpoint/backend/internal/database"
 	"dashpoint/backend/internal/handlers"
@@ -96,9 +95,16 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 
 func newPermissionChecker(userRepo *repository.UserRepository) middleware.PermissionChecker {
 	return func(c *fiber.Ctx, userID uuid.UUID, permission string) (bool, error) {
-		_ = userRepo
-		_ = userID
-		return authz.HasPermission(middleware.GetRoleName(c), permission), nil
+		permissions, err := userRepo.GetUserPermissions(c.Context(), userID)
+		if err != nil {
+			return false, err
+		}
+		for _, granted := range permissions {
+			if granted == permission {
+				return true, nil
+			}
+		}
+		return false, nil
 	}
 }
 

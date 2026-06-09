@@ -14,7 +14,7 @@ const cashier: User = {
   role_name: "cashier",
   is_active: true,
   has_pin: false,
-  permissions: ["can_view_sales", "can_view_products"],
+  permissions: ["access_sales_page", "access_products_page"],
   created_at: "",
   updated_at: "",
 };
@@ -34,14 +34,14 @@ describe("auth permission helpers", () => {
   });
 
   test("checks explicit permissions for non-owners", () => {
-    expect(hasPermission(cashier, "can_view_sales")).toBe(true);
-    expect(hasAnyPermission(cashier, ["can_edit_products", "can_view_sales"])).toBe(
+    expect(hasPermission(cashier, "access_sales_page")).toBe(true);
+    expect(hasAnyPermission(cashier, ["manage_products_page", "access_sales_page"])).toBe(
       true,
     );
-    expect(hasAllPermissions(cashier, ["can_view_sales", "can_view_products"])).toBe(
+    expect(hasAllPermissions(cashier, ["access_sales_page", "access_products_page"])).toBe(
       true,
     );
-    expect(hasAllPermissions(cashier, ["can_view_sales", "can_edit_products"])).toBe(
+    expect(hasAllPermissions(cashier, ["access_sales_page", "manage_products_page"])).toBe(
       false,
     );
   });

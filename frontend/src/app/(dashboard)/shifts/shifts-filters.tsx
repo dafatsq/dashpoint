@@ -26,37 +26,27 @@ export function ShiftsFilters({
   onSelectedUserChange,
 }: ShiftsFiltersProps) {
   return (
-    <FilterCard title="Filters">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            Date Range
-          </label>
-          <DateRangePicker
-            value={dateRange}
-            onChange={onDateRangeChange}
-            placeholder="Filter by date..."
-            className="w-full"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            Opened By
-          </label>
-          <Select value={selectedUser} onValueChange={onSelectedUserChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="All Users" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Users</SelectItem>
-              {users.map((user) => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+    <FilterCard>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <DateRangePicker
+          value={dateRange}
+          onChange={onDateRangeChange}
+          placeholder="Filter by date..."
+          className="w-full"
+        />
+        <Select value={selectedUser} onValueChange={onSelectedUserChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="All Users" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Users</SelectItem>
+            {users.map((user) => (
+              <SelectItem key={user.id} value={user.id}>
+                {user.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </FilterCard>
   );

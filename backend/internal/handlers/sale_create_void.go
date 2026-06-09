@@ -27,16 +27,12 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 
 	userID := middleware.GetUserID(c)
 
-	var shiftID *uuid.UUID
-	shift, err := h.shiftRepo.GetCurrentOpenShift(c.Context())
+	shiftID, err := h.validateSaleShift(c, input.shiftID)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get open shift")
-		return saleInternalError(c, "Failed to get open shift")
+		return err
 	}
-	if shift != nil {
-		shiftID = &shift.ID
-	} else {
-		return middleware.JSONError(c, fiber.StatusConflict, "NO_OPEN_SHIFT", "You must start a shift before processing sales")
+	if shiftID == nil {
+		return nil
 	}
 
 	createReq := &repository.CreateSaleRequest{
@@ -69,6 +65,49 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 	})
 }
 
+// ValidateCart handles POST /api/v1/sales/validate.
+func (h *SaleHandler) ValidateCart(c *fiber.Ctx) error {
+	var req ValidateSaleCartRequest
+	if err := c.BodyParser(&req); err != nil {
+		return saleInvalidRequest(c)
+	}
+
+	input, err := parseSaleCartValidationInput(req)
+	if err != nil {
+		return respondAPIError(c, err)
+	}
+
+	if _, err := h.validateSaleShift(c, input.shiftID); err != nil {
+		return err
+	}
+	if c.Response().StatusCode() >= fiber.StatusBadRequest {
+		return nil
+	}
+
+	if err := h.saleRepo.ValidateCart(c.Context(), &repository.ValidateSaleCartRequest{Items: input.items}); err != nil {
+		return middleware.JSONError(c, fiber.StatusBadRequest, "SALE_VALIDATION_FAILED", err.Error())
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Cart validated successfully",
+	})
+}
+
+func (h *SaleHandler) validateSaleShift(c *fiber.Ctx, expectedShiftID *uuid.UUID) (*uuid.UUID, error) {
+	shift, err := h.shiftRepo.GetCurrentOpenShift(c.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get open shift")
+		return nil, saleInternalError(c, "Failed to get open shift")
+	}
+	if shift == nil {
+		return nil, middleware.JSONError(c, fiber.StatusConflict, "NO_OPEN_SHIFT", "You must start a shift before processing sales")
+	}
+	if expectedShiftID != nil && *expectedShiftID != shift.ID {
+		return nil, middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleShiftMessage)
+	}
+	return &shift.ID, nil
+}
+
 // VoidSale handles POST /api/v1/sales/:id/void.
 func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
 	id, err := saleParamUUID(c, "id", "INVALID_ID", "Invalid sale ID format")
@@ -85,12 +124,27 @@ func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
 	}
 
 	userID := middleware.GetUserID(c)
+	sale, repoErr := h.saleRepo.GetByID(c.Context(), id)
+	if repoErr != nil {
+		return saleInternalError(c, "Failed to retrieve sale")
+	}
+	if sale == nil {
+		return middleware.JSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Sale not found")
+	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, sale.UpdatedAt)
+	if staleErr != nil {
+		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
+	}
+
 	if err := h.saleRepo.VoidSale(c.Context(), id, userID, req.Reason); err != nil {
 		log.Error().Err(err).Msg("Failed to void sale")
 		return middleware.JSONError(c, fiber.StatusBadRequest, "VOID_FAILED", err.Error())
 	}
 
-	sale, _ := h.saleRepo.GetByID(c.Context(), id)
+	sale, _ = h.saleRepo.GetByID(c.Context(), id)
 	if sale != nil {
 		newVals := map[string]interface{}{
 			"invoice_no": sale.InvoiceNo,

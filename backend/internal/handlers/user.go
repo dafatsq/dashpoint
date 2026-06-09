@@ -79,9 +79,10 @@ type UserDetailResponse struct {
 }
 
 type RoleResponse struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description *string  `json:"description,omitempty"`
+	Permissions []string `json:"permissions,omitempty"`
 }
 
 type CreateUserRequest struct {
@@ -93,20 +94,23 @@ type CreateUserRequest struct {
 }
 
 type UpdateUserRequest struct {
-	Email    *string `json:"email"`
-	Name     *string `json:"name"`
-	RoleID   *string `json:"role_id"`
-	IsActive *bool   `json:"is_active"`
-	PIN      *string `json:"pin"`
-	Password *string `json:"password"`
+	Email             *string `json:"email"`
+	Name              *string `json:"name"`
+	RoleID            *string `json:"role_id"`
+	IsActive          *bool   `json:"is_active"`
+	PIN               *string `json:"pin"`
+	Password          *string `json:"password"`
+	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
 type UpdatePasswordRequest struct {
-	Password string `json:"password"`
+	Password          string  `json:"password"`
+	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
 type UpdatePINRequest struct {
-	PIN *string `json:"pin"`
+	PIN               *string `json:"pin"`
+	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
 // Create handles POST /api/v1/users.
@@ -212,18 +216,44 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 		}
 	}
 
-	targetRoleName := roleNameOfUser(user)
-	if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
-		return nil
-	}
-
-	oldValues := baseUserAuditValues(user)
-	oldValues["is_active"] = user.IsActive
-
 	var req UpdateUserRequest
 	if err := c.BodyParser(&req); err != nil {
 		return badUserRequest(c, "INVALID_REQUEST", "Invalid request body")
 	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, user.UpdatedAt)
+	if staleErr != nil {
+		return badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+	}
+	if !user.IsActive && (req.IsActive == nil || !*req.IsActive) {
+		return userArchivedConflict(c, "Archived users cannot be changed")
+	}
+
+	isSelfUpdate := middleware.GetUserID(c) == id
+	if isSelfUpdate {
+		if req.RoleID != nil {
+			roleID, err := uuid.Parse(*req.RoleID)
+			if err != nil {
+				return badUserRequest(c, "INVALID_ROLE_ID", "Invalid role ID format")
+			}
+			if roleID != user.RoleID {
+				return middleware.JSONError(c, fiber.StatusForbidden, "CANNOT_CHANGE_OWN_ROLE", "You cannot change your own role")
+			}
+		}
+		if req.IsActive != nil && *req.IsActive != user.IsActive {
+			return middleware.JSONError(c, fiber.StatusForbidden, "CANNOT_CHANGE_OWN_STATUS", "You cannot change your own account status")
+		}
+	} else {
+		targetRoleName := roleNameOfUser(user)
+		if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
+			return nil
+		}
+	}
+
+	oldValues := baseUserAuditValues(user)
+	oldValues["is_active"] = user.IsActive
 
 	if req.Name != nil {
 		if *req.Name != "" {
@@ -372,5 +402,14 @@ func getRoleLevel(roleName string) int {
 }
 
 func canAssignRole(currentRole, targetRole string) bool {
-	return getRoleLevel(currentRole) >= getRoleLevel(targetRole)
+	if isRoleName(targetRole, roleCashier) && (isRoleName(currentRole, roleManager) || isRoleName(currentRole, roleCashier)) {
+		return true
+	}
+
+	currentLevel := getRoleLevel(currentRole)
+	targetLevel := getRoleLevel(targetRole)
+	if isRoleName(currentRole, roleOwner) {
+		return currentLevel >= targetLevel
+	}
+	return currentLevel > targetLevel
 }

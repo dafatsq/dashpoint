@@ -118,10 +118,10 @@ describe("inventory helpers", () => {
     ).toBe(false);
   });
 
-  test("requires notes for destructive inventory adjustments", () => {
-    expect(requiresInventoryAdjustmentReason("damage", "remove")).toBe(true);
-    expect(requiresInventoryAdjustmentReason("loss", "remove")).toBe(true);
-    expect(requiresInventoryAdjustmentReason("adjustment", "remove")).toBe(true);
+  test("keeps notes optional for stock adjustments", () => {
+    expect(requiresInventoryAdjustmentReason("damage", "remove")).toBe(false);
+    expect(requiresInventoryAdjustmentReason("loss", "remove")).toBe(false);
+    expect(requiresInventoryAdjustmentReason("adjustment", "remove")).toBe(false);
     expect(requiresInventoryAdjustmentReason("purchase", "add")).toBe(false);
     expect(requiresInventoryAdjustmentReason("adjustment", "add")).toBe(false);
 
@@ -134,7 +134,7 @@ describe("inventory helpers", () => {
         notes: "",
         isSubmitting: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       canSubmitInventoryAdjustment({
@@ -190,6 +190,23 @@ describe("inventory helpers", () => {
       adjustment_type: "count",
       quantity: "7",
       reason: "Cycle count",
+    });
+  });
+
+  test("builds zero stock-count requests as absolute zero quantity", () => {
+    expect(
+      buildInventoryAdjustmentRequest({
+        productId: "product-1",
+        action: "count",
+        adjustmentType: "count",
+        quantity: "0",
+        currentStock: 5,
+      }),
+    ).toEqual({
+      product_id: "product-1",
+      adjustment_type: "count",
+      quantity: "0",
+      reason: undefined,
     });
   });
 

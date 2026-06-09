@@ -47,7 +47,7 @@ export function ReportsCategories({ isLoading, categorySales, dateRange }: Repor
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(category.total_revenue)}</div>
+              <div className="text-2xl font-bold font-mono">{formatCurrency(category.total_revenue)}</div>
               <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                 <span>{formatNumber(category.quantity_sold)} units</span>
                 <span>•</span>
@@ -67,7 +67,7 @@ export function ReportsCategories({ isLoading, categorySales, dateRange }: Repor
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b text-left text-sm text-muted-foreground">
                   <th className="pb-3 font-medium">#</th>
@@ -93,7 +93,7 @@ export function ReportsCategories({ isLoading, categorySales, dateRange }: Repor
                     <td className="py-3 font-medium">{category.category_name}</td>
                     <td className="py-3 text-right">{formatNumber(category.items_sold)}</td>
                     <td className="py-3 text-right">{formatNumber(category.quantity_sold)}</td>
-                    <td className="py-3 text-right font-bold">{formatCurrency(category.total_revenue)}</td>
+                    <td className="py-3 text-right font-bold font-mono">{formatCurrency(category.total_revenue)}</td>
                     <td className="py-3 text-right">
                       <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset bg-transparent text-muted-foreground ring-muted-foreground/30">
                         {revenuePercentages[category.category_id].toFixed(1)}%
@@ -125,7 +125,7 @@ export function ReportsCategories({ isLoading, categorySales, dateRange }: Repor
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-xs text-muted-foreground block">Revenue</span>
-                  <span className="font-bold">{formatCurrency(category.total_revenue)}</span>
+                  <span className="font-bold font-mono">{formatCurrency(category.total_revenue)}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-muted-foreground block">Qty Sold</span>

@@ -70,7 +70,7 @@ export function DashboardShiftHistory({ shifts, isLoading, error, onRetry }: Das
                 )}
                 <div className="flex items-center gap-1 text-sm font-medium flex-wrap">
                   <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                  <span className="truncate max-w-[120px] sm:max-w-[200px]">Opened by {shift.opened_by_name || "Unknown"}</span>
+                  <span className="break-words">Opened by {shift.opened_by_name || "Unknown"}</span>
                   {!preview.isOpen && shift.closed_by_name ? (
                     <span className="text-muted-foreground text-[10px] sm:text-xs font-normal">(Closed by {shift.closed_by_name})</span>
                   ) : null}
@@ -82,16 +82,16 @@ export function DashboardShiftHistory({ shifts, isLoading, error, onRetry }: Das
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm mt-3">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className="text-muted-foreground text-xs">Open:</span>
-                <span className="font-medium">{formatDashboardCurrency(preview.openingCash)}</span>
+                <span className="font-medium font-mono">{formatDashboardCurrency(preview.openingCash)}</span>
               </div>
               {!preview.isOpen && preview.closingCash !== null ? (
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
                   <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
                   <span className="text-muted-foreground text-xs sm:ml-0">Close:</span>
-                  <span className="font-medium">{formatDashboardCurrency(preview.closingCash)}</span>
+                  <span className="font-medium font-mono">{formatDashboardCurrency(preview.closingCash)}</span>
                   {preview.cashDifference !== null ? (
                     <span
-                      className={`text-xs ml-1 font-medium ${
+                      className={`text-xs ml-1 font-medium font-mono ${
                         preview.cashDifference > 0
                           ? "text-green-600"
                           : preview.cashDifference < 0
@@ -128,7 +128,7 @@ export function DashboardShiftHistory({ shifts, isLoading, error, onRetry }: Das
                         {operation.performed_by_name || "System"} • {formatDashboardDateTime(operation.created_at)}
                       </span>
                     </div>
-                    <span className={`text-sm font-semibold tabular-nums tracking-tight ${operation.type === "pay_in" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+                    <span className={`text-sm font-semibold tabular-nums tracking-tight font-mono ${operation.type === "pay_in" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
                       {formatDashboardCurrency(Number.parseFloat(operation.amount))}
                     </span>
                   </div>

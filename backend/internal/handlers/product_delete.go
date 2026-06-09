@@ -23,6 +23,13 @@ func (h *ProductHandler) Delete(c *fiber.Ctx) error {
 	if !productToDelete.IsActive {
 		return productJSONError(c, fiber.StatusConflict, "PRODUCT_INACTIVE", "Product is already archived")
 	}
+	stale, staleErr := isStaleSubmit(expectedUpdatedAtFromQuery(c), productToDelete.UpdatedAt)
+	if staleErr != nil {
+		return productJSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return productJSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
+	}
 
 	if err := h.productRepo.Delete(c.Context(), id); err != nil {
 		return productInternalError(c, err, "Failed to delete product", "Failed to delete product")
@@ -53,6 +60,13 @@ func (h *ProductHandler) PermanentDelete(c *fiber.Ctx) error {
 	}
 	if productToDelete == nil {
 		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Product not found")
+	}
+	stale, staleErr := isStaleSubmit(expectedUpdatedAtFromQuery(c), productToDelete.UpdatedAt)
+	if staleErr != nil {
+		return productJSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return productJSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
 	}
 
 	hasSales, repoErr := h.productRepo.HasSalesHistory(c.Context(), id)

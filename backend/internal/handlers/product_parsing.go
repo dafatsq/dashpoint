@@ -85,16 +85,16 @@ func parseCreateProductInput(req CreateProductRequest) (*productCreateInput, err
 	}
 
 	product := &models.Product{
-		SKU:                req.SKU,
-		Barcode:            req.Barcode,
-		Name:               req.Name,
-		Description:        req.Description,
-		CategoryID:         categoryID,
-		Price:              price,
-		Cost:               decimal.Zero,
-		TaxRate:            decimal.Zero,
-		IsActive:           true,
-		ImageURL:           req.ImageURL,
+		SKU:         req.SKU,
+		Barcode:     req.Barcode,
+		Name:        req.Name,
+		Description: req.Description,
+		CategoryID:  categoryID,
+		Price:       price,
+		Cost:        decimal.Zero,
+		TaxRate:     decimal.Zero,
+		IsActive:    true,
+		ImageURL:    req.ImageURL,
 	}
 	if cost != nil {
 		product.Cost = *cost
@@ -157,10 +157,11 @@ func applyUpdateProductRequest(product *models.Product, req UpdateProductRequest
 
 func parseStockAdjustmentRequest(c *fiber.Ctx) (*stockAdjustmentRequest, error) {
 	var req struct {
-		ProductID      string `json:"product_id"`
-		AdjustmentType string `json:"adjustment_type"`
-		Quantity       string `json:"quantity"`
-		Reason         string `json:"reason"`
+		ProductID         string  `json:"product_id"`
+		AdjustmentType    string  `json:"adjustment_type"`
+		Quantity          string  `json:"quantity"`
+		Reason            string  `json:"reason"`
+		ExpectedUpdatedAt *string `json:"expected_updated_at"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -184,31 +185,30 @@ func parseStockAdjustmentRequest(c *fiber.Ctx) (*stockAdjustmentRequest, error) 
 		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_ADJUSTMENT_TYPE", "Invalid adjustment type. Valid types: purchase, adjustment, damage, loss, count")
 	}
 
-	quantity, err := parseDecimalField(req.Quantity, "quantity", false)
+	quantity, err := parseDecimalField(req.Quantity, "quantity", true)
 	if err != nil {
 		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_QUANTITY", "Invalid quantity")
 	}
 
-	if (adjType == models.AdjustmentDamage || adjType == models.AdjustmentLoss || (adjType == models.AdjustmentAdjustment && quantity.LessThan(decimal.Zero))) && strings.TrimSpace(req.Reason) == "" {
-		return nil, productJSONError(c, fiber.StatusBadRequest, "REASON_REQUIRED", "Reason is required for damaged, lost, or correction removals")
-	}
-
 	var reason *string
-	if req.Reason != "" {
-		reason = &req.Reason
+	if strings.TrimSpace(req.Reason) != "" {
+		trimmedReason := strings.TrimSpace(req.Reason)
+		reason = &trimmedReason
 	}
 
 	return &stockAdjustmentRequest{
-		ProductID:      productID,
-		AdjustmentType: adjType,
-		Quantity:       quantity,
-		Reason:         reason,
+		ProductID:         productID,
+		AdjustmentType:    adjType,
+		Quantity:          quantity,
+		Reason:            reason,
+		ExpectedUpdatedAt: req.ExpectedUpdatedAt,
 	}, nil
 }
 
 func parseInventoryThresholdUpdateRequest(c *fiber.Ctx) (*inventoryThresholdUpdateRequest, error) {
 	var req struct {
-		LowStockThreshold string `json:"low_stock_threshold"`
+		LowStockThreshold string  `json:"low_stock_threshold"`
+		ExpectedUpdatedAt *string `json:"expected_updated_at"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -226,5 +226,6 @@ func parseInventoryThresholdUpdateRequest(c *fiber.Ctx) (*inventoryThresholdUpda
 
 	return &inventoryThresholdUpdateRequest{
 		LowStockThreshold: threshold,
+		ExpectedUpdatedAt: req.ExpectedUpdatedAt,
 	}, nil
 }

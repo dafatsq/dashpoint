@@ -40,7 +40,7 @@ export function DataTableContainer({
     >
       <CardContent className="flex-1 px-0 py-0 md:p-6">
         {!hideLimitSelector && (
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-4">
+          <div className="flex flex-row gap-4 items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Show</span>
               <Select

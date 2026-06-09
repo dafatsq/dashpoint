@@ -11,20 +11,20 @@ import {
 describe("nav config helpers", () => {
   test("resolves exact and parent route permissions", () => {
     expect(getRequiredRoutePermission("/")).toBeUndefined();
-    expect(getRequiredRoutePermission("/products")).toBe("can_view_products");
-    expect(getRequiredRoutePermission("/expenses")).toBe("can_view_expenses");
-    expect(getRequiredRoutePermission("/users/123")).toBe("can_view_users");
+    expect(getRequiredRoutePermission("/products")).toBe("access_products_page");
+    expect(getRequiredRoutePermission("/expenses")).toBe("access_expenses_page");
+    expect(getRequiredRoutePermission("/users/123")).toBe("access_users_page");
     expect(getRequiredRoutePermission("/settings")).toBeUndefined();
   });
 
   test("checks multi-permission routes through hasAnyPermission", () => {
-    routePermissions["/test-multi"] = ["can_view_sales", "can_view_products"];
+    routePermissions["/test-multi"] = ["access_sales_page", "access_products_page"];
     try {
       expect(
         hasRouteAccess("/test-multi", {
           hasPermission: () => false,
           hasAnyPermission: (permissions) =>
-            permissions.includes("can_view_sales"),
+            permissions.includes("access_sales_page"),
         }),
       ).toBe(true);
       expect(
@@ -41,8 +41,10 @@ describe("nav config helpers", () => {
   test("filters visible nav items from the shared config", () => {
     const visible = filterVisibleNavItems(navItems, {
       hasPermission: (permission) =>
-        permission === "can_view_sales" || permission === "can_view_products",
-      hasAnyPermission: (permissions) => permissions.includes("can_view_sales"),
+        permission === "access_sales_page" ||
+        permission === "access_products_page" ||
+        permission === "access_shifts_page",
+      hasAnyPermission: (permissions) => permissions.includes("access_sales_page"),
     });
 
     expect(visible.some((item) => item.href === "/sales")).toBe(true);

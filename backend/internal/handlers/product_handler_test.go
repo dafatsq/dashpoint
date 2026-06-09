@@ -95,7 +95,7 @@ func TestParseStockAdjustmentRequestRejectsInvalidQuantity(t *testing.T) {
 	}
 }
 
-func TestParseStockAdjustmentRequestRequiresReasonForDestructiveAdjustments(t *testing.T) {
+func TestParseStockAdjustmentRequestAllowsDestructiveAdjustmentsWithoutReason(t *testing.T) {
 	tests := []struct {
 		name string
 		body string
@@ -128,8 +128,8 @@ func TestParseStockAdjustmentRequestRequiresReasonForDestructiveAdjustments(t *t
 			if err != nil {
 				t.Fatalf("app.Test returned error: %v", err)
 			}
-			if resp.StatusCode != fiber.StatusBadRequest {
-				t.Fatalf("expected 400, got %d", resp.StatusCode)
+			if resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("expected 200, got %d", resp.StatusCode)
 			}
 		})
 	}
@@ -140,6 +140,7 @@ func TestGetInventoryUsesRequestedPagination(t *testing.T) {
 	var capturedLimit int
 	var capturedOffset int
 	var capturedAdjustmentType *models.AdjustmentType
+	var capturedAdjustedBy *uuid.UUID
 
 	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{
 		getByProductIDFunc: func(context.Context, uuid.UUID) (*models.InventoryItem, error) {
@@ -150,13 +151,14 @@ func TestGetInventoryUsesRequestedPagination(t *testing.T) {
 				UpdatedAt:         time.Now(),
 			}, nil
 		},
-		getAdjustmentHistoryFunc: func(_ context.Context, id uuid.UUID, limit int, offset int, adjustmentType *models.AdjustmentType) ([]*models.StockAdjustment, int, error) {
+		getAdjustmentHistoryFunc: func(_ context.Context, id uuid.UUID, limit int, offset int, adjustmentType *models.AdjustmentType, adjustedBy *uuid.UUID, startDate, endDate *time.Time) ([]*models.StockAdjustment, int, error) {
 			if id != productID {
 				t.Fatalf("expected product id %s, got %s", productID, id)
 			}
 			capturedLimit = limit
 			capturedOffset = offset
 			capturedAdjustmentType = adjustmentType
+			capturedAdjustedBy = adjustedBy
 			return nil, 0, nil
 		},
 	}, &fakeCategoryStore{}, "")
@@ -178,6 +180,9 @@ func TestGetInventoryUsesRequestedPagination(t *testing.T) {
 	if capturedAdjustmentType != nil {
 		t.Fatalf("expected nil adjustment type filter, got %q", *capturedAdjustmentType)
 	}
+	if capturedAdjustedBy != nil {
+		t.Fatalf("expected nil user filter, got %s", capturedAdjustedBy.String())
+	}
 }
 
 func TestGetInventoryAcceptsAdjustmentTypeFilter(t *testing.T) {
@@ -193,11 +198,14 @@ func TestGetInventoryAcceptsAdjustmentTypeFilter(t *testing.T) {
 				UpdatedAt:         time.Now(),
 			}, nil
 		},
-		getAdjustmentHistoryFunc: func(_ context.Context, id uuid.UUID, limit int, offset int, adjustmentType *models.AdjustmentType) ([]*models.StockAdjustment, int, error) {
+		getAdjustmentHistoryFunc: func(_ context.Context, id uuid.UUID, limit int, offset int, adjustmentType *models.AdjustmentType, adjustedBy *uuid.UUID, startDate, endDate *time.Time) ([]*models.StockAdjustment, int, error) {
 			if id != productID {
 				t.Fatalf("expected product id %s, got %s", productID, id)
 			}
 			capturedAdjustmentType = adjustmentType
+			if adjustedBy != nil {
+				t.Fatalf("expected nil user filter, got %s", adjustedBy.String())
+			}
 			return nil, 0, nil
 		},
 	}, &fakeCategoryStore{}, "")
@@ -218,6 +226,91 @@ func TestGetInventoryAcceptsAdjustmentTypeFilter(t *testing.T) {
 	}
 }
 
+func TestGetInventoryAcceptsUserFilter(t *testing.T) {
+	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
+	var capturedAdjustedBy *uuid.UUID
+
+	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{
+		getByProductIDFunc: func(context.Context, uuid.UUID) (*models.InventoryItem, error) {
+			return &models.InventoryItem{
+				ProductID:         productID,
+				Quantity:          decimal.RequireFromString("5"),
+				LowStockThreshold: decimal.RequireFromString("2"),
+				UpdatedAt:         time.Now(),
+			}, nil
+		},
+		getAdjustmentHistoryFunc: func(_ context.Context, id uuid.UUID, limit int, offset int, adjustmentType *models.AdjustmentType, adjustedBy *uuid.UUID, startDate, endDate *time.Time) ([]*models.StockAdjustment, int, error) {
+			if id != productID {
+				t.Fatalf("expected product id %s, got %s", productID, id)
+			}
+			capturedAdjustedBy = adjustedBy
+			if adjustmentType != nil {
+				t.Fatalf("expected nil adjustment type filter, got %q", *adjustmentType)
+			}
+			return nil, 0, nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Get("/products/:id/inventory", handler.GetInventory)
+
+	req := httptest.NewRequest(http.MethodGet, "/products/00000000-0000-0000-0000-000000000001/inventory?user_id=00000000-0000-0000-0000-000000000010", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if capturedAdjustedBy == nil || *capturedAdjustedBy != userID {
+		t.Fatalf("expected user filter %s, got %v", userID, capturedAdjustedBy)
+	}
+}
+
+func TestGetInventoryAcceptsDateFilters(t *testing.T) {
+	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	var capturedStart *time.Time
+	var capturedEnd *time.Time
+
+	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{
+		getByProductIDFunc: func(context.Context, uuid.UUID) (*models.InventoryItem, error) {
+			return &models.InventoryItem{
+				ProductID:         productID,
+				Quantity:          decimal.RequireFromString("5"),
+				LowStockThreshold: decimal.RequireFromString("2"),
+				UpdatedAt:         time.Now(),
+			}, nil
+		},
+		getAdjustmentHistoryFunc: func(_ context.Context, id uuid.UUID, limit int, offset int, adjustmentType *models.AdjustmentType, adjustedBy *uuid.UUID, startDate, endDate *time.Time) ([]*models.StockAdjustment, int, error) {
+			if id != productID {
+				t.Fatalf("expected product id %s, got %s", productID, id)
+			}
+			capturedStart = startDate
+			capturedEnd = endDate
+			return nil, 0, nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Get("/products/:id/inventory", handler.GetInventory)
+
+	req := httptest.NewRequest(http.MethodGet, "/products/00000000-0000-0000-0000-000000000001/inventory?from=2026-05-01&to=2026-05-14", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if capturedStart == nil || capturedStart.Format("2006-01-02") != "2026-05-01" {
+		t.Fatalf("expected start date 2026-05-01, got %v", capturedStart)
+	}
+	if capturedEnd == nil || capturedEnd.Format("2006-01-02") != "2026-05-15" {
+		t.Fatalf("expected end date 2026-05-15, got %v", capturedEnd)
+	}
+}
+
 func TestGetInventoryRejectsInvalidAdjustmentTypeFilter(t *testing.T) {
 	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{}, &fakeCategoryStore{}, "")
 
@@ -225,6 +318,22 @@ func TestGetInventoryRejectsInvalidAdjustmentTypeFilter(t *testing.T) {
 	app.Get("/products/:id/inventory", handler.GetInventory)
 
 	req := httptest.NewRequest(http.MethodGet, "/products/00000000-0000-0000-0000-000000000001/inventory?adjustment_type=bad", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetInventoryRejectsInvalidUserFilter(t *testing.T) {
+	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Get("/products/:id/inventory", handler.GetInventory)
+
+	req := httptest.NewRequest(http.MethodGet, "/products/00000000-0000-0000-0000-000000000001/inventory?user_id=bad", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
@@ -441,6 +550,157 @@ func TestAdjustStockRejectsArchivedProduct(t *testing.T) {
 	}
 }
 
+func TestAdjustStockAllowsRemovalWithoutReason(t *testing.T) {
+	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	var capturedType models.AdjustmentType
+	var capturedQuantity decimal.Decimal
+	var capturedReason *string
+	handler := NewProductHandler(&fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = id
+			return product, nil
+		},
+	}, &fakeInventoryStore{
+		getByProductIDFunc: func(_ context.Context, id uuid.UUID) (*models.InventoryItem, error) {
+			return &models.InventoryItem{
+				ProductID:         id,
+				Quantity:          decimal.RequireFromString("100"),
+				LowStockThreshold: decimal.Zero,
+				UpdatedAt:         time.Now(),
+			}, nil
+		},
+		adjustStockFunc: func(_ context.Context, _ uuid.UUID, adjustmentType models.AdjustmentType, quantity decimal.Decimal, reason *string, _ *string, _ *uuid.UUID, _ uuid.UUID) (*models.StockAdjustment, error) {
+			capturedType = adjustmentType
+			capturedQuantity = quantity
+			capturedReason = reason
+			return &models.StockAdjustment{ID: uuid.New()}, nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", uuid.New())
+		return c.Next()
+	})
+	app.Post("/inventory/adjust", handler.AdjustStock)
+
+	req := httptest.NewRequest(http.MethodPost, "/inventory/adjust", strings.NewReader(`{"product_id":"`+productID.String()+`","adjustment_type":"adjustment","quantity":"-10"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if capturedType != models.AdjustmentAdjustment {
+		t.Fatalf("expected adjustment type, got %q", capturedType)
+	}
+	if !capturedQuantity.Equal(decimal.RequireFromString("-10")) {
+		t.Fatalf("expected quantity -10, got %s", capturedQuantity)
+	}
+	if capturedReason != nil {
+		t.Fatalf("expected nil reason, got %v", capturedReason)
+	}
+}
+
+func TestAdjustStockConvertsDamageRemovalToNegativeDelta(t *testing.T) {
+	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	var capturedQuantity decimal.Decimal
+	handler := NewProductHandler(&fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = id
+			return product, nil
+		},
+	}, &fakeInventoryStore{
+		getByProductIDFunc: func(_ context.Context, id uuid.UUID) (*models.InventoryItem, error) {
+			return &models.InventoryItem{
+				ProductID:         id,
+				Quantity:          decimal.RequireFromString("100"),
+				LowStockThreshold: decimal.Zero,
+				UpdatedAt:         time.Now(),
+			}, nil
+		},
+		adjustStockFunc: func(_ context.Context, _ uuid.UUID, adjustmentType models.AdjustmentType, quantity decimal.Decimal, _ *string, _ *string, _ *uuid.UUID, _ uuid.UUID) (*models.StockAdjustment, error) {
+			if adjustmentType != models.AdjustmentDamage {
+				t.Fatalf("expected damage adjustment, got %q", adjustmentType)
+			}
+			capturedQuantity = quantity
+			return &models.StockAdjustment{ID: uuid.New()}, nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", uuid.New())
+		return c.Next()
+	})
+	app.Post("/inventory/adjust", handler.AdjustStock)
+
+	req := httptest.NewRequest(http.MethodPost, "/inventory/adjust", strings.NewReader(`{"product_id":"`+productID.String()+`","adjustment_type":"damage","quantity":"10"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if !capturedQuantity.Equal(decimal.RequireFromString("-10")) {
+		t.Fatalf("expected quantity -10, got %s", capturedQuantity)
+	}
+}
+
+func TestAdjustStockRejectsStaleInventoryVersion(t *testing.T) {
+	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	inventoryUpdatedAt := time.Now()
+	adjustCalled := false
+	handler := NewProductHandler(&fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = id
+			return product, nil
+		},
+	}, &fakeInventoryStore{
+		getByProductIDFunc: func(_ context.Context, id uuid.UUID) (*models.InventoryItem, error) {
+			return &models.InventoryItem{
+				ProductID:         id,
+				Quantity:          decimal.RequireFromString("100"),
+				LowStockThreshold: decimal.Zero,
+				UpdatedAt:         inventoryUpdatedAt,
+			}, nil
+		},
+		adjustStockFunc: func(context.Context, uuid.UUID, models.AdjustmentType, decimal.Decimal, *string, *string, *uuid.UUID, uuid.UUID) (*models.StockAdjustment, error) {
+			adjustCalled = true
+			return nil, nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", uuid.New())
+		return c.Next()
+	})
+	app.Post("/inventory/adjust", handler.AdjustStock)
+
+	staleVersion := inventoryUpdatedAt.Add(-time.Minute).Format(time.RFC3339Nano)
+	body := `{"product_id":"` + productID.String() + `","adjustment_type":"adjustment","quantity":"1","expected_updated_at":"` + staleVersion + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/inventory/adjust", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+	if adjustCalled {
+		t.Fatalf("expected stale inventory submit to be blocked")
+	}
+}
+
 func testProduct() *models.Product {
 	return &models.Product{
 		ID:       uuid.MustParse("00000000-0000-0000-0000-000000000001"),
@@ -489,6 +749,93 @@ func TestCreateSucceedsWhenThresholdUpdateFails(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusCreated {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+}
+
+func TestValidateActiveProductCategoryRejectsArchivedCategory(t *testing.T) {
+	categoryID := uuid.New()
+	handler := NewProductHandler(&fakeProductStore{}, &fakeInventoryStore{}, &fakeCategoryStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
+			return &models.Category{ID: categoryID, Name: "Archived", IsActive: false}, nil
+		},
+	}, "")
+
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		handler.validateActiveProductCategory(c, &categoryID)
+		return nil
+	})
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateRejectsMissingProductCategory(t *testing.T) {
+	categoryID := uuid.New()
+	var createdCategoryID *uuid.UUID
+	productRepo := &fakeProductStore{
+		createFunc: func(_ context.Context, product *models.Product, _ *decimal.Decimal) error {
+			createdCategoryID = product.CategoryID
+			return nil
+		},
+	}
+	categoryLookupCalled := false
+	handler := NewProductHandler(productRepo, &fakeInventoryStore{}, &fakeCategoryStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
+			categoryLookupCalled = true
+			return nil, nil
+		},
+	}, "")
+
+	app := fiber.New()
+	app.Post("/products", handler.Create)
+
+	body := `{"name":"Milk","price":"12.50","category_id":"` + categoryID.String() + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d; category lookup called=%v, created category id=%v", resp.StatusCode, categoryLookupCalled, createdCategoryID)
+	}
+}
+
+func TestCreateRejectsArchivedProductCategory(t *testing.T) {
+	categoryID := uuid.New()
+	var createCalled bool
+	productRepo := &fakeProductStore{
+		createFunc: func(context.Context, *models.Product, *decimal.Decimal) error {
+			createCalled = true
+			return nil
+		},
+	}
+	handler := NewProductHandler(productRepo, &fakeInventoryStore{}, &fakeCategoryStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
+			return &models.Category{ID: categoryID, Name: "Archived", IsActive: false}, nil
+		},
+	}, "")
+
+	app := fiber.New()
+	app.Post("/products", handler.Create)
+
+	body := `{"name":"Milk","price":"12.50","category_id":"` + categoryID.String() + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d; create called=%v", resp.StatusCode, createCalled)
 	}
 }
 
@@ -541,6 +888,135 @@ func TestUpdateAllowsClearingSKU(t *testing.T) {
 	}
 	if *payload.Product.SKU != "" {
 		t.Fatalf("expected sku to be cleared to empty string, got %q", *payload.Product.SKU)
+	}
+}
+
+func TestUpdateRejectsMissingProductCategory(t *testing.T) {
+	categoryID := uuid.New()
+	current := testProduct()
+	current.CategoryID = nil
+	var updatedCategoryID *uuid.UUID
+
+	productRepo := &fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := *current
+			product.ID = id
+			return &product, nil
+		},
+		updateFunc: func(_ context.Context, product *models.Product) error {
+			updatedCategoryID = product.CategoryID
+			return nil
+		},
+	}
+	categoryLookupCalled := false
+	handler := NewProductHandler(productRepo, &fakeInventoryStore{}, &fakeCategoryStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
+			categoryLookupCalled = true
+			return nil, nil
+		},
+	}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id", handler.Update)
+
+	body := `{"category_id":"` + categoryID.String() + `"}`
+	req := httptest.NewRequest(http.MethodPatch, "/products/00000000-0000-0000-0000-000000000001", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d; category lookup called=%v, updated category id=%v", resp.StatusCode, categoryLookupCalled, updatedCategoryID)
+	}
+}
+
+func TestUpdateRejectsArchivedProductCategory(t *testing.T) {
+	categoryID := uuid.New()
+	current := testProduct()
+	current.CategoryID = nil
+	var updateCalled bool
+
+	productRepo := &fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := *current
+			product.ID = id
+			return &product, nil
+		},
+		updateFunc: func(context.Context, *models.Product) error {
+			updateCalled = true
+			return nil
+		},
+	}
+	handler := NewProductHandler(productRepo, &fakeInventoryStore{}, &fakeCategoryStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
+			return &models.Category{ID: categoryID, Name: "Archived", IsActive: false}, nil
+		},
+	}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id", handler.Update)
+
+	body := `{"category_id":"` + categoryID.String() + `"}`
+	req := httptest.NewRequest(http.MethodPatch, "/products/00000000-0000-0000-0000-000000000001", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d; update called=%v", resp.StatusCode, updateCalled)
+	}
+}
+
+func TestUpdateAllowsUnchangedArchivedProductCategory(t *testing.T) {
+	categoryID := uuid.New()
+	current := testProduct()
+	current.CategoryID = &categoryID
+	updateCalled := false
+
+	productRepo := &fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := *current
+			product.ID = id
+			return &product, nil
+		},
+		updateFunc: func(_ context.Context, product *models.Product) error {
+			updateCalled = true
+			if product.CategoryID == nil || *product.CategoryID != categoryID {
+				t.Fatalf("expected category id to stay %s, got %v", categoryID, product.CategoryID)
+			}
+			if product.Name != "Renamed" {
+				t.Fatalf("expected name update, got %q", product.Name)
+			}
+			return nil
+		},
+	}
+	handler := NewProductHandler(productRepo, &fakeInventoryStore{}, &fakeCategoryStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Category, error) {
+			t.Fatalf("expected unchanged archived category not to be revalidated")
+			return nil, nil
+		},
+	}, "")
+
+	app := fiber.New()
+	app.Patch("/products/:id", handler.Update)
+
+	body := `{"name":"Renamed","category_id":"` + categoryID.String() + `"}`
+	req := httptest.NewRequest(http.MethodPatch, "/products/00000000-0000-0000-0000-000000000001", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if !updateCalled {
+		t.Fatalf("expected product update to be called")
 	}
 }
 
@@ -673,7 +1149,7 @@ type fakeInventoryStore struct {
 	setQuantityFunc          func(context.Context, uuid.UUID, decimal.Decimal, *string, uuid.UUID) (*models.StockAdjustment, error)
 	updateThresholdsFunc     func(context.Context, uuid.UUID, decimal.Decimal) error
 	getLowStockProductsFunc  func(context.Context) ([]*models.ProductWithInventory, error)
-	getAdjustmentHistoryFunc func(context.Context, uuid.UUID, int, int, *models.AdjustmentType) ([]*models.StockAdjustment, int, error)
+	getAdjustmentHistoryFunc func(context.Context, uuid.UUID, int, int, *models.AdjustmentType, *uuid.UUID, *time.Time, *time.Time) ([]*models.StockAdjustment, int, error)
 }
 
 func (f *fakeInventoryStore) GetByProductID(ctx context.Context, id uuid.UUID) (*models.InventoryItem, error) {
@@ -706,15 +1182,20 @@ func (f *fakeInventoryStore) GetLowStockProducts(ctx context.Context) ([]*models
 	}
 	return nil, nil
 }
-func (f *fakeInventoryStore) GetAdjustmentHistory(ctx context.Context, productID uuid.UUID, limit int, offset int, adjustmentType *models.AdjustmentType) ([]*models.StockAdjustment, int, error) {
+func (f *fakeInventoryStore) GetAdjustmentHistory(ctx context.Context, productID uuid.UUID, limit int, offset int, adjustmentType *models.AdjustmentType, adjustedBy *uuid.UUID, startDate, endDate *time.Time) ([]*models.StockAdjustment, int, error) {
 	if f.getAdjustmentHistoryFunc != nil {
-		return f.getAdjustmentHistoryFunc(ctx, productID, limit, offset, adjustmentType)
+		return f.getAdjustmentHistoryFunc(ctx, productID, limit, offset, adjustmentType, adjustedBy, startDate, endDate)
 	}
 	return nil, 0, nil
 }
 
-type fakeCategoryStore struct{}
+type fakeCategoryStore struct {
+	getByIDFunc func(context.Context, uuid.UUID) (*models.Category, error)
+}
 
-func (f *fakeCategoryStore) GetByID(context.Context, uuid.UUID) (*models.Category, error) {
+func (f *fakeCategoryStore) GetByID(ctx context.Context, id uuid.UUID) (*models.Category, error) {
+	if f.getByIDFunc != nil {
+		return f.getByIDFunc(ctx, id)
+	}
 	return nil, nil
 }

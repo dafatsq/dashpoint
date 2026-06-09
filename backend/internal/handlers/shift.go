@@ -38,4 +38,5 @@ type StartShiftRequest struct {
 type CloseShiftRequest struct {
 	ClosingCash string  `json:"closing_cash"`
 	Notes       *string `json:"notes"`
+	ShiftID     *string `json:"shift_id"`
 }

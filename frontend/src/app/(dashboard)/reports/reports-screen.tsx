@@ -15,6 +15,7 @@ import {
 import api from '@/lib/api';
 import type { ApiResponse } from '@/lib/api/types';
 import { PERMISSIONS, useAuth } from '@/contexts/auth-context';
+import { useGlobalError } from '@/contexts/error-context';
 
 import { ReportsCategories } from './reports-categories';
 import { ReportsControls } from './reports-controls';
@@ -55,6 +56,7 @@ function requireApiData<T>(response: ApiResponse<T>, fallbackMessage: string): T
 export function ReportsScreen() {
   const { hasPermission } = useAuth();
   const canExport = hasPermission(PERMISSIONS.REPORTS_EXPORT);
+  const { showError } = useGlobalError();
 
   const [activeTab, setActiveTab] = useState<ReportType>('overview');
   const [isLoading, setIsLoading] = useState(true);
@@ -208,6 +210,11 @@ export function ReportsScreen() {
 
   const exportReport = useCallback(
     async (tab: 'overview' | 'sales' | 'inventory' | 'top-sellers') => {
+      if (!canExport) {
+        showError("Permission Denied", "You do not have permission to export reports");
+        return;
+      }
+
       setErrorMessage(null);
       try {
         let url = '';
@@ -238,10 +245,12 @@ export function ReportsScreen() {
 
         triggerDownload(url, buildExportFilename(tab, dateRange));
       } catch {
-        setErrorMessage(`Failed to export ${tab.replace('-', ' ')} report.`);
+        const message = `Failed to export ${tab.replace('-', ' ')} report.`;
+        setErrorMessage(message);
+        showError("Export Failed", message);
       }
     },
-    [dateRange],
+    [canExport, dateRange, showError],
   );
 
   return (

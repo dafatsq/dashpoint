@@ -34,7 +34,7 @@ export function ReportsEmployees({ isLoading, employeeSales, dateRange }: Report
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b text-left text-sm text-muted-foreground">
                   <th className="pb-3 font-medium">#</th>
@@ -60,8 +60,8 @@ export function ReportsEmployees({ isLoading, employeeSales, dateRange }: Report
                     <td className="py-3 font-medium">{employee.employee_name}</td>
                     <td className="py-3 text-right">{formatNumber(employee.transaction_count)}</td>
                     <td className="py-3 text-right">{formatNumber(employee.item_count)}</td>
-                    <td className="py-3 text-right font-bold">{formatCurrency(employee.total_sales)}</td>
-                    <td className="py-3 text-right">{formatCurrency(employee.avg_transaction)}</td>
+                    <td className="py-3 text-right font-bold font-mono">{formatCurrency(employee.total_sales)}</td>
+                    <td className="py-3 text-right font-mono">{formatCurrency(employee.avg_transaction)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -88,7 +88,7 @@ export function ReportsEmployees({ isLoading, employeeSales, dateRange }: Report
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-xs text-muted-foreground block">Total Sales</span>
-                  <span className="font-bold">{formatCurrency(employee.total_sales)}</span>
+                  <span className="font-bold font-mono">{formatCurrency(employee.total_sales)}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-muted-foreground block">Transactions</span>
@@ -100,7 +100,7 @@ export function ReportsEmployees({ isLoading, employeeSales, dateRange }: Report
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-muted-foreground block">Avg / Txn</span>
-                  <span className="font-medium">{formatCurrency(employee.avg_transaction)}</span>
+                  <span className="font-medium font-mono">{formatCurrency(employee.avg_transaction)}</span>
                 </div>
               </div>
             </CardContent>

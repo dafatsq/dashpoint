@@ -11,18 +11,21 @@ interface FilterCardProps {
 }
 
 export function FilterCard({
-  title = "Filters",
+  title,
   action,
   children,
   className = "",
 }: FilterCardProps) {
+  const hasHeader = !!title || !!action;
   return (
     <Card className={cn("mb-6", className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle className="text-base font-semibold">{title}</CardTitle>
-        {action}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
+      {hasHeader && (
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          {title && <CardTitle className="text-base font-semibold">{title}</CardTitle>}
+          {action}
+        </CardHeader>
+      )}
+      <CardContent className={cn(!hasHeader && "pt-6")}>{children}</CardContent>
     </Card>
   );
 }

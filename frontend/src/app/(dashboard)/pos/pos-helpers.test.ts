@@ -5,6 +5,7 @@ import type { CartItem, Product } from "@/types";
 import {
   addCartItem,
   buildSaleRequest,
+  buildSaleCartValidationRequest,
   canSubmitEndShift,
   canSubmitStartShift,
   calculateCartTotals,
@@ -125,6 +126,21 @@ describe("POS helpers", () => {
       ],
       discount_value: undefined,
       discount_type: undefined,
+    });
+  });
+
+  test("builds cart validation request without payment fields", () => {
+    const items: CartItem[] = [{ product: createProduct(), quantity: 2 }];
+
+    expect(buildSaleCartValidationRequest(items, "shift-1")).toEqual({
+      items: [
+        {
+          product_id: "product-1",
+          quantity: "2",
+          unit_price: "15000",
+        },
+      ],
+      shift_id: "shift-1",
     });
   });
 

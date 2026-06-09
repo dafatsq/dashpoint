@@ -61,7 +61,7 @@ export function SalesList({
   return (
     <>
       <div className="hidden lg:block overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-max">
           <thead>
             <tr className="border-b text-left text-sm text-muted-foreground">
               <th className="pb-3 font-medium">Invoice</th>
@@ -84,7 +84,7 @@ export function SalesList({
                 </td>
                 <td className="py-3 text-sm">{sale.employee_name || "-"}</td>
                 <td className="py-3 text-sm">{sale.item_count} items</td>
-                <td className="py-3 text-right font-medium">
+                <td className="py-3 text-right font-medium font-mono">
                   {formatSalesCurrency(sale.total_amount)}
                 </td>
                 <td className="py-3 text-center">
@@ -151,7 +151,7 @@ export function SalesList({
               <div className="flex items-center justify-between border-t pt-3">
                 <div>
                   <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="text-lg font-bold">
+                  <p className="text-lg font-bold font-mono">
                     {formatSalesCurrency(sale.total_amount)}
                   </p>
                 </div>

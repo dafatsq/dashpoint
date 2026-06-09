@@ -19,6 +19,7 @@ import (
 
 type fakeSaleStore struct {
 	createFunc          func(context.Context, *repository.CreateSaleRequest) (*models.Sale, error)
+	validateCartFunc    func(context.Context, *repository.ValidateSaleCartRequest) error
 	getByIDFunc         func(context.Context, uuid.UUID) (*models.Sale, error)
 	getByInvoiceNoFunc  func(context.Context, string) (*models.Sale, error)
 	listFunc            func(context.Context, *repository.SaleFilter) ([]models.Sale, int, error)
@@ -31,6 +32,12 @@ func (f *fakeSaleStore) Create(ctx context.Context, req *repository.CreateSaleRe
 		return f.createFunc(ctx, req)
 	}
 	return nil, nil
+}
+func (f *fakeSaleStore) ValidateCart(ctx context.Context, req *repository.ValidateSaleCartRequest) error {
+	if f.validateCartFunc != nil {
+		return f.validateCartFunc(ctx, req)
+	}
+	return nil
 }
 func (f *fakeSaleStore) GetByID(ctx context.Context, id uuid.UUID) (*models.Sale, error) {
 	if f.getByIDFunc != nil {
@@ -116,6 +123,81 @@ func TestCreateSaleRequiresOpenShift(t *testing.T) {
 	}
 }
 
+func TestCreateSaleRejectsMismatchedShiftID(t *testing.T) {
+	currentShiftID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	staleShiftID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	createCalled := false
+	handler := NewSaleHandler(&fakeSaleStore{
+		createFunc: func(context.Context, *repository.CreateSaleRequest) (*models.Sale, error) {
+			createCalled = true
+			return nil, nil
+		},
+	}, &fakeShiftLookup{shift: &models.Shift{ID: currentShiftID}})
+	app := saleTestApp(handler, uuid.New(), "owner")
+	body := `{
+		"shift_id":"` + staleShiftID.String() + `",
+		"items":[{"product_id":"00000000-0000-0000-0000-000000000001","quantity":"1","unit_price":"10.00","discount_value":"0","discount_amount":"0"}],
+		"payments":[{"payment_method":"cash","amount":"10.00"}]
+	}`
+
+	resp := performJSONRequest(t, app, http.MethodPost, "/sales", body)
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+	if createCalled {
+		t.Fatalf("expected mismatched shift submit to be blocked")
+	}
+}
+
+func TestValidateCartRejectsMismatchedShiftID(t *testing.T) {
+	currentShiftID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	staleShiftID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	validateCalled := false
+	handler := NewSaleHandler(&fakeSaleStore{
+		validateCartFunc: func(context.Context, *repository.ValidateSaleCartRequest) error {
+			validateCalled = true
+			return nil
+		},
+	}, &fakeShiftLookup{shift: &models.Shift{ID: currentShiftID}})
+	app := saleTestApp(handler, uuid.New(), "owner")
+	body := `{
+		"shift_id":"` + staleShiftID.String() + `",
+		"items":[{"product_id":"00000000-0000-0000-0000-000000000001","quantity":"1","unit_price":"10.00","discount_value":"0","discount_amount":"0"}]
+	}`
+
+	resp := performJSONRequest(t, app, http.MethodPost, "/sales/validate", body)
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+	if validateCalled {
+		t.Fatalf("expected mismatched shift validation to be blocked")
+	}
+}
+
+func TestValidateCartCallsRepositoryWithoutPayments(t *testing.T) {
+	shiftID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	var capturedItems []repository.CreateSaleItemRequest
+	handler := NewSaleHandler(&fakeSaleStore{
+		validateCartFunc: func(_ context.Context, req *repository.ValidateSaleCartRequest) error {
+			capturedItems = req.Items
+			return nil
+		},
+	}, &fakeShiftLookup{shift: &models.Shift{ID: shiftID}})
+	app := saleTestApp(handler, uuid.New(), "owner")
+	body := `{
+		"shift_id":"` + shiftID.String() + `",
+		"items":[{"product_id":"00000000-0000-0000-0000-000000000001","quantity":"1","unit_price":"10.00","discount_value":"0","discount_amount":"0"}]
+	}`
+
+	resp := performJSONRequest(t, app, http.MethodPost, "/sales/validate", body)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if len(capturedItems) != 1 {
+		t.Fatalf("expected one validated item, got %d", len(capturedItems))
+	}
+}
+
 func TestListSalesRejectsInvalidShiftID(t *testing.T) {
 	handler := NewSaleHandler(&fakeSaleStore{}, &fakeShiftLookup{})
 	app := saleTestApp(handler, uuid.New(), "owner")
@@ -195,6 +277,7 @@ func saleTestApp(handler *SaleHandler, userID uuid.UUID, roleName string) *fiber
 		return c.Next()
 	})
 	app.Post("/sales", handler.CreateSale)
+	app.Post("/sales/validate", handler.ValidateCart)
 	app.Get("/sales", handler.ListSales)
 	return app
 }

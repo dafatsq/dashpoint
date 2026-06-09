@@ -37,22 +37,11 @@ export function ProductsControls({
   onViewModeChange,
 }: ProductsControlsProps) {
   return (
-    <FilterCard
-      title="Filters"
-      action={
-        canCreate && viewMode === "active" && (
-          <Button onClick={onCreate} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Product
-          </Button>
-        )
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <ActiveArchivedToggle value={viewMode} onChange={onViewModeChange} />
-
-        <div className="flex flex-col gap-4 md:flex-row">
-          <div className="relative flex-1">
+    <>
+      <ActiveArchivedToggle value={viewMode} onChange={onViewModeChange} className="mb-4" />
+      <FilterCard>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search products..."
@@ -62,7 +51,7 @@ export function ProductsControls({
             />
           </div>
           <Select value={selectedCategory} onValueChange={onCategoryChange}>
-            <SelectTrigger className="w-full md:w-48">
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
@@ -74,8 +63,14 @@ export function ProductsControls({
               ))}
             </SelectContent>
           </Select>
+          {canCreate && viewMode === "active" && (
+            <Button onClick={onCreate} className="w-full">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Product
+            </Button>
+          )}
         </div>
-      </div>
-    </FilterCard>
+      </FilterCard>
+    </>
   );
 }

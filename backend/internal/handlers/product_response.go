@@ -31,6 +31,7 @@ func (h *ProductHandler) toProductResponse(p *models.Product) ProductResponse {
 			AvailableQuantity: p.Inventory.AvailableQuantity().String(),
 			LowStockThreshold: p.Inventory.LowStockThreshold.String(),
 			IsLowStock:        p.Inventory.IsLowStock(),
+			UpdatedAt:         p.Inventory.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
 	}
 	return response

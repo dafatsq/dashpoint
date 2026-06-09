@@ -58,14 +58,15 @@ export function InventoryScreen() {
 
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [inventoryDetails, setInventoryDetails] = useState<ProductInventoryDetails | null>(null);
-  const [isLoadingInventoryDetails, setIsLoadingInventoryDetails] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
   const [historyDetails, setHistoryDetails] = useState<ProductInventoryDetails | null>(null);
+  const [historyUsers, setHistoryUsers] = useState<{ id: string; name: string }[]>([]);
   const [isLoadingHistoryDetails, setIsLoadingHistoryDetails] = useState(false);
   const [historyOffset, setHistoryOffset] = useState(0);
   const [historyFilter, setHistoryFilter] = useState<InventoryHistoryFilter>("all");
+  const [historyUserId, setHistoryUserId] = useState("all");
+  const [historyDateRange, setHistoryDateRange] = useState({ start: "", end: "" });
   const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormState>(createEmptyAdjustmentFormState("add"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [thresholdDialogOpen, setThresholdDialogOpen] = useState(false);
@@ -97,6 +98,24 @@ export function InventoryScreen() {
 
     return () => window.clearTimeout(timeoutId);
   }, [loadCategories]);
+
+  const loadHistoryUsers = useCallback(async () => {
+    const result = await api.getBasicUsers();
+    if (result.error) {
+      setPageError(result.error);
+      return;
+    }
+    setPageError(null);
+    setHistoryUsers(result.data || []);
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadHistoryUsers();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadHistoryUsers]);
 
   const fetchLowStock = useCallback(async () => {
     const result = await api.getLowStock();
@@ -213,25 +232,28 @@ export function InventoryScreen() {
   const openAdjustDialog = useCallback(
     async (product: Product) => {
       if (!canModifyStock || allowedActions.length === 0) {
+        showError("Permission Denied", "You do not have permission to adjust inventory.");
         return;
       }
 
+      const inventoryResult = await api.getProductInventory(product.id);
+      if (inventoryResult.error) {
+        showError("Inventory Load Failed", inventoryResult.error);
+        return;
+      }
+
+      const refreshedProduct: Product = inventoryResult.data?.inventory
+        ? { ...product, inventory: inventoryResult.data.inventory }
+        : product;
       const defaultAction = allowedActions[0];
-      setSelectedProduct(product);
-      setInventoryDetails(null);
-      setIsLoadingInventoryDetails(true);
+      setProducts((current) =>
+        current.map((item) => (item.id === product.id ? refreshedProduct : item)),
+      );
+      setSelectedProduct(refreshedProduct);
       setAdjustmentForm(createEmptyAdjustmentFormState(defaultAction));
       setAdjustDialogOpen(true);
-
-      const result = await api.getProductInventory(product.id);
-      if (result.error) {
-        setPageError(result.error);
-      } else {
-        setInventoryDetails(result.data || null);
-      }
-      setIsLoadingInventoryDetails(false);
     },
-    [allowedActions, canModifyStock],
+    [allowedActions, canModifyStock, showError],
   );
 
   const openAdjustDialogFromLowStock = useCallback(
@@ -244,63 +266,89 @@ export function InventoryScreen() {
 
       const result = await api.getProduct(productId);
       if (result.error) {
-        setPageError(result.error);
+        showError("Product Load Failed", result.error);
         return;
       }
       if (result.data) {
         await openAdjustDialog(result.data);
       }
     },
-    [openAdjustDialog, products],
+    [openAdjustDialog, products, showError],
   );
 
   const openThresholdDialog = useCallback(
-    (product: Product) => {
+    async (product: Product) => {
       if (!canEditThreshold) {
+        showError("Permission Denied", "You do not have permission to edit inventory thresholds.");
         return;
       }
-      setThresholdProduct(product);
-      setThresholdValue(product.inventory?.low_stock_threshold || "0");
+
+      const inventoryResult = await api.getProductInventory(product.id);
+      if (inventoryResult.error) {
+        showError("Inventory Load Failed", inventoryResult.error);
+        return;
+      }
+
+      const refreshedProduct: Product = inventoryResult.data?.inventory
+        ? { ...product, inventory: inventoryResult.data.inventory }
+        : product;
+      setProducts((current) =>
+        current.map((item) => (item.id === product.id ? refreshedProduct : item)),
+      );
+      setThresholdProduct(refreshedProduct);
+      setThresholdValue(refreshedProduct.inventory?.low_stock_threshold || "0");
       setThresholdDialogOpen(true);
     },
-    [canEditThreshold],
+    [canEditThreshold, showError],
   );
 
   const openThresholdDialogFromLowStock = useCallback(
     async (productId: string) => {
       const existing = products.find((product) => product.id === productId);
       if (existing) {
-        openThresholdDialog(existing);
+        await openThresholdDialog(existing);
         return;
       }
 
       const result = await api.getProduct(productId);
       if (result.error) {
-        setPageError(result.error);
+        showError("Product Load Failed", result.error);
         return;
       }
       if (result.data) {
-        openThresholdDialog(result.data);
+        await openThresholdDialog(result.data);
       }
     },
-    [openThresholdDialog, products],
+    [openThresholdDialog, products, showError],
   );
 
   const loadHistoryPage = useCallback(
-    async (product: Product, offset: number, adjustmentType: InventoryHistoryFilter) => {
+    async (
+      product: Product,
+      offset: number,
+      adjustmentType: InventoryHistoryFilter,
+      userId: string,
+      dateRange: { start: string; end: string },
+    ) => {
       setIsLoadingHistoryDetails(true);
       const result = await api.getProductInventory(product.id, {
         limit: HISTORY_PAGE_SIZE,
         offset,
         adjustment_type: adjustmentType === "all" ? undefined : adjustmentType,
+        user_id: userId === "all" ? undefined : userId,
+        from: dateRange.start || undefined,
+        to: dateRange.end || undefined,
       });
       if (result.error) {
+        showError("History Load Failed", result.error);
         setPageError(result.error);
         setHistoryDrawerOpen(false);
         setHistoryProduct(null);
         setHistoryDetails(null);
         setHistoryOffset(0);
         setHistoryFilter("all");
+        setHistoryUserId("all");
+        setHistoryDateRange({ start: "", end: "" });
       } else {
         setPageError(null);
         setHistoryDetails(result.data || null);
@@ -308,7 +356,7 @@ export function InventoryScreen() {
       }
       setIsLoadingHistoryDetails(false);
     },
-    [],
+    [showError],
   );
 
   const openHistoryDrawer = useCallback(
@@ -317,8 +365,10 @@ export function InventoryScreen() {
       setHistoryDetails(null);
       setHistoryOffset(0);
       setHistoryFilter("all");
+      setHistoryUserId("all");
+      setHistoryDateRange({ start: "", end: "" });
       setHistoryDrawerOpen(true);
-      await loadHistoryPage(product, 0, "all");
+      await loadHistoryPage(product, 0, "all", "all", { start: "", end: "" });
     },
     [loadHistoryPage],
   );
@@ -329,9 +379,31 @@ export function InventoryScreen() {
         return;
       }
       setHistoryFilter(value);
-      await loadHistoryPage(historyProduct, 0, value);
+      await loadHistoryPage(historyProduct, 0, value, historyUserId, historyDateRange);
     },
-    [historyProduct, loadHistoryPage],
+    [historyProduct, historyUserId, historyDateRange, loadHistoryPage],
+  );
+
+  const handleHistoryUserChange = useCallback(
+    async (value: string) => {
+      if (!historyProduct) {
+        return;
+      }
+      setHistoryUserId(value);
+      await loadHistoryPage(historyProduct, 0, historyFilter, value, historyDateRange);
+    },
+    [historyFilter, historyProduct, historyDateRange, loadHistoryPage],
+  );
+
+  const handleHistoryDateRangeChange = useCallback(
+    async (range: { start: string; end: string }) => {
+      if (!historyProduct) {
+        return;
+      }
+      setHistoryDateRange(range);
+      await loadHistoryPage(historyProduct, 0, historyFilter, historyUserId, range);
+    },
+    [historyFilter, historyProduct, historyUserId, loadHistoryPage],
   );
 
   const handleAdjustment = useCallback(async () => {
@@ -354,6 +426,11 @@ export function InventoryScreen() {
       return;
     }
 
+    if (!isInventoryActionAllowed(adjustmentForm.action, allowedActions)) {
+      showError("Permission Denied", "You do not have permission for that inventory action.");
+      return;
+    }
+
     if (
       !canSubmitInventoryAdjustment({
         allowedActions,
@@ -367,24 +444,23 @@ export function InventoryScreen() {
       return;
     }
 
-    if (!isInventoryActionAllowed(adjustmentForm.action, allowedActions)) {
-      showError("Permission Denied", "You do not have permission for that inventory action.");
-      return;
-    }
-
     const inputQuantity = Number.parseInt(adjustmentForm.quantity, 10);
     const currentStock = getInventoryProductQuantity(selectedProduct);
 
-    if (Number.isNaN(inputQuantity) || inputQuantity <= 0) {
-      showError("Invalid Quantity", "Quantity must be greater than zero");
+    if (
+      Number.isNaN(inputQuantity) ||
+      (adjustmentForm.action === "count" ? inputQuantity < 0 : inputQuantity <= 0)
+    ) {
+      showError(
+        "Invalid Quantity",
+        adjustmentForm.action === "count"
+          ? "Stock count cannot be negative"
+          : "Quantity must be greater than zero",
+      );
       return;
     }
     if (requiresInventoryAdjustmentReason(adjustmentForm.adjustmentType, adjustmentForm.action) && !adjustmentForm.notes.trim()) {
       showError("Reason Required", "Enter a reason for damaged, lost, or correction removals.");
-      return;
-    }
-    if (adjustmentForm.adjustmentType === "count" && inputQuantity < 0) {
-      showError("Invalid Quantity", "Stock quantity cannot be negative");
       return;
     }
     if (
@@ -413,6 +489,7 @@ export function InventoryScreen() {
         quantity: adjustmentForm.quantity,
         currentStock,
         notes: adjustmentForm.notes,
+        expectedUpdatedAt: selectedProduct.inventory?.updated_at,
       }),
     );
 
@@ -426,7 +503,6 @@ export function InventoryScreen() {
     await Promise.all([fetchProductsPage(1, true), fetchLowStock()]);
     setAdjustDialogOpen(false);
     setSelectedProduct(null);
-    setInventoryDetails(null);
     setIsSubmitting(false);
   }, [
     adjustmentForm,
@@ -447,6 +523,10 @@ export function InventoryScreen() {
     if (isSubmittingThreshold) {
       return;
     }
+    if (!canEditThreshold) {
+      showError("Permission Denied", "You do not have permission to edit inventory thresholds.");
+      return;
+    }
     if (!thresholdValue.trim()) {
       showError("Threshold Required", "Enter a low stock threshold before saving.");
       return;
@@ -461,9 +541,10 @@ export function InventoryScreen() {
     setIsSubmittingThreshold(true);
     const result = await api.updateProductInventoryThreshold(thresholdProduct.id, {
       low_stock_threshold: thresholdValue,
+      expected_updated_at: thresholdProduct.inventory?.updated_at,
     });
     if (result.error) {
-      setPageError(result.error);
+      showError("Threshold Update Failed", result.error);
       setIsSubmittingThreshold(false);
       return;
     }
@@ -475,7 +556,7 @@ export function InventoryScreen() {
     setThresholdProduct(null);
     setThresholdValue("");
     setIsSubmittingThreshold(false);
-  }, [fetchLowStock, fetchProductsPage, isSubmittingThreshold, resetProductPagination, showError, thresholdProduct, thresholdValue]);
+  }, [canEditThreshold, fetchLowStock, fetchProductsPage, isSubmittingThreshold, resetProductPagination, showError, thresholdProduct, thresholdValue]);
 
   const totalStock = products.reduce((sum, product) => sum + getInventoryProductQuantity(product), 0);
   const totalValue = products.reduce(
@@ -601,17 +682,13 @@ export function InventoryScreen() {
       <InventoryAdjustDialog
         open={adjustDialogOpen}
         product={selectedProduct}
-        inventoryDetails={inventoryDetails}
         formState={adjustmentForm}
         allowedActions={allowedActions}
-        isLoadingInventoryDetails={isLoadingInventoryDetails}
         isSubmitting={isSubmitting}
         onOpenChange={(open) => {
           setAdjustDialogOpen(open);
           if (!open) {
             setSelectedProduct(null);
-            setInventoryDetails(null);
-            setIsLoadingInventoryDetails(false);
           }
         }}
         onActionChange={(action) =>
@@ -628,10 +705,12 @@ export function InventoryScreen() {
         open={historyDrawerOpen}
         product={historyProduct}
         inventoryDetails={historyDetails}
+        users={historyUsers}
         isLoading={isLoadingHistoryDetails}
-        pageSize={HISTORY_PAGE_SIZE}
         offset={historyOffset}
         selectedType={historyFilter}
+        selectedUserId={historyUserId}
+        selectedDateRange={historyDateRange}
         onOpenChange={(open) => {
           setHistoryDrawerOpen(open);
           if (!open) {
@@ -639,18 +718,22 @@ export function InventoryScreen() {
             setHistoryDetails(null);
             setHistoryOffset(0);
             setHistoryFilter("all");
+            setHistoryUserId("all");
+            setHistoryDateRange({ start: "", end: "" });
             setIsLoadingHistoryDetails(false);
           }
         }}
         onTypeChange={(value) => void handleHistoryFilterChange(value)}
+        onUserChange={(value) => void handleHistoryUserChange(value)}
+        onDateRangeChange={(range) => void handleHistoryDateRangeChange(range)}
         onPrevious={() => {
           if (historyProduct && historyOffset > 0) {
-            void loadHistoryPage(historyProduct, Math.max(0, historyOffset - HISTORY_PAGE_SIZE), historyFilter);
+            void loadHistoryPage(historyProduct, Math.max(0, historyOffset - HISTORY_PAGE_SIZE), historyFilter, historyUserId, historyDateRange);
           }
         }}
         onNext={() => {
           if (historyProduct && historyDetails && historyOffset + historyDetails.recent_adjustments.length < historyDetails.total_adjustments) {
-            void loadHistoryPage(historyProduct, historyOffset + HISTORY_PAGE_SIZE, historyFilter);
+            void loadHistoryPage(historyProduct, historyOffset + HISTORY_PAGE_SIZE, historyFilter, historyUserId, historyDateRange);
           }
         }}
       />

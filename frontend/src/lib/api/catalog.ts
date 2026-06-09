@@ -8,6 +8,12 @@ import type {
   ProductsResponse,
 } from "./types";
 
+function withExpectedUpdatedAt(path: string, expectedUpdatedAt?: string): string {
+  if (!expectedUpdatedAt) return path;
+  const searchParams = new URLSearchParams({ expected_updated_at: expectedUpdatedAt });
+  return `${path}?${searchParams.toString()}`;
+}
+
 export function createCatalogApi(transport: ApiTransport): CatalogApi {
   return {
     async getProductsPage(params) {
@@ -59,6 +65,15 @@ export function createCatalogApi(transport: ApiTransport): CatalogApi {
       if (params?.adjustment_type) {
         searchParams.set("adjustment_type", params.adjustment_type);
       }
+      if (params?.user_id) {
+        searchParams.set("user_id", params.user_id);
+      }
+      if (params?.from) {
+        searchParams.set("from", params.from);
+      }
+      if (params?.to) {
+        searchParams.set("to", params.to);
+      }
       const query = searchParams.toString();
       const result = await transport.request<ProductInventoryDetails>(`/products/${id}/inventory${query ? `?${query}` : ""}`);
       if (result.error) return { error: result.error };
@@ -95,11 +110,16 @@ export function createCatalogApi(transport: ApiTransport): CatalogApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.product };
     },
-    deleteProduct(id) {
-      return transport.request(`/products/${id}`, { method: "DELETE" });
+    deleteProduct(id, expectedUpdatedAt) {
+      return transport.request(withExpectedUpdatedAt(`/products/${id}`, expectedUpdatedAt), {
+        method: "DELETE",
+      });
     },
-    permanentDeleteProduct(id) {
-      return transport.request(`/products/${id}/permanent`, { method: "DELETE" });
+    permanentDeleteProduct(id, expectedUpdatedAt) {
+      return transport.request(
+        withExpectedUpdatedAt(`/products/${id}/permanent`, expectedUpdatedAt),
+        { method: "DELETE" },
+      );
     },
     async getCategories(status = "active") {
       const result = await transport.request<CategoriesResponse>(`/categories?status=${status}`);
@@ -122,11 +142,16 @@ export function createCatalogApi(transport: ApiTransport): CatalogApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.category };
     },
-    deleteCategory(id) {
-      return transport.request(`/categories/${id}`, { method: "DELETE" });
+    deleteCategory(id, expectedUpdatedAt) {
+      return transport.request(withExpectedUpdatedAt(`/categories/${id}`, expectedUpdatedAt), {
+        method: "DELETE",
+      });
     },
-    permanentDeleteCategory(id) {
-      return transport.request(`/categories/${id}/permanent`, { method: "DELETE" });
+    permanentDeleteCategory(id, expectedUpdatedAt) {
+      return transport.request(
+        withExpectedUpdatedAt(`/categories/${id}/permanent`, expectedUpdatedAt),
+        { method: "DELETE" },
+      );
     },
     async getLowStock(threshold) {
       const query = threshold ? `?threshold=${threshold}` : "";

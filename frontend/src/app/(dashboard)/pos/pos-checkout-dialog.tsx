@@ -64,7 +64,7 @@ export function PosCheckoutDialog({
               <DialogDescription className="text-center">Invoice: {lastInvoice}</DialogDescription>
             </DialogHeader>
             <div className="text-center py-4">
-              <p className="text-2xl font-bold text-primary">Change: {formatCurrency(lastChange)}</p>
+              <p className="text-2xl font-bold text-primary">Change: <span className="font-mono">{formatCurrency(lastChange)}</span></p>
             </div>
             <DialogFooter>
               <Button className="w-full" onClick={onOpenChange}>
@@ -77,7 +77,7 @@ export function PosCheckoutDialog({
             <DialogHeader>
               <DialogTitle>Checkout</DialogTitle>
               <DialogDescription>
-                Total: <span className="font-bold text-primary">{formatCurrency(total)}</span>
+                Total: <span className="font-bold text-primary font-mono">{formatCurrency(total)}</span>
               </DialogDescription>
             </DialogHeader>
 
@@ -152,7 +152,7 @@ export function PosCheckoutDialog({
                   </div>
                   {amountPaidNumber >= total ? (
                     <p className="mt-2 text-sm">
-                      Change: <span className="font-bold text-primary">{formatCurrency(change)}</span>
+                      Change: <span className="font-bold text-primary font-mono">{formatCurrency(change)}</span>
                     </p>
                   ) : null}
                 </div>

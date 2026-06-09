@@ -45,11 +45,16 @@ func AuthMiddleware(jwtManager *auth.JWTManager, userRepo *repository.UserReposi
 			return JSONError(c, fiber.StatusUnauthorized, "ACCOUNT_INACTIVE", "Your account has been deactivated")
 		}
 
-		// Store claims in context
+		roleName := claims.RoleName
+		if user.Role != nil {
+			roleName = user.Role.Name
+		}
+
+		// Store current database-backed identity in context.
 		c.Locals("user_id", claims.UserID)
-		c.Locals("email", claims.Email)
-		c.Locals("role_id", claims.RoleID)
-		c.Locals("role_name", claims.RoleName)
+		c.Locals("email", user.Email)
+		c.Locals("role_id", user.RoleID)
+		c.Locals("role_name", roleName)
 		c.Locals("claims", claims)
 
 		return c.Next()
@@ -116,6 +121,35 @@ func RequirePermission(checker PermissionChecker, permissions ...string) fiber.H
 		}
 
 		// Check each required permission
+		for _, perm := range permissions {
+			hasPermission, err := checker(c, userID, perm)
+			if err != nil {
+				return JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to check permissions")
+			}
+
+			if !hasPermission {
+				return JSONError(c, fiber.StatusForbidden, "FORBIDDEN", "You do not have the required permission: "+perm)
+			}
+		}
+
+		return c.Next()
+	}
+}
+
+// RequirePermissionOrSelfParam allows users to operate on their own record while
+// preserving permission checks for every other target record.
+func RequirePermissionOrSelfParam(checker PermissionChecker, paramName string, permissions ...string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		userID := GetUserID(c)
+		if userID == uuid.Nil {
+			return JSONError(c, fiber.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
+		}
+
+		targetID, err := uuid.Parse(c.Params(paramName))
+		if err == nil && targetID == userID {
+			return c.Next()
+		}
+
 		for _, perm := range permissions {
 			hasPermission, err := checker(c, userID, perm)
 			if err != nil {

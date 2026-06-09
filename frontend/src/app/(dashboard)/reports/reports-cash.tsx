@@ -37,7 +37,7 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
             <CardTitle className="text-sm font-medium">Opening Cash</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(cashReport.opening_cash)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(cashReport.opening_cash)}</div>
             <p className="text-xs text-muted-foreground mt-1">From {cashReport.shift_count} shift(s)</p>
           </CardContent>
         </Card>
@@ -46,7 +46,7 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
             <CardTitle className="text-sm font-medium">Cash Sales</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">+{formatCurrency(cashReport.cash_sales)}</div>
+            <div className="text-2xl font-bold text-green-600 font-mono">+{formatCurrency(cashReport.cash_sales)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -54,7 +54,7 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
             <CardTitle className="text-sm font-medium">Voided Cash Sales</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">-{formatCurrency(cashReport.cash_voided_sales)}</div>
+            <div className="text-2xl font-bold text-red-600 font-mono">-{formatCurrency(cashReport.cash_voided_sales)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -62,7 +62,7 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
             <CardTitle className="text-sm font-medium">Pay In</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">+{formatCurrency(cashReport.pay_in_total ?? '0')}</div>
+            <div className="text-2xl font-bold text-blue-600 font-mono">+{formatCurrency(cashReport.pay_in_total ?? '0')}</div>
             <p className="text-xs text-muted-foreground mt-1">Cash added to drawer</p>
           </CardContent>
         </Card>
@@ -71,7 +71,7 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
             <CardTitle className="text-sm font-medium">Pay Out</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">-{formatCurrency(cashReport.pay_out_total ?? '0')}</div>
+            <div className="text-2xl font-bold text-orange-600 font-mono">-{formatCurrency(cashReport.pay_out_total ?? '0')}</div>
             <p className="text-xs text-muted-foreground mt-1">Cash removed from drawer</p>
           </CardContent>
         </Card>
@@ -83,7 +83,7 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
             <CardTitle className="text-sm font-medium">Expected Cash</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(cashReport.expected_cash)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(cashReport.expected_cash)}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Opening + Sales + Pay In - Pay Out
             </p>
@@ -94,7 +94,7 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
             <CardTitle className="text-sm font-medium">Actual Cash</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(cashReport.actual_cash)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(cashReport.actual_cash)}</div>
             <p className="text-xs text-muted-foreground mt-1">Closing cash from shifts</p>
           </CardContent>
         </Card>
@@ -118,13 +118,13 @@ export function ReportsCash({ isLoading, cashReport }: ReportsCashProps) {
             {difference > 0 ? <ArrowUpRight className="h-8 w-8" /> : null}
             {difference < 0 ? <ArrowDownRight className="h-8 w-8" /> : null}
             {difference === 0 ? <Minus className="h-8 w-8" /> : null}
-            {formatCurrency(Math.abs(difference))}
+            <span className="font-mono">{formatCurrency(Math.abs(difference))}</span>
             {difference > 0 ? ' over' : null}
             {difference < 0 ? ' short' : null}
             {difference === 0 ? ' (balanced)' : null}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Expected: {formatCurrency(cashReport.expected_cash)} • Actual: {formatCurrency(cashReport.actual_cash)}
+            Expected: <span className="font-mono">{formatCurrency(cashReport.expected_cash)}</span> • Actual: <span className="font-mono">{formatCurrency(cashReport.actual_cash)}</span>
           </p>
         </CardContent>
       </Card>

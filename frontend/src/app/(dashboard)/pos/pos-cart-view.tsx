@@ -50,8 +50,8 @@ export function PosCartView({
                 className="flex items-center gap-3 p-2 rounded-lg border bg-card"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{item.product.name}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="font-medium text-sm break-words">{item.product.name}</p>
+                  <p className="text-sm text-muted-foreground font-mono">
                     {formatCurrency(getProductPrice(item.product))}
                   </p>
                 </div>
@@ -96,12 +96,12 @@ export function PosCartView({
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatCurrency(subtotal)}</span>
+            <span className="font-mono">{formatCurrency(subtotal)}</span>
           </div>
           {totalTax > 0 ? (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tax</span>
-              <span>{formatCurrency(totalTax)}</span>
+              <span className="font-mono">{formatCurrency(totalTax)}</span>
             </div>
           ) : null}
           {canApplyDiscount ? (
@@ -127,7 +127,7 @@ export function PosCartView({
               {discountAmount > 0 ? (
                 <div className="flex justify-between text-destructive">
                   <span className="text-xs">Discount Amount</span>
-                  <span>-{formatCurrency(discountAmount)}</span>
+                  <span className="font-mono">-{formatCurrency(discountAmount)}</span>
                 </div>
               ) : null}
             </div>
@@ -135,7 +135,7 @@ export function PosCartView({
           <Separator />
           <div className="flex justify-between text-lg font-bold">
             <span>Total</span>
-            <span className="text-primary">{formatCurrency(total)}</span>
+            <span className="text-primary font-mono">{formatCurrency(total)}</span>
           </div>
         </div>
 

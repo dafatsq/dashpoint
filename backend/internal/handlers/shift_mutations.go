@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
@@ -8,6 +10,7 @@ import (
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
+	"dashpoint/backend/internal/repository"
 )
 
 const (
@@ -43,6 +46,12 @@ func (h *ShiftHandler) StartShift(c *fiber.Ctx) error {
 		Notes:       req.Notes,
 	}
 	if err := h.shiftRepo.Create(c.Context(), shift); err != nil {
+		if errors.Is(err, repository.ErrShiftAlreadyOpen) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"code":    "SHIFT_EXISTS",
+				"message": "There is already an open shift",
+			})
+		}
 		log.Error().Err(err).Msg("Failed to create shift")
 		return shiftInternalError(c, "Failed to start shift")
 	}
@@ -82,6 +91,13 @@ func (h *ShiftHandler) CloseShift(c *fiber.Ctx) error {
 	req, closingCash, err := parseCloseShiftRequest(c)
 	if err != nil {
 		return err
+	}
+	expectedShiftID, err := parseExpectedUUID(req.ShiftID)
+	if err != nil {
+		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_SHIFT_ID", "Invalid shift_id")
+	}
+	if expectedShiftID != nil && *expectedShiftID != shift.ID {
+		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleShiftMessage)
 	}
 
 	if err := h.shiftRepo.CloseShift(c.Context(), shift.ID, closingCash, req.Notes, userID); err != nil {

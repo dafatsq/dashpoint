@@ -34,7 +34,7 @@ export function ReportsTopSellers({ isLoading, topSellers, dateRange }: ReportsT
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b text-left text-sm text-muted-foreground">
                   <th className="pb-3 font-medium w-12">#</th>
@@ -66,7 +66,7 @@ export function ReportsTopSellers({ isLoading, topSellers, dateRange }: ReportsT
                     </td>
                     <td className="py-3 text-muted-foreground">{item.category_name || '-'}</td>
                     <td className="py-3 text-right font-medium">{formatNumber(item.quantity_sold)}</td>
-                    <td className="py-3 text-right font-bold">{formatCurrency(item.total_revenue)}</td>
+                    <td className="py-3 text-right font-bold font-mono">{formatCurrency(item.total_revenue)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -89,7 +89,7 @@ export function ReportsTopSellers({ isLoading, topSellers, dateRange }: ReportsT
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold truncate">{item.product_name}</p>
+                  <p className="font-bold break-words">{item.product_name}</p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                     {item.product_sku ? <span>{item.product_sku}</span> : null}
                     {item.product_sku ? <span>•</span> : null}
@@ -101,7 +101,7 @@ export function ReportsTopSellers({ isLoading, topSellers, dateRange }: ReportsT
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-xs text-muted-foreground block">Revenue</span>
-                  <span className="font-bold">{formatCurrency(item.total_revenue)}</span>
+                  <span className="font-bold font-mono">{formatCurrency(item.total_revenue)}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-muted-foreground block">Qty Sold</span>

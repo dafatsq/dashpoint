@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -177,6 +178,11 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               setShowSwitchDialog(false);
             }}
           />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSwitchDialog(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </aside>

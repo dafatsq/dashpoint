@@ -24,7 +24,7 @@ export function ExpensesSummaryCards({
           <TrendingDown className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-destructive">{summary ? formatCurrency(summary.total_amount) : "Rp 0"}</div>
+          <div className="text-2xl font-bold text-destructive font-mono">{summary ? formatCurrency(summary.total_amount) : "Rp 0"}</div>
           <p className="text-xs text-muted-foreground">{summary?.expense_count || 0} transactions</p>
         </CardContent>
       </Card>
@@ -37,7 +37,7 @@ export function ExpensesSummaryCards({
         <CardContent>
           <div className="text-2xl font-bold">{summary?.by_category?.[0]?.category_name || "-"}</div>
           <p className="text-xs text-muted-foreground">
-            {summary?.by_category?.[0] ? formatCurrency(summary.by_category[0].total_amount) : "No expenses yet"}
+            {summary?.by_category?.[0] ? <span className="font-mono">{formatCurrency(summary.by_category[0].total_amount)}</span> : "No expenses yet"}
           </p>
         </CardContent>
       </Card>

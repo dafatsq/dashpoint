@@ -39,10 +39,10 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.shift };
     },
-    async closeShift(closingCash, notes) {
+    async closeShift(closingCash, notes, shiftId) {
       const result = await transport.request<{ shift: Shift }>("/shifts/close", {
         method: "POST",
-        body: { closing_cash: String(closingCash), notes },
+        body: { closing_cash: String(closingCash), notes, shift_id: shiftId },
       });
       if (result.error) return { error: result.error };
       return { data: result.data?.shift };
@@ -58,23 +58,23 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.shifts || [], total: result.data?.total || 0 };
     },
-    async payIn(amount, reason) {
+    async payIn(amount, reason, shiftId) {
       const result = await transport.request<{ operation: CashDrawerOperation }>(
         "/shifts/pay-in",
         {
           method: "POST",
-          body: { amount, reason },
+          body: { amount, reason, shift_id: shiftId },
         },
       );
       if (result.error) return { error: result.error };
       return { data: result.data?.operation };
     },
-    async payOut(amount, reason) {
+    async payOut(amount, reason, shiftId) {
       const result = await transport.request<{ operation: CashDrawerOperation }>(
         "/shifts/pay-out",
         {
           method: "POST",
-          body: { amount, reason },
+          body: { amount, reason, shift_id: shiftId },
         },
       );
       if (result.error) return { error: result.error };
@@ -94,6 +94,12 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
       });
       if (result.error) return { error: result.error };
       return { data: result.data?.sale };
+    },
+    validateSaleCart(cart) {
+      return transport.request("/sales/validate", {
+        method: "POST",
+        body: cart,
+      });
     },
     async getSalesPage(params) {
       const result = await transport.request<SalesResponse>(`/sales${buildQuery({
@@ -127,10 +133,10 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.sale };
     },
-    voidSale(id, reason) {
+    voidSale(id, reason, expectedUpdatedAt) {
       return transport.request(`/sales/${id}/void`, {
         method: "POST",
-        body: { reason },
+        body: { reason, expected_updated_at: expectedUpdatedAt },
       });
     },
     async getDailySummary(date) {

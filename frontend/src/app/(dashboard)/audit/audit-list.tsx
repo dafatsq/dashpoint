@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import type { AuditLog } from "@/types";
 
 import {
@@ -62,81 +62,70 @@ export function AuditList({
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center gap-3 py-12">
-          <ScrollText className="h-12 w-12 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">{error}</p>
-          <Button variant="outline" size="sm" onClick={onRetry}>
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
+        <ScrollText className="h-12 w-12 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">{error}</p>
+        <Button variant="outline" size="sm" onClick={onRetry}>
+          Retry
+        </Button>
+      </div>
     );
   }
 
   if (logs.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <ScrollText className="mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No audit logs found</p>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center justify-center py-12">
+        <ScrollText className="mb-4 h-12 w-12 text-muted-foreground" />
+        <p className="text-muted-foreground">No audit logs found</p>
+      </div>
     );
   }
 
   return (
     <>
-      <Card className="hidden lg:block">
-        <CardHeader>
-          <CardTitle>Activity Log</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b text-left text-sm text-muted-foreground">
-                  <th className="pb-3 font-medium">Timestamp</th>
-                  <th className="pb-3 font-medium">User</th>
-                  <th className="pb-3 font-medium">Action</th>
-                  <th className="pb-3 font-medium">Entity</th>
-                  <th className="pb-3 text-right font-medium">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => (
-                  <tr key={log.id} className="border-b last:border-0">
-                    <td className="py-3 text-sm">
-                      {formatActivityDate(log.created_at)}
-                    </td>
-                    <td className="py-3 text-sm font-medium">
-                      {log.user_name || "System"}
-                    </td>
-                    <td className="py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${getActivityBadgeColor(log.action)}`}
-                      >
-                        {getActivityActionLabel(log.action)}
-                      </span>
-                    </td>
-                    <td className="py-3 text-sm capitalize">
-                      {getActivityEntityLabel(log.entity_type)}
-                      {log.entity_id ? (
-                        <span className="ml-1 text-xs text-muted-foreground">
-                          ({log.entity_id.slice(0, 8)}...)
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="py-3 text-right">
-                      {renderDetailsButton(log)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="hidden lg:block overflow-x-auto">
+        <table className="w-full min-w-max">
+          <thead>
+            <tr className="border-b text-left text-sm text-muted-foreground">
+              <th className="pb-3 font-medium">Timestamp</th>
+              <th className="pb-3 font-medium">User</th>
+              <th className="pb-3 font-medium">Action</th>
+              <th className="pb-3 font-medium">Entity</th>
+              <th className="pb-3 text-right font-medium">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => (
+              <tr key={log.id} className="border-b last:border-0 hover:bg-muted/50">
+                <td className="py-3 text-sm">
+                  {formatActivityDate(log.created_at)}
+                </td>
+                <td className="py-3 text-sm font-medium">
+                  {log.user_name || "System"}
+                </td>
+                <td className="py-3">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${getActivityBadgeColor(log.action)}`}
+                  >
+                    {getActivityActionLabel(log.action)}
+                  </span>
+                </td>
+                <td className="py-3 text-sm capitalize">
+                  {getActivityEntityLabel(log.entity_type)}
+                  {log.entity_id ? (
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      ({log.entity_id.slice(0, 8)}...)
+                    </span>
+                  ) : null}
+                </td>
+                <td className="py-3 text-right">
+                  {renderDetailsButton(log)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <div className="space-y-4 lg:hidden">
         {logs.map((log) => (

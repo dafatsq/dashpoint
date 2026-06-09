@@ -1,11 +1,14 @@
 package repository
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrShiftAlreadyOpen = errors.New("shift already open")
 
 // ShiftRepository handles shift database operations.
 type ShiftRepository struct {

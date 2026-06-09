@@ -8,7 +8,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"dashpoint/backend/internal/authz"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 )
@@ -44,9 +43,9 @@ const (
 	roleManager = "manager"
 	roleCashier = "cashier"
 
-	userActionCreate            userAction = "create"
-	userActionEdit              userAction = "edit"
-	userActionDelete            userAction = "delete"
+	userActionCreate userAction = "create"
+	userActionEdit   userAction = "edit"
+	userActionDelete userAction = "delete"
 )
 
 func badUserRequest(c *fiber.Ctx, code, message string) error {
@@ -67,6 +66,10 @@ func userForbidden(c *fiber.Ctx, message string) error {
 
 func userConflict(c *fiber.Ctx, code, message string) error {
 	return middleware.JSONError(c, fiber.StatusConflict, code, message)
+}
+
+func userArchivedConflict(c *fiber.Ctx, message string) error {
+	return middleware.JSONError(c, fiber.StatusConflict, "USER_INACTIVE", message)
 }
 
 func parseUserIDParam(c *fiber.Ctx) (uuid.UUID, error) {
@@ -98,16 +101,6 @@ func parseUserPagination(c *fiber.Ctx) (int, int, *bool, string, string) {
 	}
 
 	return page, perPage, isActive, strings.TrimSpace(c.Query("search", "")), strings.TrimSpace(c.Query("role", ""))
-}
-
-func (h *UserHandler) currentUserPermissionSet(c *fiber.Ctx) (map[string]bool, error) {
-	permissions := authz.PermissionsForRole(middleware.GetRoleName(c))
-	permissionSet := make(map[string]bool, len(permissions))
-	for _, permission := range permissions {
-		permissionSet[permission] = true
-	}
-
-	return permissionSet, nil
 }
 
 func roleNameOfUser(user *models.User) string {
@@ -144,59 +137,24 @@ func isRoleName(roleName, expected string) bool {
 
 func (h *UserHandler) requireRoleHierarchy(c *fiber.Ctx, targetRoleName string) bool {
 	currentRoleName := middleware.GetRoleName(c)
-	if getRoleLevel(currentRoleName) < getRoleLevel(targetRoleName) {
-		_ = userForbidden(c, "You do not have permission to modify a user with a higher role level.")
+	if isRoleName(targetRoleName, roleCashier) && (isRoleName(currentRoleName, roleManager) || isRoleName(currentRoleName, roleCashier)) {
+		return true
+	}
+
+	currentLevel := getRoleLevel(currentRoleName)
+	targetLevel := getRoleLevel(targetRoleName)
+	if (!isRoleName(currentRoleName, roleOwner) && currentLevel <= targetLevel) || currentLevel < targetLevel {
+		_ = userForbidden(c, "You do not have permission to modify a user with the same or higher role level.")
 		return false
 	}
 	return true
 }
 
 func (h *UserHandler) requireActionPermission(c *fiber.Ctx, targetRoleName string, action userAction) bool {
-	if !isRoleName(middleware.GetRoleName(c), roleManager) {
-		return true
-	}
-
-	permissionSet, err := h.currentUserPermissionSet(c)
-	if err != nil {
-		_ = userInternalError(c, "Failed to validate permissions")
-		return false
-	}
-
-	permissionKey, message, ok := managerPermissionForAction(action, targetRoleName)
-	if !ok {
-		return true
-	}
-	if permissionSet[permissionKey] {
-		return true
-	}
-
-	_ = userForbidden(c, message)
-	return false
-}
-
-func managerPermissionForAction(action userAction, targetRoleName string) (string, string, bool) {
-	switch {
-	case isRoleName(targetRoleName, roleManager):
-		switch action {
-		case userActionCreate:
-			return "can_create_manager_users", "You do not have permission to create Managers", true
-		case userActionEdit:
-			return "can_edit_manager_users", "You do not have permission to edit details of Managers", true
-		case userActionDelete:
-			return "can_delete_manager_users", "You do not have permission to archive/delete Managers", true
-		}
-	case isRoleName(targetRoleName, roleCashier):
-		switch action {
-		case userActionCreate:
-			return "can_create_cashier_users", "You do not have permission to create Cashiers", true
-		case userActionEdit:
-			return "can_edit_cashier_users", "You do not have permission to edit details of Cashiers", true
-		case userActionDelete:
-			return "can_delete_cashier_users", "You do not have permission to archive/delete Cashiers", true
-		}
-	}
-
-	return "", "", false
+	_ = c
+	_ = targetRoleName
+	_ = action
+	return true
 }
 
 func (h *UserHandler) enforceTargetUserAction(c *fiber.Ctx, targetRoleName string, action userAction) bool {

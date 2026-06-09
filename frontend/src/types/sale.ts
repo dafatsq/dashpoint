@@ -73,6 +73,12 @@ export interface CreateSaleRequest {
   discount_value?: string;
   discount_reason?: string;
   notes?: string;
+  shift_id?: string;
+}
+
+export interface ValidateSaleCartRequest {
+  items: CreateSaleItem[];
+  shift_id?: string;
 }
 
 export interface CartItem {

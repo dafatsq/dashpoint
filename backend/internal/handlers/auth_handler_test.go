@@ -16,12 +16,13 @@ import (
 )
 
 type fakeAuthUserRepo struct {
-	userByEmail              *models.User
-	userByID                 *models.User
-	getByEmailErr            error
-	getByIDErr               error
-	updateLastLoginErr       error
-	updateLastLoginCalls     int
+	userByEmail          *models.User
+	userByID             *models.User
+	permissions          []string
+	getByEmailErr        error
+	getByIDErr           error
+	updateLastLoginErr   error
+	updateLastLoginCalls int
 }
 
 func (f *fakeAuthUserRepo) GetByID(context.Context, uuid.UUID) (*models.User, error) {
@@ -30,6 +31,13 @@ func (f *fakeAuthUserRepo) GetByID(context.Context, uuid.UUID) (*models.User, er
 
 func (f *fakeAuthUserRepo) GetByEmail(context.Context, string) (*models.User, error) {
 	return f.userByEmail, f.getByEmailErr
+}
+
+func (f *fakeAuthUserRepo) GetUserPermissions(context.Context, uuid.UUID) ([]string, error) {
+	if f.permissions != nil {
+		return f.permissions, nil
+	}
+	return []string{"access_pos_page"}, nil
 }
 
 func (f *fakeAuthUserRepo) UpdateLastLogin(context.Context, uuid.UUID) error {

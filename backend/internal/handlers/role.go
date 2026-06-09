@@ -23,3 +23,8 @@ type RoleDetailResponse struct {
 	Description *string  `json:"description,omitempty"`
 	Permissions []string `json:"permissions"`
 }
+
+type UpdateRolePermissionsRequest struct {
+	Permissions         []string `json:"permissions"`
+	ExpectedPermissions []string `json:"expected_permissions"`
+}
