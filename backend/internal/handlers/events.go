@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -14,7 +15,12 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"dashpoint/backend/internal/middleware"
+	"dashpoint/backend/internal/models"
 )
+
+type eventUserReader interface {
+	GetByID(context.Context, uuid.UUID) (*models.User, error)
+}
 
 // UserEventType represents different types of user management events
 type UserEventType string
@@ -51,14 +57,16 @@ type EventsHandler struct {
 	clients    map[string]*Client
 	clientsMux sync.RWMutex
 	jwtManager authTokenManager
+	userRepo   eventUserReader
 	origins    []string
 }
 
 // NewEventsHandler creates a new events handler
-func NewEventsHandler(jwtManager authTokenManager, origins []string) *EventsHandler {
+func NewEventsHandler(jwtManager authTokenManager, userRepo eventUserReader, origins []string) *EventsHandler {
 	return &EventsHandler{
 		clients:    make(map[string]*Client),
 		jwtManager: jwtManager,
+		userRepo:   userRepo,
 		origins:    origins,
 	}
 }
@@ -75,6 +83,15 @@ func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
 	claims, err := h.jwtManager.ValidateAccessToken(token)
 	if err != nil {
 		return middleware.JSONError(c, fiber.StatusUnauthorized, "INVALID_TOKEN", "Invalid or expired access token")
+	}
+
+	user, err := h.userRepo.GetByID(c.Context(), claims.UserID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify SSE user status")
+		return middleware.JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to verify authentication")
+	}
+	if user == nil || !user.IsActive {
+		return middleware.JSONError(c, fiber.StatusUnauthorized, "ACCOUNT_INACTIVE", "Your account has been deactivated")
 	}
 
 	// Create a unique client ID
@@ -176,14 +193,12 @@ func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
 
 func eventStreamToken(c *fiber.Ctx) string {
 	authHeader := c.Get("Authorization")
-	if authHeader != "" {
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-			return strings.TrimSpace(parts[1])
-		}
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return strings.TrimSpace(parts[1])
 	}
 
-	return c.Query("token")
+	return ""
 }
 
 // sendEvent sends an SSE event to the writer

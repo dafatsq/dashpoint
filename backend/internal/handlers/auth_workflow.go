@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,6 +11,7 @@ import (
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/auth"
 	"dashpoint/backend/internal/models"
+	"dashpoint/backend/internal/repository"
 )
 
 type authWorkflow struct {
@@ -83,6 +85,9 @@ func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user
 	}
 
 	if err := w.tokenStore.Rotate(c.Context(), currentHash, "token_refresh", refreshTokenRecord); err != nil {
+		if errors.Is(err, repository.ErrRefreshTokenNotActive) {
+			return authUnauthorized(c, "INVALID_TOKEN", "Refresh token has been revoked or expired")
+		}
 		log.Error().Err(err).Msg("Failed to rotate refresh token")
 		return authInternalError(c, "An error occurred during token refresh")
 	}
@@ -109,11 +114,12 @@ func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, token
 		return authInternalError(c, "Failed to retrieve user permissions")
 	}
 
+	setRefreshTokenCookie(c, tokenPair.RefreshToken, tokenPair.RefreshTokenExpiresAt)
+
 	return c.JSON(AuthResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
-		ExpiresAt:    tokenPair.AccessTokenExpiresAt,
-		User:         authUserResponse(user, permissions, false),
+		AccessToken: tokenPair.AccessToken,
+		ExpiresAt:   tokenPair.AccessTokenExpiresAt,
+		User:        authUserResponse(user, permissions, false),
 	})
 }
 

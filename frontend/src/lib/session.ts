@@ -62,7 +62,7 @@ export const migrateSession = (toLocalStorage: boolean): void => {
 
     const source = toLocalStorage ? window.sessionStorage : window.localStorage;
     const target = toLocalStorage ? window.localStorage : window.sessionStorage;
-    const keys = ['access_token', 'refresh_token', 'user'];
+    const keys = ['access_token', 'user'];
 
     for (const key of keys) {
         const value = source.getItem(key);

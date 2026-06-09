@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,17 +16,26 @@ import (
 )
 
 type fakeRefreshTx struct {
-	execCalls   int
-	commitCalls int
-	execErrAt   int
-	execErr     error
-	commitErr   error
+	execCalls          int
+	commitCalls        int
+	execErrAt          int
+	execErr            error
+	commitErr          error
+	updateRowsAffected int64
+	forceZeroRows      bool
 }
 
 func (f *fakeRefreshTx) Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error) {
 	f.execCalls++
 	if f.execErrAt == f.execCalls {
 		return pgconn.CommandTag{}, f.execErr
+	}
+	if f.execCalls == 1 {
+		rowsAffected := f.updateRowsAffected
+		if rowsAffected == 0 && !f.forceZeroRows {
+			rowsAffected = 1
+		}
+		return pgconn.NewCommandTag("UPDATE " + strconv.FormatInt(rowsAffected, 10)), nil
 	}
 	return pgconn.CommandTag{}, nil
 }
@@ -129,6 +139,26 @@ func TestRotateRefreshTokenTxReturnsStepSpecificError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to store rotated refresh token") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRotateRefreshTokenTxRejectsInactiveOldToken(t *testing.T) {
+	tx := &fakeRefreshTx{forceZeroRows: true}
+	replacement := &models.RefreshToken{
+		UserID:    uuid.New(),
+		TokenHash: "new-token-hash",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+
+	err := rotateRefreshTokenTx(context.Background(), tx, "old-token-hash", "token_refresh", replacement)
+	if !errors.Is(err, ErrRefreshTokenNotActive) {
+		t.Fatalf("expected ErrRefreshTokenNotActive, got %v", err)
+	}
+	if tx.execCalls != 1 {
+		t.Fatalf("expected insert to be skipped, got %d Exec calls", tx.execCalls)
+	}
+	if tx.commitCalls != 0 {
+		t.Fatalf("expected commit to be skipped, got %d", tx.commitCalls)
 	}
 }
 

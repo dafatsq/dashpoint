@@ -17,7 +17,6 @@ describe("persistAuthPayload", () => {
     persistAuthPayload(
       {
         access_token: "access",
-        refresh_token: "refresh",
         user: {
           id: "user-1",
           email: "cashier@example.com",
@@ -39,7 +38,6 @@ describe("persistAuthPayload", () => {
     persistAuthPayload(
       {
         access_token: "access",
-        refresh_token: "refresh",
         user: {
           id: "user-2",
           email: "manager@example.com",
@@ -69,7 +67,6 @@ describe("persistAuthPayload", () => {
         new Response(
           JSON.stringify({
             access_token: "next-access",
-            refresh_token: "next-refresh",
             user: {
               id: "user-3",
               email: "owner@example.com",
@@ -89,7 +86,6 @@ describe("persistAuthPayload", () => {
     persistAuthPayload(
       {
         access_token: "access",
-        refresh_token: "refresh",
         user: {
           id: "user-3",
           email: "owner@example.com",
@@ -105,7 +101,34 @@ describe("persistAuthPayload", () => {
     saveAccountSpy.mockClear();
 
     await expect(refreshSessionTokens()).resolves.toBe(true);
-    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/refresh"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+      }),
+    );
     expect(saveAccountSpy).not.toHaveBeenCalled();
+  });
+
+  test("does not store refresh tokens in browser storage", () => {
+    window.localStorage.setItem("refresh_token", "legacy-refresh");
+    window.sessionStorage.setItem("refresh_token", "legacy-refresh");
+
+    persistAuthPayload({
+      access_token: "access",
+      user: {
+        id: "user-4",
+        email: "cashier@example.com",
+        name: "Cashier",
+        role_name: "cashier",
+        is_active: true,
+        has_pin: false,
+      },
+    });
+
+    expect(window.localStorage.getItem("access_token")).toBe("access");
+    expect(window.localStorage.getItem("refresh_token")).toBeNull();
+    expect(window.sessionStorage.getItem("refresh_token")).toBeNull();
   });
 });

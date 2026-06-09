@@ -1,7 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"strings"
 	"time"
 
@@ -33,6 +37,14 @@ type authTokenManager interface {
 	ValidateRefreshToken(string) (*auth.Claims, error)
 }
 
+const (
+	authMaxJSONBodyBytes = 4096
+	refreshTokenCookie   = "refresh_token"
+	refreshTokenPath     = "/api/v1/auth"
+)
+
+var errEmptyAuthBody = errors.New("empty auth request body")
+
 // LoginRequest represents the login request body.
 type LoginRequest struct {
 	Email    string `json:"email"`
@@ -45,17 +57,11 @@ type PINLoginRequest struct {
 	PIN    string `json:"pin"`
 }
 
-// RefreshRequest represents the refresh token request body.
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
-}
-
 // AuthResponse represents the authentication response.
 type AuthResponse struct {
-	AccessToken  string       `json:"access_token"`
-	RefreshToken string       `json:"refresh_token"`
-	ExpiresAt    time.Time    `json:"expires_at"`
-	User         UserResponse `json:"user"`
+	AccessToken string       `json:"access_token"`
+	ExpiresAt   time.Time    `json:"expires_at"`
+	User        UserResponse `json:"user"`
 }
 
 // UserResponse represents the user in auth responses.
@@ -95,6 +101,62 @@ func authUnauthorized(c *fiber.Ctx, code, message string) error {
 
 func authInternalError(c *fiber.Ctx, message string) error {
 	return middleware.JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", message)
+}
+
+func parseStrictAuthJSON(c *fiber.Ctx, dest interface{}, allowEmpty bool) error {
+	body := bytes.TrimSpace(c.Body())
+	if len(body) == 0 {
+		if allowEmpty {
+			return nil
+		}
+		return errEmptyAuthBody
+	}
+	if len(body) > authMaxJSONBodyBytes {
+		return errors.New("auth request body is too large")
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dest); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return errors.New("auth request body must contain a single JSON object")
+	}
+	return nil
+}
+
+func refreshTokenFromCookie(c *fiber.Ctx) string {
+	return strings.TrimSpace(c.Cookies(refreshTokenCookie))
+}
+
+func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time) {
+	c.Cookie(&fiber.Cookie{
+		Name:     refreshTokenCookie,
+		Value:    token,
+		Path:     refreshTokenPath,
+		Expires:  expiresAt,
+		HTTPOnly: true,
+		Secure:   isSecureRequest(c),
+		SameSite: fiber.CookieSameSiteStrictMode,
+	})
+}
+
+func clearRefreshTokenCookie(c *fiber.Ctx) {
+	c.Cookie(&fiber.Cookie{
+		Name:     refreshTokenCookie,
+		Value:    "",
+		Path:     refreshTokenPath,
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HTTPOnly: true,
+		Secure:   isSecureRequest(c),
+		SameSite: fiber.CookieSameSiteStrictMode,
+	})
+}
+
+func isSecureRequest(c *fiber.Ctx) bool {
+	return c.Protocol() == "https" || strings.EqualFold(c.Get("X-Forwarded-Proto"), "https")
 }
 
 func normalizeLoginEmail(email string) string {

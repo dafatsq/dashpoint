@@ -48,6 +48,9 @@ func TestCORSAllowsConfiguredOrigin(t *testing.T) {
 	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "http://localhost:3000" {
 		t.Fatalf("expected allow origin header to echo configured origin, got %q", got)
 	}
+	if got := resp.Header.Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("expected credentials header, got %q", got)
+	}
 }
 
 func TestCORSPreflightAllowsSSEHeaders(t *testing.T) {
@@ -119,6 +122,12 @@ func TestSecureHeadersSetsExpectedHeaders(t *testing.T) {
 	}
 	if got := resp.Header.Get("X-XSS-Protection"); got != "1; mode=block" {
 		t.Fatalf("expected XSS protection header, got %q", got)
+	}
+	if got := resp.Header.Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("expected no-referrer policy, got %q", got)
+	}
+	if got := resp.Header.Get("Permissions-Policy"); !strings.Contains(got, "geolocation=()") {
+		t.Fatalf("expected permissions policy, got %q", got)
 	}
 }
 

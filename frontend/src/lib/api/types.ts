@@ -36,6 +36,8 @@ export interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   headers?: Record<string, string>;
+  credentials?: RequestCredentials;
+  skipAuth?: boolean;
 }
 
 export interface ApiResponse<T> {

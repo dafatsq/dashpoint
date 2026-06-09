@@ -13,8 +13,8 @@ export class ApiTransport {
     return getAccessToken();
   }
 
-  setTokens(accessToken: string, refreshToken: string): void {
-    persistAuthPayload({ access_token: accessToken, refresh_token: refreshToken });
+  setTokens(accessToken: string): void {
+    persistAuthPayload({ access_token: accessToken });
   }
 
   clearTokens(): void {
@@ -29,14 +29,20 @@ export class ApiTransport {
     endpoint: string,
     options: RequestOptions = {},
   ): Promise<ApiResponse<T>> {
-    const { method = "GET", body, headers = {} } = options;
+    const {
+      method = "GET",
+      body,
+      headers = {},
+      credentials = "same-origin",
+      skipAuth = false,
+    } = options;
 
     const requestHeaders: Record<string, string> = {
       "Content-Type": "application/json",
       ...headers,
     };
 
-    const accessToken = getAccessToken();
+    const accessToken = skipAuth ? null : getAccessToken();
     if (accessToken) {
       requestHeaders.Authorization = `Bearer ${accessToken}`;
     }
@@ -47,21 +53,24 @@ export class ApiTransport {
         headers: requestHeaders,
         body: body ? JSON.stringify(body) : undefined,
         cache: "no-store",
+        credentials,
       });
 
       if (response.status === 401 && accessToken) {
         const refreshed = await this.refreshTokens();
         if (refreshed) {
           const nextToken = getAccessToken();
+          const retryHeaders = { ...requestHeaders };
           if (nextToken) {
-            requestHeaders.Authorization = `Bearer ${nextToken}`;
+            retryHeaders.Authorization = `Bearer ${nextToken}`;
           }
 
           response = await fetch(`${this.baseUrl}${endpoint}`, {
             method,
-            headers: requestHeaders,
+            headers: retryHeaders,
             body: body ? JSON.stringify(body) : undefined,
             cache: "no-store",
+            credentials,
           });
         } else {
           if (typeof window !== "undefined") {
@@ -98,13 +107,15 @@ export class ApiTransport {
           console.warn("API Client Error:", {
             status: response.status,
             message: errorMsg,
-            data,
+            code: data.code,
+            request_id: data.request_id,
           });
         } else {
           console.error("API Server Error:", {
             status: response.status,
             message: errorMsg,
-            data,
+            code: data.code,
+            request_id: data.request_id,
           });
         }
         return { error: errorMsg };

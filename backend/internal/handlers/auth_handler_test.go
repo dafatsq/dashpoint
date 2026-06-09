@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -52,6 +54,8 @@ type fakeRefreshTokenStore struct {
 	revokeErr       error
 	rotateErr       error
 	created         *models.RefreshToken
+	revokedHash     string
+	revokeReason    string
 	rotatedOldHash  string
 	rotatedReason   string
 	rotatedNewToken *models.RefreshToken
@@ -66,7 +70,9 @@ func (f *fakeRefreshTokenStore) GetByTokenHash(context.Context, string) (*models
 	return f.stored, f.getErr
 }
 
-func (f *fakeRefreshTokenStore) Revoke(context.Context, string, string) error {
+func (f *fakeRefreshTokenStore) Revoke(_ context.Context, tokenHash string, reason string) error {
+	f.revokedHash = tokenHash
+	f.revokeReason = reason
 	return f.revokeErr
 }
 
@@ -157,9 +163,14 @@ func TestAuthHandlerLoginSuccess(t *testing.T) {
 		t.Fatalf("expected refresh token to be stored")
 	}
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll returned error: %v", err)
+	}
+
 	var body AuthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("Decode returned error: %v", err)
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		t.Fatalf("Unmarshal returned error: %v", err)
 	}
 	if body.AccessToken != "access-token" {
 		t.Fatalf("expected access token in response")
@@ -169,6 +180,33 @@ func TestAuthHandlerLoginSuccess(t *testing.T) {
 	}
 	if len(body.User.Permissions) == 0 {
 		t.Fatalf("expected role-derived permissions in response")
+	}
+
+	var rawBody map[string]any
+	if err := json.Unmarshal(bodyBytes, &rawBody); err != nil {
+		t.Fatalf("Unmarshal raw body returned error: %v", err)
+	}
+	if _, exists := rawBody["refresh_token"]; exists {
+		t.Fatalf("did not expect refresh_token in auth response")
+	}
+	if cookie := findCookie(resp.Cookies(), refreshTokenCookie); cookie == nil || cookie.Value == "" || !cookie.HttpOnly {
+		t.Fatalf("expected HttpOnly refresh token cookie")
+	}
+}
+
+func TestAuthHandlerLoginRejectsUnknownFields(t *testing.T) {
+	handler := &AuthHandler{}
+	app := fiber.New()
+	app.Post("/login", handler.Login)
+
+	req := httptest.NewRequest("POST", "/login", bytes.NewBufferString(`{"email":"owner@example.com","password":"secret123","refresh_token":"bad"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
 	}
 }
 
@@ -233,8 +271,8 @@ func TestAuthHandlerRefreshRotatesToken(t *testing.T) {
 	app := fiber.New()
 	app.Post("/refresh", handler.Refresh)
 
-	req := httptest.NewRequest("POST", "/refresh", bytes.NewBufferString(`{"refresh_token":"refresh-token"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("POST", "/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookie, Value: currentToken})
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
@@ -247,6 +285,102 @@ func TestAuthHandlerRefreshRotatesToken(t *testing.T) {
 	}
 	if tokenStore.rotatedReason != "token_refresh" {
 		t.Fatalf("expected token_refresh reason, got %q", tokenStore.rotatedReason)
+	}
+	if cookie := findCookie(resp.Cookies(), refreshTokenCookie); cookie == nil || cookie.Value == "" || !cookie.HttpOnly {
+		t.Fatalf("expected rotated HttpOnly refresh token cookie")
+	}
+}
+
+func TestAuthHandlerRefreshRejectsTokenInBody(t *testing.T) {
+	handler := &AuthHandler{}
+	app := fiber.New()
+	app.Post("/refresh", handler.Refresh)
+
+	req := httptest.NewRequest("POST", "/refresh", bytes.NewBufferString(`{"refresh_token":"refresh-token"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookie, Value: "refresh-token"})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthHandlerRefreshRejectsInactiveStoredToken(t *testing.T) {
+	roleID := uuid.New()
+	userID := uuid.New()
+	email := "manager@example.com"
+	currentToken := "refresh-token"
+	currentHash := authpkg.HashToken(currentToken)
+	revokedAt := time.Now()
+
+	userRepo := &fakeAuthUserRepo{
+		userByID: &models.User{
+			ID:       userID,
+			Email:    &email,
+			Name:     "Manager",
+			RoleID:   roleID,
+			IsActive: true,
+			Role:     &models.Role{ID: roleID, Name: "manager"},
+		},
+	}
+	tokenStore := &fakeRefreshTokenStore{
+		stored: &models.RefreshToken{
+			UserID:    userID,
+			TokenHash: currentHash,
+			ExpiresAt: time.Now().Add(time.Hour),
+			RevokedAt: &revokedAt,
+		},
+	}
+	jwtManager := &fakeJWTManager{validateRefreshClaims: &authpkg.Claims{UserID: userID}}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+
+	app := fiber.New()
+	app.Post("/refresh", handler.Refresh)
+
+	req := httptest.NewRequest("POST", "/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookie, Value: currentToken})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthHandlerLogoutRevokesCookieTokenAndClearsCookie(t *testing.T) {
+	token := "refresh-token"
+	tokenStore := &fakeRefreshTokenStore{}
+	handler := &AuthHandler{refreshTokenRepo: tokenStore}
+
+	app := fiber.New()
+	app.Post("/logout", handler.Logout)
+
+	req := httptest.NewRequest("POST", "/logout", nil)
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookie, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if tokenStore.revokedHash != authpkg.HashToken(token) {
+		t.Fatalf("expected cookie token hash to be revoked")
+	}
+	if tokenStore.revokeReason != "user_logout" {
+		t.Fatalf("expected logout revoke reason, got %q", tokenStore.revokeReason)
+	}
+	if cookie := findCookie(resp.Cookies(), refreshTokenCookie); cookie == nil || cookie.Value != "" || cookie.Expires.After(time.Now()) {
+		t.Fatalf("expected refresh token cookie to be cleared")
 	}
 }
 
@@ -263,4 +397,13 @@ func TestAuthHandlerMeRequiresAuthentication(t *testing.T) {
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d", resp.StatusCode)
 	}
+}
+
+func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
+	for _, cookie := range cookies {
+		if cookie.Name == name {
+			return cookie
+		}
+	}
+	return nil
 }
