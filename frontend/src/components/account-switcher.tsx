@@ -132,15 +132,6 @@ export function AccountSwitcher({
   return (
     <>
       <div className="space-y-3">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold">Saved Accounts</h3>
-            <p className="text-sm text-muted-foreground">
-              Select an account and enter your PIN
-            </p>
-          </div>
-        </div>
-
         <div className="grid gap-3">
           {visibleAccounts.map((account) => (
             <Card
