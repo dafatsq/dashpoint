@@ -97,7 +97,7 @@ export function ChangesList({ entityType, dateRange, selectedUser }: ChangesList
 
   return (
     <div>
-      <div className="mb-4 flex flex-col items-center justify-between gap-4 md:flex-row">
+      <div className="mb-4 flex flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Show</span>
           <Select value={String(limit)} onValueChange={(value) => { setLimit(Number(value)); setPage(1); }}>
@@ -130,7 +130,7 @@ export function ChangesList({ entityType, dateRange, selectedUser }: ChangesList
                 </span>
                 <div className="flex items-center gap-1.5 text-sm font-medium">
                   <UserIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="max-w-[150px] truncate sm:max-w-[200px]">{log.user_name || "System"}</span>
+                  <span className="break-words">{log.user_name || "System"}</span>
                 </div>
               </div>
               <span className="whitespace-nowrap text-xs text-muted-foreground">{formatActivityDate(log.created_at)}</span>

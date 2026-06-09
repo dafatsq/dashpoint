@@ -62,11 +62,11 @@ export function SalesDetailDialog({ open, sale, paymentIcons, onOpenChange, onVo
                   <div key={item.id} className="flex items-center justify-between p-3">
                     <div>
                       <p className="font-medium">{item.product_name}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground font-mono">
                         {formatSalesCurrency(item.unit_price)} x {item.quantity}
                       </p>
                     </div>
-                    <p className="font-medium">{formatSalesCurrency(item.subtotal)}</p>
+                    <p className="font-medium font-mono">{formatSalesCurrency(item.subtotal)}</p>
                   </div>
                 ))}
               </div>
@@ -75,28 +75,28 @@ export function SalesDetailDialog({ open, sale, paymentIcons, onOpenChange, onVo
             <div className="rounded-lg bg-muted p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Subtotal</span>
-                <span>{formatSalesCurrency(sale.subtotal)}</span>
+                <span className="font-mono">{formatSalesCurrency(sale.subtotal)}</span>
               </div>
               {Number.parseFloat(sale.discount_amount) > 0 ? (
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Discount</span>
-                  <span>-{formatSalesCurrency(sale.discount_amount)}</span>
+                  <span className="font-mono">-{formatSalesCurrency(sale.discount_amount)}</span>
                 </div>
               ) : null}
               <div className="flex justify-between font-bold pt-2 border-t">
                 <span>Total</span>
-                <span>{formatSalesCurrency(sale.total_amount)}</span>
+                <span className="font-mono">{formatSalesCurrency(sale.total_amount)}</span>
               </div>
               {sale.payments && sale.payments.length > 0 ? (
                 <>
                   <div className="flex justify-between text-sm">
                     <span>Amount Paid</span>
-                    <span>{formatSalesCurrency(sale.amount_paid)}</span>
+                    <span className="font-mono">{formatSalesCurrency(sale.amount_paid)}</span>
                   </div>
                   {Number.parseFloat(sale.change_amount) > 0 ? (
                     <div className="flex justify-between text-sm">
                       <span>Change</span>
-                      <span>{formatSalesCurrency(sale.change_amount)}</span>
+                      <span className="font-mono">{formatSalesCurrency(sale.change_amount)}</span>
                     </div>
                   ) : null}
                 </>
@@ -113,15 +113,15 @@ export function SalesDetailDialog({ open, sale, paymentIcons, onOpenChange, onVo
         ) : null}
 
         <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
           {sale?.status === "completed" && hasPermission(PERMISSIONS.SALES_VOID) ? (
             <Button variant="destructive" onClick={onVoidRequest}>
               <XCircle className="h-4 w-4 mr-2" />
               Void Sale
             </Button>
           ) : null}
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

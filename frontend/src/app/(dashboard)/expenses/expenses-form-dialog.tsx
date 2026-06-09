@@ -1,7 +1,7 @@
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
@@ -30,6 +30,7 @@ interface ExpensesFormDialogProps {
   formData: CreateExpenseRequest;
   formErrors: { amount?: string; description?: string; general?: string };
   isSubmitting: boolean;
+  hasChanges: boolean;
   isInventoryPurchase: boolean;
   isManualAmount: boolean;
   isManualDescription: boolean;
@@ -50,6 +51,7 @@ export function ExpensesFormDialog({
   formData,
   formErrors,
   isSubmitting,
+  hasChanges,
   isInventoryPurchase,
   isManualAmount,
   isManualDescription,
@@ -70,7 +72,7 @@ export function ExpensesFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{editingExpense ? "Edit Expense" : "Add Expense"}</DialogTitle>
           <DialogDescription>
@@ -85,7 +87,7 @@ export function ExpensesFormDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
             <div className="grid gap-2">
               <Label htmlFor="category">Category</Label>
               <Select
@@ -117,11 +119,35 @@ export function ExpensesFormDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No Category</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
+                  {(() => {
+                    const displayCategories = [...categories];
+                    if (
+                      editingExpense?.category_id &&
+                      !categories.some((c) => c.id === editingExpense.category_id)
+                    ) {
+                      displayCategories.push({
+                        id: editingExpense.category_id,
+                        name: editingExpense.category_name || "Archived Category",
+                        is_active: false,
+                      } as ExpenseCategory);
+                    }
+                    return displayCategories.map((category) => {
+                      const isArchived = category.is_active === false || !categories.some((c) => c.id === category.id);
+                      const isCurrentlySelected = formData.category_id === category.id;
+                      const isDisabled = isArchived && !isCurrentlySelected;
+
+                      return (
+                        <SelectItem
+                          key={category.id}
+                          value={category.id}
+                          disabled={isDisabled}
+                          className={isArchived ? "opacity-50 text-muted-foreground" : ""}
+                        >
+                          {category.name} {isArchived ? " (Archived)" : ""}
+                        </SelectItem>
+                      );
+                    });
+                  })()}
                 </SelectContent>
               </Select>
             </div>
@@ -144,16 +170,19 @@ export function ExpensesFormDialog({
                     placeholder="Enter quantity"
                     disabled={!hasCategory}
                   />
-                  <div className="mt-2 flex items-center gap-2">
-                    <Checkbox
-                      id="applies_inventory"
-                      checked={!!formData.applies_inventory}
-                      onCheckedChange={(checked) => updateFormData({ applies_inventory: checked === true })}
-                      disabled={!canEditRemainingFields}
-                    />
-                    <Label htmlFor="applies_inventory" className={!canEditRemainingFields ? "opacity-50" : ""}>
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <Label
+                      htmlFor="applies_inventory"
+                      className={`text-sm ${!canEditRemainingFields ? "opacity-50" : ""}`}
+                    >
                       Add to product inventory
                     </Label>
+                    <Switch
+                      id="applies_inventory"
+                      checked={!!formData.applies_inventory}
+                      onCheckedChange={(checked) => updateFormData({ applies_inventory: checked })}
+                      disabled={!canEditRemainingFields}
+                    />
                   </div>
                 </>
               ) : (
@@ -171,7 +200,7 @@ export function ExpensesFormDialog({
                 </>
               )}
             </div>
-          </div>
+
 
           <div className="grid gap-2">
             {isInventoryPurchase ? (
@@ -222,7 +251,7 @@ export function ExpensesFormDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="amount" className={!hasCategory ? "opacity-50" : ""}>
@@ -271,7 +300,7 @@ export function ExpensesFormDialog({
                 disabled={!canEditRemainingFields}
               />
             </div>
-          </div>
+
 
           {isInventoryPurchase && (
             <>
@@ -357,7 +386,7 @@ export function ExpensesFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting}>
+          <Button onClick={onSubmit} disabled={isSubmitting || (!!editingExpense && !hasChanges)}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

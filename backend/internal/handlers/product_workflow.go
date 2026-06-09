@@ -32,6 +32,9 @@ func (h *ProductHandler) reactivateProduct(c *fiber.Ctx, existingProduct *models
 	if err != nil {
 		return nil, productJSONError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	}
+	if !h.validateActiveProductCategory(c, categoryID) {
+		return nil, nil
+	}
 	existingProduct.CategoryID = categoryID
 
 	if err := h.productRepo.Update(c.Context(), existingProduct); err != nil {

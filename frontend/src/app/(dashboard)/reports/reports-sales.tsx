@@ -29,7 +29,7 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold truncate" title={formatCurrency(salesRangeReport.summary.total_amount)}>
+            <div className="text-xl font-bold truncate font-mono" title={formatCurrency(salesRangeReport.summary.total_amount)}>
               {formatCurrency(salesRangeReport.summary.total_amount)}
             </div>
           </CardContent>
@@ -58,7 +58,7 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
           </CardHeader>
           <CardContent>
             <div
-              className="text-xl font-bold truncate"
+              className="text-xl font-bold truncate font-mono"
               title={formatCurrency(
                 (parseFloat(salesRangeReport.summary.total_amount) || 0) /
                   Math.max(salesRangeReport.daily_reports.length, 1),
@@ -76,7 +76,7 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
             <CardTitle className="text-sm font-medium">Tax</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold truncate" title={formatCurrency(salesRangeReport.summary.total_tax)}>
+            <div className="text-xl font-bold truncate font-mono" title={formatCurrency(salesRangeReport.summary.total_tax)}>
               {formatCurrency(salesRangeReport.summary.total_tax)}
             </div>
           </CardContent>
@@ -87,7 +87,7 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
           </CardHeader>
           <CardContent>
             <div
-              className="text-xl font-bold text-orange-600 truncate"
+              className="text-xl font-bold text-orange-600 truncate font-mono"
               title={formatCurrency(salesRangeReport.summary.total_discount)}
             >
               {formatCurrency(salesRangeReport.summary.total_discount)}
@@ -105,7 +105,7 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b text-left text-sm text-muted-foreground">
                   <th className="pb-3 font-medium">Date</th>
@@ -122,9 +122,9 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
                     <td className="py-3 font-medium">{day.date}</td>
                     <td className="py-3 text-right">{day.transaction_count}</td>
                     <td className="py-3 text-right">{day.item_count}</td>
-                    <td className="py-3 text-right font-bold">{formatCurrency(day.total_amount)}</td>
-                    <td className="py-3 text-right">{formatCurrency(day.total_tax)}</td>
-                    <td className="py-3 text-right text-orange-600">{formatCurrency(day.total_discount)}</td>
+                    <td className="py-3 text-right font-bold font-mono">{formatCurrency(day.total_amount)}</td>
+                    <td className="py-3 text-right font-mono">{formatCurrency(day.total_tax)}</td>
+                    <td className="py-3 text-right text-orange-600 font-mono">{formatCurrency(day.total_discount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -145,7 +145,7 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="flex flex-col">
                   <span className="text-muted-foreground text-xs">Revenue</span>
-                  <span className="font-bold">{formatCurrency(day.total_amount)}</span>
+                  <span className="font-bold font-mono">{formatCurrency(day.total_amount)}</span>
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="text-muted-foreground text-xs">Items</span>
@@ -153,11 +153,11 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
                 </div>
                 <div className="flex flex-col">
                   <span className="text-muted-foreground text-xs">Tax</span>
-                  <span>{formatCurrency(day.total_tax)}</span>
+                  <span className="font-mono">{formatCurrency(day.total_tax)}</span>
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="text-muted-foreground text-xs">Discounts</span>
-                  <span className="text-orange-600">{formatCurrency(day.total_discount)}</span>
+                  <span className="text-orange-600 font-mono">{formatCurrency(day.total_discount)}</span>
                 </div>
               </div>
             </CardContent>

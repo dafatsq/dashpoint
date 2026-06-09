@@ -162,6 +162,13 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	if existing == nil {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense not found")
 	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, existing.UpdatedAt)
+	if staleErr != nil {
+		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
+	}
 
 	oldValues := expenseAuditValues(existing)
 
@@ -192,7 +199,8 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 		}
 	}
 
-	finalIsInventoryPurchase, err := h.isInventoryPurchaseCategory(c.Context(), finalCategoryID)
+	categoryUnchanged := sameUUIDPointer(existing.CategoryID, finalCategoryID)
+	finalIsInventoryPurchase, err := h.isInventoryPurchaseCategoryWithArchived(c.Context(), finalCategoryID, categoryUnchanged)
 	if err != nil {
 		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
 	}
@@ -287,8 +295,18 @@ func (h *ExpenseHandler) Delete(c *fiber.Ctx) error {
 	if expense == nil {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense not found")
 	}
+	stale, staleErr := isStaleSubmit(expectedUpdatedAtFromQuery(c), expense.UpdatedAt)
+	if staleErr != nil {
+		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
+	}
 
 	if expense.AppliesInventory && expense.ProductID != nil && expense.Quantity != nil {
+		if err := h.ensureExpenseInventoryProductActive(c.Context(), expense.ProductID); err != nil {
+			return expenseMessage(c, fiber.StatusConflict, err.Error())
+		}
 		if _, err := h.inventoryRepo.AdjustStockWithTx(
 			c.Context(),
 			tx,

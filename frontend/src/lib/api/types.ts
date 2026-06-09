@@ -29,6 +29,7 @@ import type {
   UpdateProductRequest,
   UpdateUserRequest,
   User,
+  Role,
 } from "@/types";
 
 export interface RequestOptions {
@@ -83,6 +84,7 @@ export interface LowStockResponse {
 
 export interface UpdateInventoryThresholdRequest {
   low_stock_threshold: string;
+  expected_updated_at?: string;
 }
 
 export interface UsersResponse {
@@ -150,11 +152,14 @@ export interface UserApi {
   getUser(id: string): Promise<ApiResponse<User>>;
   createUser(user: CreateUserRequest): Promise<ApiResponse<User>>;
   updateUser(id: string, user: UpdateUserRequest): Promise<ApiResponse<User>>;
-  deleteUser(id: string): Promise<ApiResponse<unknown>>;
-  permanentDeleteUser(id: string): Promise<ApiResponse<unknown>>;
-  getRoles(): Promise<
-    ApiResponse<{ id: string; name: string; description: string }[]>
-  >;
+  deleteUser(id: string, expectedUpdatedAt?: string): Promise<ApiResponse<unknown>>;
+  permanentDeleteUser(id: string, expectedUpdatedAt?: string): Promise<ApiResponse<unknown>>;
+  getRoles(): Promise<ApiResponse<Role[]>>;
+  updateRolePermissions(
+    id: string,
+    permissions: string[],
+    expectedPermissions?: string[],
+  ): Promise<ApiResponse<Role>>;
 }
 
 export interface CatalogApi {
@@ -173,7 +178,14 @@ export interface CatalogApi {
   getProduct(id: string): Promise<ApiResponse<Product>>;
   getProductInventory(
     id: string,
-    params?: { limit?: number; offset?: number; adjustment_type?: AdjustmentType },
+    params?: {
+      limit?: number;
+      offset?: number;
+      adjustment_type?: AdjustmentType;
+      user_id?: string;
+      from?: string;
+      to?: string;
+    },
   ): Promise<ApiResponse<ProductInventoryDetails>>;
   updateProductInventoryThreshold(
     id: string,
@@ -185,8 +197,11 @@ export interface CatalogApi {
     id: string,
     product: UpdateProductRequest,
   ): Promise<ApiResponse<Product>>;
-  deleteProduct(id: string): Promise<ApiResponse<unknown>>;
-  permanentDeleteProduct(id: string): Promise<ApiResponse<unknown>>;
+  deleteProduct(id: string, expectedUpdatedAt?: string): Promise<ApiResponse<unknown>>;
+  permanentDeleteProduct(
+    id: string,
+    expectedUpdatedAt?: string,
+  ): Promise<ApiResponse<unknown>>;
   getCategories(status?: string): Promise<ApiResponse<Category[]>>;
   createCategory(category: {
     name: string;
@@ -194,10 +209,18 @@ export interface CatalogApi {
   }): Promise<ApiResponse<Category>>;
   updateCategory(
     id: string,
-    category: { name?: string; description?: string; is_active?: boolean },
+    category: {
+      name?: string;
+      description?: string;
+      is_active?: boolean;
+      expected_updated_at?: string;
+    },
   ): Promise<ApiResponse<Category>>;
-  deleteCategory(id: string): Promise<ApiResponse<unknown>>;
-  permanentDeleteCategory(id: string): Promise<ApiResponse<unknown>>;
+  deleteCategory(id: string, expectedUpdatedAt?: string): Promise<ApiResponse<unknown>>;
+  permanentDeleteCategory(
+    id: string,
+    expectedUpdatedAt?: string,
+  ): Promise<ApiResponse<unknown>>;
   getLowStock(threshold?: number): Promise<ApiResponse<LowStockItem[]>>;
   adjustInventory(
     adjustment: InventoryAdjustment,
@@ -210,6 +233,7 @@ export interface OperationsApi {
   closeShift(
     closingCash: number | string,
     notes?: string,
+    shiftId?: string,
   ): Promise<ApiResponse<Shift>>;
   getShifts(
     params?: UserScopedFilterParams &
@@ -219,15 +243,20 @@ export interface OperationsApi {
   payIn(
     amount: string,
     reason: string,
+    shiftId?: string,
   ): Promise<ApiResponse<CashDrawerOperation>>;
   payOut(
     amount: string,
     reason: string,
+    shiftId?: string,
   ): Promise<ApiResponse<CashDrawerOperation>>;
   getShiftOperations(
     shiftId: string,
   ): Promise<ApiResponse<CashDrawerOperationsResponse>>;
   createSale(sale: CreateSaleRequest): Promise<ApiResponse<Sale>>;
+  validateSaleCart(
+    cart: import("@/types").ValidateSaleCartRequest,
+  ): Promise<ApiResponse<unknown>>;
   getSalesPage(
     params?: DateRangeFilterParams &
       UserScopedFilterParams &
@@ -243,7 +272,11 @@ export interface OperationsApi {
       },
   ): Promise<ApiResponse<Sale[]>>;
   getSale(id: string): Promise<ApiResponse<Sale>>;
-  voidSale(id: string, reason: string): Promise<ApiResponse<unknown>>;
+  voidSale(
+    id: string,
+    reason: string,
+    expectedUpdatedAt?: string,
+  ): Promise<ApiResponse<unknown>>;
   getDailySummary(date?: string): Promise<ApiResponse<DailySummary>>;
 }
 
@@ -318,10 +351,21 @@ export interface ExpensesApi {
   ): Promise<ApiResponse<ExpenseCategory>>;
   updateExpenseCategory(
     id: string,
-    category: { name?: string; description?: string; is_active?: boolean },
+    category: {
+      name?: string;
+      description?: string;
+      is_active?: boolean;
+      expected_updated_at?: string;
+    },
   ): Promise<ApiResponse<ExpenseCategory>>;
-  deleteExpenseCategory(id: string): Promise<ApiResponse<void>>;
-  permanentDeleteExpenseCategory(id: string): Promise<ApiResponse<void>>;
+  deleteExpenseCategory(
+    id: string,
+    expectedUpdatedAt?: string,
+  ): Promise<ApiResponse<void>>;
+  permanentDeleteExpenseCategory(
+    id: string,
+    expectedUpdatedAt?: string,
+  ): Promise<ApiResponse<void>>;
   getExpenses(
     params?: OffsetPaginationParams & {
       category_id?: string;
@@ -335,7 +379,7 @@ export interface ExpensesApi {
     id: string,
     expense: UpdateExpenseRequest,
   ): Promise<ApiResponse<Expense>>;
-  deleteExpense(id: string): Promise<ApiResponse<void>>;
+  deleteExpense(id: string, expectedUpdatedAt?: string): Promise<ApiResponse<void>>;
   getExpenseSummary(params?: {
     start_date?: string;
     end_date?: string;

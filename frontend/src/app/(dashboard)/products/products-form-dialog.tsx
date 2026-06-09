@@ -30,6 +30,7 @@ interface ProductsFormDialogProps {
   formData: ProductFormData;
   formErrors: { name?: string; price?: string; sku?: string; barcode?: string; general?: string };
   isSubmitting: boolean;
+  hasChanges: boolean;
   onOpenChange: (open: boolean) => void;
   onFormDataChange: (value: ProductFormData) => void;
   onFormErrorsChange: (
@@ -45,6 +46,7 @@ export function ProductsFormDialog({
   formData,
   formErrors,
   isSubmitting,
+  hasChanges,
   onOpenChange,
   onFormDataChange,
   onFormErrorsChange,
@@ -96,7 +98,7 @@ export function ProductsFormDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+
             <div className="grid gap-2">
               <Label htmlFor="sku">SKU</Label>
               <Input
@@ -125,9 +127,9 @@ export function ProductsFormDialog({
                 placeholder="8901234567890"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
+
+
             <div className="grid gap-2">
               <Label htmlFor="price">Price (IDR) *</Label>
               <Input
@@ -164,10 +166,10 @@ export function ProductsFormDialog({
                 placeholder="11"
               />
             </div>
-          </div>
+
 
           {!editingProduct && (
-            <div className="grid grid-cols-2 gap-4">
+            <>
               <div className="grid gap-2">
                 <Label htmlFor="initial_quantity">Initial Stock</Label>
                 <Input
@@ -188,7 +190,7 @@ export function ProductsFormDialog({
                   placeholder="5"
                 />
               </div>
-            </div>
+            </>
           )}
 
           <div className="grid gap-2">
@@ -202,11 +204,35 @@ export function ProductsFormDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No Category</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
+                {(() => {
+                  const displayCategories = [...categories];
+                  if (
+                    editingProduct?.category_id &&
+                    !categories.some((c) => c.id === editingProduct.category_id)
+                  ) {
+                    displayCategories.push({
+                      id: editingProduct.category_id,
+                      name: editingProduct.category_name || "Archived Category",
+                      is_active: false,
+                    } as Category);
+                  }
+                  return displayCategories.map((category) => {
+                    const isArchived = category.is_active === false || !categories.some((c) => c.id === category.id);
+                    const isCurrentlySelected = formData.category_id === category.id;
+                    const isDisabled = isArchived && !isCurrentlySelected;
+
+                    return (
+                      <SelectItem
+                        key={category.id}
+                        value={category.id}
+                        disabled={isDisabled}
+                        className={isArchived ? "opacity-50 text-muted-foreground" : ""}
+                      >
+                        {category.name} {isArchived ? " (Archived)" : ""}
+                      </SelectItem>
+                    );
+                  });
+                })()}
               </SelectContent>
             </Select>
           </div>
@@ -221,7 +247,7 @@ export function ProductsFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting}>
+          <Button onClick={onSubmit} disabled={isSubmitting || (!!editingProduct && !hasChanges)}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

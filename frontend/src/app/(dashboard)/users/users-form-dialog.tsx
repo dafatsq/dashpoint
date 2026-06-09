@@ -32,6 +32,7 @@ interface UsersFormDialogProps {
   setFormData: React.Dispatch<React.SetStateAction<CreateUserRequest>>;
   formErrors: { general?: string };
   isSubmitting: boolean;
+  hasChanges: boolean;
   onSubmit: () => void;
 }
 
@@ -45,6 +46,7 @@ export function UsersFormDialog({
   setFormData,
   formErrors,
   isSubmitting,
+  hasChanges,
   onSubmit,
 }: UsersFormDialogProps) {
   return (
@@ -185,7 +187,7 @@ export function UsersFormDialog({
           </Button>
           <Button
             onClick={onSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || (!!editingUser && !hasChanges)}
           >
             {isSubmitting ? (
               <>

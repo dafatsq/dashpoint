@@ -17,10 +17,10 @@ func TestPermissionsForRoleReturnsCopy(t *testing.T) {
 }
 
 func TestHasPermission(t *testing.T) {
-	if !HasPermission("manager", "can_view_users") {
-		t.Fatal("expected manager to have can_view_users")
+	if !HasPermission("manager", "access_users_page") {
+		t.Fatal("expected manager to have access_users_page")
 	}
-	if HasPermission("cashier", "can_view_reports") {
-		t.Fatal("did not expect cashier to have can_view_reports")
+	if HasPermission("cashier", "access_reports_page") {
+		t.Fatal("did not expect cashier to have access_reports_page")
 	}
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"dashpoint/backend/internal/models"
 )
@@ -14,7 +15,7 @@ const saleSummarySelectColumns = `
 		SELECT
 			s.id, s.invoice_no, s.subtotal, s.tax_amount, s.discount_amount, s.total_amount,
 			s.item_count, s.payment_status, s.amount_paid, s.change_amount, s.discount_type,
-			s.discount_value, s.discount_reason, s.employee_id, s.shift_id,
+			s.discount_value::text as discount_value, s.discount_reason, s.employee_id, s.shift_id,
 			s.status, s.voided_at, s.voided_by, s.void_reason, s.notes,
 			s.created_at, s.updated_at, u.name as employee_name
 `
@@ -40,10 +41,11 @@ type saleRows interface {
 
 func scanSaleSummary(scanner saleScanner) (*models.Sale, error) {
 	sale := &models.Sale{}
+	var discountValue *string
 	if err := scanner.Scan(
 		&sale.ID, &sale.InvoiceNo, &sale.Subtotal, &sale.TaxAmount, &sale.DiscountAmount,
 		&sale.TotalAmount, &sale.ItemCount, &sale.PaymentStatus, &sale.AmountPaid, &sale.ChangeAmount,
-		&sale.DiscountType, &sale.DiscountValue, &sale.DiscountReason, &sale.EmployeeID, &sale.ShiftID,
+		&sale.DiscountType, &discountValue, &sale.DiscountReason, &sale.EmployeeID, &sale.ShiftID,
 		&sale.Status, &sale.VoidedAt, &sale.VoidedBy,
 		&sale.VoidReason, &sale.Notes, &sale.CreatedAt, &sale.UpdatedAt, &sale.EmployeeName,
 	); err != nil {
@@ -52,7 +54,23 @@ func scanSaleSummary(scanner saleScanner) (*models.Sale, error) {
 		}
 		return nil, err
 	}
+	parsedDiscountValue, err := parseNullableDecimal(discountValue)
+	if err != nil {
+		return nil, err
+	}
+	sale.DiscountValue = parsedDiscountValue
 	return sale, nil
+}
+
+func parseNullableDecimal(raw *string) (*decimal.Decimal, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	value, err := decimal.NewFromString(*raw)
+	if err != nil {
+		return nil, err
+	}
+	return &value, nil
 }
 
 func scanSaleListRow(scanner saleScanner) (*models.Sale, error) {
@@ -204,7 +222,7 @@ func loadSaleItems(ctx context.Context, db interface {
 	rows, err := db.Query(ctx, `
 		SELECT
 			id, sale_id, product_id, product_name, product_sku, product_barcode,
-			quantity, unit_price, cost_price, discount_type, discount_value, discount_amount,
+			quantity, unit_price, cost_price, discount_type, COALESCE(discount_value, 0), discount_amount,
 			tax_rate, tax_amount, subtotal, total, created_at
 		FROM sale_items
 		WHERE sale_id = $1
@@ -236,7 +254,7 @@ func loadSalePayments(ctx context.Context, db interface {
 }, saleID uuid.UUID) ([]models.Payment, error) {
 	rows, err := db.Query(ctx, `
 		SELECT
-			id, sale_id, payment_method, amount, amount_tendered, change_given,
+			id, sale_id, payment_method, amount, amount_tendered::text, change_given::text,
 			reference_no, status, created_at
 		FROM payments
 		WHERE sale_id = $1
@@ -250,13 +268,24 @@ func loadSalePayments(ctx context.Context, db interface {
 	var payments []models.Payment
 	for rows.Next() {
 		var payment models.Payment
+		var amountTendered, changeGiven *string
 		if err := rows.Scan(
 			&payment.ID, &payment.SaleID, &payment.PaymentMethod, &payment.Amount,
-			&payment.AmountTendered, &payment.ChangeGiven, &payment.ReferenceNo,
+			&amountTendered, &changeGiven, &payment.ReferenceNo,
 			&payment.Status, &payment.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
+		parsedAmountTendered, err := parseNullableDecimal(amountTendered)
+		if err != nil {
+			return nil, err
+		}
+		parsedChangeGiven, err := parseNullableDecimal(changeGiven)
+		if err != nil {
+			return nil, err
+		}
+		payment.AmountTendered = parsedAmountTendered
+		payment.ChangeGiven = parsedChangeGiven
 		payments = append(payments, payment)
 	}
 	return payments, nil

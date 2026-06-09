@@ -56,7 +56,7 @@ export function ReportsOverview({
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(metrics.netRevenue)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(metrics.netRevenue)}</div>
             <p className="text-xs text-muted-foreground mt-1">Sales after discount</p>
           </CardContent>
         </Card>
@@ -67,7 +67,7 @@ export function ReportsOverview({
             <TrendingDown className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(metrics.totalExpenses)}</div>
+            <div className="text-2xl font-bold text-red-600 font-mono">{formatCurrency(metrics.totalExpenses)}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {expenseSummary ? expenseSummary.expense_count : 0} records
             </p>
@@ -84,7 +84,7 @@ export function ReportsOverview({
             )}
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${metrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`text-2xl font-bold font-mono ${metrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(metrics.netProfit)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Revenue - Expenses</p>
@@ -97,7 +97,7 @@ export function ReportsOverview({
             <Banknote className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(metrics.totalTax)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(metrics.totalTax)}</div>
             <p className="text-xs text-muted-foreground mt-1">Not included in net revenue</p>
           </CardContent>
         </Card>
@@ -164,7 +164,7 @@ export function ReportsOverview({
                       <p className="text-xs text-muted-foreground">{formatNumber(item.quantity_sold)} sold</p>
                     </div>
                   </div>
-                  <span className="font-bold text-sm">{formatCurrency(item.total_revenue)}</span>
+                  <span className="font-bold text-sm font-mono">{formatCurrency(item.total_revenue)}</span>
                 </div>
               ))}
             </div>

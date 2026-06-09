@@ -27,6 +27,7 @@ export interface InventoryAdjustment {
   adjustment_type: AdjustmentType;
   quantity: string;
   reason?: string;
+  expected_updated_at?: string;
 }
 
 export interface InventoryAdjustmentRecord {

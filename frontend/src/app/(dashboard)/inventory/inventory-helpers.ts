@@ -144,6 +144,7 @@ export function buildInventoryAdjustmentRequest(input: {
   quantity: string;
   currentStock: number;
   notes?: string;
+  expectedUpdatedAt?: string;
 }): InventoryAdjustment {
   const inputQuantity = Number.parseInt(input.quantity, 10) || 0;
   let finalQuantity = inputQuantity;
@@ -154,12 +155,16 @@ export function buildInventoryAdjustmentRequest(input: {
     finalQuantity = input.action === "remove" ? -inputQuantity : inputQuantity;
   }
 
-  return {
+  const request: InventoryAdjustment = {
     product_id: input.productId,
     adjustment_type: input.adjustmentType,
     quantity: String(finalQuantity),
     reason: input.notes || undefined,
   };
+  if (input.expectedUpdatedAt) {
+    request.expected_updated_at = input.expectedUpdatedAt;
+  }
+  return request;
 }
 
 export function getInventoryProductImageUrl(
@@ -212,13 +217,7 @@ export function requiresInventoryAdjustmentReason(
   adjustmentType: AdjustmentType,
   action: InventoryAction,
 ): boolean {
-  if (adjustmentType === "damage" || adjustmentType === "loss") {
-    return true;
-  }
-
-  if (adjustmentType === "adjustment" && action === "remove") {
-    return true;
-  }
-
+  void adjustmentType;
+  void action;
   return false;
 }

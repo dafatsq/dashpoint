@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -66,13 +68,26 @@ func (r *InventoryRepository) GetLowStockProducts(ctx context.Context) ([]*model
 }
 
 // GetAdjustmentHistory retrieves stock adjustment history for a product
-func (r *InventoryRepository) GetAdjustmentHistory(ctx context.Context, productID uuid.UUID, limit, offset int, adjustmentType *models.AdjustmentType) ([]*models.StockAdjustment, int, error) {
-	countQuery := `SELECT COUNT(*) FROM stock_adjustments WHERE product_id = $1`
+func (r *InventoryRepository) GetAdjustmentHistory(ctx context.Context, productID uuid.UUID, limit, offset int, adjustmentType *models.AdjustmentType, adjustedBy *uuid.UUID, startDate, endDate *time.Time) ([]*models.StockAdjustment, int, error) {
 	countArgs := []interface{}{productID}
+	countConditions := []string{"product_id = $1"}
 	if adjustmentType != nil {
-		countQuery += ` AND adjustment_type = $2`
 		countArgs = append(countArgs, *adjustmentType)
+		countConditions = append(countConditions, fmt.Sprintf("adjustment_type = $%d", len(countArgs)))
 	}
+	if adjustedBy != nil {
+		countArgs = append(countArgs, *adjustedBy)
+		countConditions = append(countConditions, fmt.Sprintf("adjusted_by = $%d", len(countArgs)))
+	}
+	if startDate != nil {
+		countArgs = append(countArgs, *startDate)
+		countConditions = append(countConditions, fmt.Sprintf("created_at >= $%d", len(countArgs)))
+	}
+	if endDate != nil {
+		countArgs = append(countArgs, *endDate)
+		countConditions = append(countConditions, fmt.Sprintf("created_at < $%d", len(countArgs)))
+	}
+	countQuery := `SELECT COUNT(*) FROM stock_adjustments WHERE ` + strings.Join(countConditions, " AND ")
 
 	var total int
 	if err := r.pool.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
@@ -90,8 +105,20 @@ func (r *InventoryRepository) GetAdjustmentHistory(ctx context.Context, productI
 	`
 	queryArgs := []interface{}{productID}
 	if adjustmentType != nil {
-		query += ` AND sa.adjustment_type = $2`
 		queryArgs = append(queryArgs, *adjustmentType)
+		query += fmt.Sprintf(` AND sa.adjustment_type = $%d`, len(queryArgs))
+	}
+	if adjustedBy != nil {
+		queryArgs = append(queryArgs, *adjustedBy)
+		query += fmt.Sprintf(` AND sa.adjusted_by = $%d`, len(queryArgs))
+	}
+	if startDate != nil {
+		queryArgs = append(queryArgs, *startDate)
+		query += fmt.Sprintf(` AND sa.created_at >= $%d`, len(queryArgs))
+	}
+	if endDate != nil {
+		queryArgs = append(queryArgs, *endDate)
+		query += fmt.Sprintf(` AND sa.created_at < $%d`, len(queryArgs))
 	}
 	query += `
 		ORDER BY sa.created_at DESC

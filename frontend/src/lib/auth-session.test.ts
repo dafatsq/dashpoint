@@ -36,18 +36,21 @@ describe("persistAuthPayload", () => {
   test("saves the account when saveAccount is true", () => {
     const saveAccountSpy = vi.spyOn(AccountManager, "saveAccount");
 
-    persistAuthPayload({
-      access_token: "access",
-      refresh_token: "refresh",
-      user: {
-        id: "user-2",
-        email: "manager@example.com",
-        name: "Manager",
-        role_name: "manager",
-        is_active: true,
-        has_pin: true,
+    persistAuthPayload(
+      {
+        access_token: "access",
+        refresh_token: "refresh",
+        user: {
+          id: "user-2",
+          email: "manager@example.com",
+          name: "Manager",
+          role_name: "manager",
+          is_active: true,
+          has_pin: true,
+        },
       },
-    });
+      { saveAccount: true },
+    );
 
     expect(saveAccountSpy).toHaveBeenCalledWith({
       id: "user-2",

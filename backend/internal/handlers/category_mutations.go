@@ -92,6 +92,13 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 	if err := parseCategoryBody(c, &req); err != nil {
 		return err
 	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, category.UpdatedAt)
+	if staleErr != nil {
+		return respondCategoryError(c, &categoryAPIError{Status: fiber.StatusBadRequest, Code: "INVALID_EXPECTED_UPDATED_AT", Message: "Invalid expected_updated_at"})
+	}
+	if stale {
+		return respondCategoryError(c, &categoryAPIError{Status: fiber.StatusConflict, Code: "STALE_SUBMIT", Message: staleSubmitMessage})
+	}
 	if !category.IsActive && (req.IsActive == nil || !*req.IsActive) {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 			"error": fiber.Map{
@@ -165,6 +172,13 @@ func (h *CategoryHandler) Delete(c *fiber.Ctx) error {
 			},
 		})
 	}
+	stale, staleErr := isStaleSubmit(expectedUpdatedAtFromQuery(c), category.UpdatedAt)
+	if staleErr != nil {
+		return respondCategoryError(c, &categoryAPIError{Status: fiber.StatusBadRequest, Code: "INVALID_EXPECTED_UPDATED_AT", Message: "Invalid expected_updated_at"})
+	}
+	if stale {
+		return respondCategoryError(c, &categoryAPIError{Status: fiber.StatusConflict, Code: "STALE_SUBMIT", Message: staleSubmitMessage})
+	}
 
 	if err := h.categoryRepo.Delete(c.UserContext(), id); err != nil {
 		if isCategoryNotFound(err) {
@@ -214,6 +228,13 @@ func (h *CategoryHandler) PermanentDelete(c *fiber.Ctx) error {
 			return categoryNotFoundResponse(c)
 		}
 		return respondCategoryInternalError(c, "Failed to fetch category")
+	}
+	stale, staleErr := isStaleSubmit(expectedUpdatedAtFromQuery(c), category.UpdatedAt)
+	if staleErr != nil {
+		return respondCategoryError(c, &categoryAPIError{Status: fiber.StatusBadRequest, Code: "INVALID_EXPECTED_UPDATED_AT", Message: "Invalid expected_updated_at"})
+	}
+	if stale {
+		return respondCategoryError(c, &categoryAPIError{Status: fiber.StatusConflict, Code: "STALE_SUBMIT", Message: staleSubmitMessage})
 	}
 
 	if err := h.categoryRepo.PermanentDelete(c.UserContext(), id); err != nil {

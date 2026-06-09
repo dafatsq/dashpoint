@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ShoppingCart } from "lucide-react";
 import api from "@/lib/api";
 import { PERMISSIONS, useAuth } from "@/contexts/auth-context";
@@ -24,6 +24,7 @@ import { PosCheckoutDialog } from "./pos-checkout-dialog";
 import { useGlobalError } from "@/contexts/error-context";
 import {
   addCartItem,
+  buildSaleCartValidationRequest,
   buildSaleRequest,
   canSubmitEndShift,
   canSubmitStartShift,
@@ -328,7 +329,7 @@ export function POSScreen() {
 
     setIsProcessing(true);
     try {
-      const result = await api.closeShift(endingCash, closingNotes);
+      const result = await api.closeShift(endingCash, closingNotes, currentShift?.id);
       if (result.error) {
         showError("End Shift Failed", getApiErrorMessage(result.error, "Failed to end shift."));
         return;
@@ -342,7 +343,7 @@ export function POSScreen() {
     } finally {
       setIsProcessing(false);
     }
-  }, [canEndShift, closingNotes, endingCash, isProcessing, showError]);
+  }, [canEndShift, closingNotes, currentShift?.id, endingCash, isProcessing, showError]);
 
   const openShiftDetails = useCallback(async () => {
     const shiftResult = await api.getCurrentShift();
@@ -401,8 +402,8 @@ export function POSScreen() {
     try {
       const result =
         cashDrawerOpType === "pay_in"
-          ? await api.payIn(cashDrawerAmount, cashDrawerReason)
-          : await api.payOut(cashDrawerAmount, cashDrawerReason);
+          ? await api.payIn(cashDrawerAmount, cashDrawerReason, currentShift?.id)
+          : await api.payOut(cashDrawerAmount, cashDrawerReason, currentShift?.id);
 
       if (result.error) {
         showError("Operation Failed", getApiErrorMessage(result.error, "Cash drawer operation failed."));
@@ -414,7 +415,7 @@ export function POSScreen() {
     } finally {
       setIsSubmittingOp(false);
     }
-  }, [cashDrawerAmount, cashDrawerOpType, cashDrawerReason, refreshShift, showError]);
+  }, [cashDrawerAmount, cashDrawerOpType, cashDrawerReason, currentShift?.id, refreshShift, showError]);
 
   const handleCompleteSale = useCallback(async () => {
     if (!currentShift || cartItems.length === 0) {
@@ -434,6 +435,7 @@ export function POSScreen() {
         discount,
         totals.total,
         parseNumericInput(amountPaid),
+        currentShift.id,
       );
 
       const result = await api.createSale(saleRequest);
@@ -473,9 +475,17 @@ export function POSScreen() {
       return;
     }
 
+    const validationResult = await api.validateSaleCart(
+      buildSaleCartValidationRequest(cartItems, result.data.id),
+    );
+    if (validationResult.error) {
+      showError("Checkout Failed", getApiErrorMessage(validationResult.error, "Cart is no longer valid."));
+      return;
+    }
+
     setAmountPaid(totals.total.toString());
     setCheckoutDialogOpen(true);
-  }, [cartItems.length, showError, totals.total]);
+  }, [cartItems, showError, totals.total]);
 
   const closeCheckoutDialog = useCallback(() => {
     setCheckoutDialogOpen(false);
@@ -559,15 +569,24 @@ export function POSScreen() {
                 <ShoppingCart className="h-5 w-5" />
                 <span>{cartItems.length} items</span>
               </div>
-              <span className="font-bold">{formatCurrency(totals.total)}</span>
+              <span className="font-bold font-mono">{formatCurrency(totals.total)}</span>
             </Button>
           </SheetTrigger>
           <SheetContent className="w-full sm:max-w-md p-0 bg-card gap-0" side="right">
             <SheetHeader>
               <SheetTitle className="sr-only">Current Order</SheetTitle>
             </SheetHeader>
-            <div className="h-full pt-6">
-              <PosCartView {...cartProps} />
+            <div className="flex h-full flex-col pt-6">
+              <div className="min-h-0 flex-1">
+                <PosCartView {...cartProps} />
+              </div>
+              <div className="border-t p-4">
+                <SheetClose asChild>
+                  <Button variant="outline" className="w-full">
+                    Close
+                  </Button>
+                </SheetClose>
+              </div>
             </div>
           </SheetContent>
         </Sheet>

@@ -6,6 +6,7 @@ import (
 
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/auth"
+	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 )
 
@@ -25,10 +26,22 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 	if err != nil || user == nil {
 		return userNotFound(c)
 	}
+	if !user.IsActive {
+		return userArchivedConflict(c, "Archived users cannot be changed")
+	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, user.UpdatedAt)
+	if staleErr != nil {
+		return badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+	}
 
-	targetRoleName := roleNameOfUser(user)
-	if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
-		return nil
+	if middleware.GetUserID(c) != id {
+		targetRoleName := roleNameOfUser(user)
+		if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
+			return nil
+		}
 	}
 
 	if req.Password == "" {
@@ -70,10 +83,22 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 	if err != nil || user == nil {
 		return userNotFound(c)
 	}
+	if !user.IsActive {
+		return userArchivedConflict(c, "Archived users cannot be changed")
+	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, user.UpdatedAt)
+	if staleErr != nil {
+		return badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+	}
 
-	targetRoleName := roleNameOfUser(user)
-	if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
-		return nil
+	if middleware.GetUserID(c) != id {
+		targetRoleName := roleNameOfUser(user)
+		if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
+			return nil
+		}
 	}
 
 	var pinHash *string

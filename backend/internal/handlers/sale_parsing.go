@@ -33,44 +33,9 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 		return nil, saleValidationAPIError("NO_PAYMENTS", "At least one payment is required")
 	}
 
-	items := make([]repository.CreateSaleItemRequest, 0, len(req.Items))
-	for i, itemReq := range req.Items {
-		productID, err := uuid.Parse(itemReq.ProductID)
-		if err != nil {
-			return nil, saleValidationAPIError("INVALID_PRODUCT_ID", fmt.Sprintf("Invalid product ID at item %d", i+1))
-		}
-
-		quantity, err := parseRequiredPositiveDecimal(
-			itemReq.Quantity,
-			"INVALID_QUANTITY",
-			fmt.Sprintf("Invalid quantity at item %d", i+1),
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		unitPrice, err := decimal.NewFromString(itemReq.UnitPrice)
-		if err != nil || unitPrice.LessThan(decimal.Zero) {
-			return nil, saleValidationAPIError("INVALID_PRICE", fmt.Sprintf("Invalid unit price at item %d", i+1))
-		}
-
-		discountValue, err := parseOptionalSaleDecimal(itemReq.DiscountValue, fmt.Sprintf("discount_value at item %d", i+1))
-		if err != nil {
-			return nil, err
-		}
-		discountAmount, err := parseOptionalSaleDecimal(itemReq.DiscountAmount, fmt.Sprintf("discount_amount at item %d", i+1))
-		if err != nil {
-			return nil, err
-		}
-
-		items = append(items, repository.CreateSaleItemRequest{
-			ProductID:      productID,
-			Quantity:       quantity,
-			UnitPrice:      unitPrice,
-			DiscountType:   itemReq.DiscountType,
-			DiscountValue:  discountValue,
-			DiscountAmount: discountAmount,
-		})
+	items, err := parseSaleItems(req.Items)
+	if err != nil {
+		return nil, err
 	}
 
 	payments := make([]repository.CreatePaymentRequest, 0, len(req.Payments))
@@ -117,6 +82,14 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 	if err != nil {
 		return nil, err
 	}
+	var shiftID *uuid.UUID
+	if req.ShiftID != nil && *req.ShiftID != "" {
+		parsedShiftID, err := uuid.Parse(*req.ShiftID)
+		if err != nil {
+			return nil, saleValidationAPIError("INVALID_SHIFT_ID", "Invalid shift_id")
+		}
+		shiftID = &parsedShiftID
+	}
 
 	return &saleCreateInput{
 		items:          items,
@@ -125,7 +98,75 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 		discountValue:  discountValue,
 		discountReason: req.DiscountReason,
 		notes:          req.Notes,
+		shiftID:        shiftID,
 	}, nil
+}
+
+func parseSaleCartValidationInput(req ValidateSaleCartRequest) (*saleCartValidationInput, error) {
+	if len(req.Items) == 0 {
+		return nil, saleValidationAPIError("NO_ITEMS", "At least one item is required")
+	}
+	items, err := parseSaleItems(req.Items)
+	if err != nil {
+		return nil, err
+	}
+
+	var shiftID *uuid.UUID
+	if req.ShiftID != nil && *req.ShiftID != "" {
+		parsedShiftID, err := uuid.Parse(*req.ShiftID)
+		if err != nil {
+			return nil, saleValidationAPIError("INVALID_SHIFT_ID", "Invalid shift_id")
+		}
+		shiftID = &parsedShiftID
+	}
+
+	return &saleCartValidationInput{
+		items:   items,
+		shiftID: shiftID,
+	}, nil
+}
+
+func parseSaleItems(itemRequests []SaleItemRequest) ([]repository.CreateSaleItemRequest, error) {
+	items := make([]repository.CreateSaleItemRequest, 0, len(itemRequests))
+	for i, itemReq := range itemRequests {
+		productID, err := uuid.Parse(itemReq.ProductID)
+		if err != nil {
+			return nil, saleValidationAPIError("INVALID_PRODUCT_ID", fmt.Sprintf("Invalid product ID at item %d", i+1))
+		}
+
+		quantity, err := parseRequiredPositiveDecimal(
+			itemReq.Quantity,
+			"INVALID_QUANTITY",
+			fmt.Sprintf("Invalid quantity at item %d", i+1),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		unitPrice, err := decimal.NewFromString(itemReq.UnitPrice)
+		if err != nil || unitPrice.LessThan(decimal.Zero) {
+			return nil, saleValidationAPIError("INVALID_PRICE", fmt.Sprintf("Invalid unit price at item %d", i+1))
+		}
+
+		discountValue, err := parseOptionalSaleDecimal(itemReq.DiscountValue, fmt.Sprintf("discount_value at item %d", i+1))
+		if err != nil {
+			return nil, err
+		}
+		discountAmount, err := parseOptionalSaleDecimal(itemReq.DiscountAmount, fmt.Sprintf("discount_amount at item %d", i+1))
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, repository.CreateSaleItemRequest{
+			ProductID:      productID,
+			Quantity:       quantity,
+			UnitPrice:      unitPrice,
+			DiscountType:   itemReq.DiscountType,
+			DiscountValue:  discountValue,
+			DiscountAmount: discountAmount,
+		})
+	}
+	return items, nil
 }
 
 func parseSaleFilter(c *fiber.Ctx) (*repository.SaleFilter, error) {

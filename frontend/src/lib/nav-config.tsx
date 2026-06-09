@@ -60,6 +60,7 @@ export const navItems: NavItem[] = [
     href: "/shifts",
     label: "Shifts",
     icon: <Clock className="h-5 w-5" />,
+    permission: PERMISSIONS.SHIFTS_VIEW,
     description: "View register shifts and cash drawer",
     color: "text-amber-500",
   },
@@ -67,6 +68,7 @@ export const navItems: NavItem[] = [
     href: "/changes",
     label: "Recent Changes",
     icon: <History className="h-5 w-5" />,
+    permission: PERMISSIONS.CHANGES_VIEW,
     description: "Track price and inventory updates",
     color: "text-rose-500",
   },
@@ -154,7 +156,9 @@ export const routePermissions: Record<string, RoutePermission> = {
   "/expenses": PERMISSIONS.EXPENSES_VIEW,
   "/users": PERMISSIONS.USERS_VIEW,
   "/audit": PERMISSIONS.AUDIT_VIEW,
-  "/shifts": undefined,
+  "/shifts": PERMISSIONS.SHIFTS_VIEW,
+  "/changes": PERMISSIONS.CHANGES_VIEW,
+  "/settings": undefined,
   "/categories": PERMISSIONS.CATEGORIES_VIEW,
 };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { ImageIcon, Loader2, Package, Settings2 } from "lucide-react";
+import { History, ImageIcon, Loader2, Package, Settings2, Sliders } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,7 +47,7 @@ export function InventoryList({
           const { isLowStock, isOutOfStock } = classifyInventoryStock(product);
 
           return (
-            <div key={product.id} className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
+            <div key={product.id} className="@container border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
               <div className="flex items-start gap-4">
                 {product.image_url ? (
                   <div className="relative h-20 w-20 rounded border overflow-hidden flex-shrink-0 bg-muted">
@@ -73,7 +73,7 @@ export function InventoryList({
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <h3 className="font-semibold line-clamp-1">{product.name}</h3>
+                      <h3 className="font-semibold break-words">{product.name}</h3>
                       <p className="text-sm text-muted-foreground">{product.sku || "-"}</p>
                     </div>
                     <span
@@ -85,7 +85,7 @@ export function InventoryList({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <span className="text-muted-foreground">Stock: </span>
                       <span className={`font-bold ${isLowStock ? "text-destructive" : ""}`}>{quantity}</span>
@@ -95,24 +95,26 @@ export function InventoryList({
                       <span>{minQuantity}</span>
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-end gap-2 border-t pt-3 mt-1">
-                    <Button variant="outline" size="sm" onClick={() => onHistory(product)} className="h-8">
-                      History
-                    </Button>
-                    {canEditThreshold ? (
-                      <Button variant="outline" size="sm" onClick={() => onEditThreshold(product)} className="h-8">
-                        Edit Threshold
-                      </Button>
-                    ) : null}
-                    {canModifyStock ? (
-                      <Button variant="outline" size="sm" onClick={() => onAdjust(product)} className="h-8">
-                        <Settings2 className="h-3.5 w-3.5 mr-1" />
-                        Adjust
-                      </Button>
-                    ) : null}
-                  </div>
                 </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3 mt-3">
+                <Button variant="outline" size="sm" onClick={() => onHistory(product)} className="h-8 w-8 p-0 @[350px]:w-auto @[350px]:px-3" title="History">
+                  <History className="h-3.5 w-3.5 @[350px]:mr-1" />
+                  <span className="hidden @[350px]:inline">History</span>
+                </Button>
+                {canEditThreshold ? (
+                  <Button variant="outline" size="sm" onClick={() => onEditThreshold(product)} className="h-8 w-8 p-0 @[350px]:w-auto @[350px]:px-3" title="Edit Threshold">
+                    <Sliders className="h-3.5 w-3.5 @[350px]:mr-1" />
+                    <span className="hidden @[350px]:inline">Edit Threshold</span>
+                  </Button>
+                ) : null}
+                {canModifyStock ? (
+                  <Button variant="outline" size="sm" onClick={() => onAdjust(product)} className="h-8 w-8 p-0 @[350px]:w-auto @[350px]:px-3" title="Adjust">
+                    <Settings2 className="h-3.5 w-3.5 @[350px]:mr-1" />
+                    <span className="hidden @[350px]:inline">Adjust</span>
+                  </Button>
+                ) : null}
               </div>
             </div>
           );
@@ -125,7 +127,7 @@ export function InventoryList({
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b text-left text-sm text-muted-foreground">
                   <th className="pb-3 font-medium">Product</th>
@@ -190,19 +192,18 @@ export function InventoryList({
                         </span>
                       </td>
                       <td className="py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => onHistory(product)}>
-                            History
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => onHistory(product)} title="View history">
+                            <History className="h-4 w-4" />
                           </Button>
                           {canEditThreshold ? (
-                            <Button variant="outline" size="sm" onClick={() => onEditThreshold(product)}>
-                              Edit Threshold
+                            <Button variant="ghost" size="icon" onClick={() => onEditThreshold(product)} title="Edit threshold">
+                              <Sliders className="h-4 w-4" />
                             </Button>
                           ) : null}
                           {canModifyStock ? (
-                            <Button variant="outline" size="sm" onClick={() => onAdjust(product)}>
-                              <Settings2 className="h-3 w-3 mr-1" />
-                              Adjust
+                            <Button variant="ghost" size="icon" onClick={() => onAdjust(product)} title="Adjust stock">
+                              <Settings2 className="h-4 w-4" />
                             </Button>
                           ) : null}
                         </div>

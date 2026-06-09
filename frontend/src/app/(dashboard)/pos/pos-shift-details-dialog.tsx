@@ -90,36 +90,36 @@ export function PosShiftDetailsDialog({
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-muted-foreground block text-xs">Opening Cash</span>
-                  <span className="font-medium">{closedOpeningCash}</span>
+                  <span className="font-medium font-mono">{closedOpeningCash}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Closing Cash</span>
-                  <span className="font-medium">{closedClosingCash}</span>
+                  <span className="font-medium font-mono">{closedClosingCash}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">
                     Total Sales ({closedShiftData.transaction_count} txn)
                   </span>
-                  <span className="font-medium text-green-600">+{closedTotalSales}</span>
+                  <span className="font-medium text-green-600 font-mono">+{closedTotalSales}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Total Cash Sales</span>
-                  <span className="font-medium text-blue-600">+{closedCashSales}</span>
+                  <span className="font-medium text-blue-600 font-mono">+{closedCashSales}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">
                     Total Voided ({closedShiftData.void_count})
                   </span>
-                  <span className="font-medium text-red-600">-{closedVoided}</span>
+                  <span className="font-medium text-red-600 font-mono">-{closedVoided}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Expected Cash</span>
-                  <span className="font-bold">{closedExpectedCash}</span>
+                  <span className="font-bold font-mono">{closedExpectedCash}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-xs">Difference</span>
                   <span
-                    className={`font-bold ${
+                    className={`font-bold font-mono ${
                       cashDifference >= 0
                         ? "text-green-600"
                         : "text-red-600"
@@ -177,8 +177,8 @@ export function PosShiftDetailsDialog({
                           <span
                             className={
                               operation.type === "pay_in"
-                                ? "text-green-600 font-medium"
-                                : "text-red-600 font-medium"
+                                ? "text-green-600 font-medium font-mono"
+                                : "text-red-600 font-medium font-mono"
                             }
                           >
                             {operation.type === "pay_in" ? "+" : "-"}
@@ -188,10 +188,10 @@ export function PosShiftDetailsDialog({
                       ))}
                     </div>
                     <div className="flex justify-between text-xs mt-2 pt-2 border-t">
-                      <span className="text-green-600">
+                      <span className="text-green-600 font-mono">
                         Pay-In: +{formatCurrency(parseNumericInput(cashDrawerTotals.pay_in_total))}
                       </span>
-                      <span className="text-red-600">
+                      <span className="text-red-600 font-mono">
                         Pay-Out: -{formatCurrency(parseNumericInput(cashDrawerTotals.pay_out_total))}
                       </span>
                     </div>

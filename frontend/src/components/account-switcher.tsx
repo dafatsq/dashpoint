@@ -238,11 +238,11 @@ export function AccountSwitcher({
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col-reverse gap-2">
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1"
+                className="w-full"
                 onClick={() => setSelectedAccount(null)}
                 disabled={isSubmitting}
               >
@@ -250,7 +250,7 @@ export function AccountSwitcher({
               </Button>
               <Button
                 type="submit"
-                className="flex-1"
+                className="w-full"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (

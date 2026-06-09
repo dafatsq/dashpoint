@@ -1,12 +1,14 @@
 "use client";
 
 import {
+  DialogFooter,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import type { AuditLog } from "@/types";
 
 import { ActivityFieldChanges } from "../activity-field-changes";
@@ -81,6 +83,10 @@ export function AuditDetailDialog({
             </div>
           </div>
         ) : null}
+
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

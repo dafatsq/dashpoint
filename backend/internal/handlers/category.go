@@ -44,7 +44,8 @@ type CreateCategoryRequest struct {
 }
 
 type UpdateCategoryRequest struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-	IsActive    *bool   `json:"is_active,omitempty"`
+	Name              *string `json:"name,omitempty"`
+	Description       *string `json:"description,omitempty"`
+	IsActive          *bool   `json:"is_active,omitempty"`
+	ExpectedUpdatedAt *string `json:"expected_updated_at,omitempty"`
 }

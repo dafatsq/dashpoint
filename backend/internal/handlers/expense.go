@@ -37,19 +37,23 @@ type expenseInventoryStore interface {
 	AdjustStockWithTx(context.Context, pgx.Tx, uuid.UUID, models.AdjustmentType, decimal.Decimal, *string, *string, *uuid.UUID, uuid.UUID) (*models.StockAdjustment, error)
 }
 
-type expenseProductStore interface{}
+type expenseProductStore interface {
+	GetByID(context.Context, uuid.UUID) (*models.Product, error)
+}
 
 // ExpenseHandler handles expense-related HTTP requests.
 type ExpenseHandler struct {
 	repo          expenseStore
 	inventoryRepo expenseInventoryStore
+	productRepo   expenseProductStore
 }
 
 // NewExpenseHandler creates a new expense handler.
-func NewExpenseHandler(repo expenseStore, inventoryRepo expenseInventoryStore, _ expenseProductStore) *ExpenseHandler {
+func NewExpenseHandler(repo expenseStore, inventoryRepo expenseInventoryStore, productRepo expenseProductStore) *ExpenseHandler {
 	return &ExpenseHandler{
 		repo:          repo,
 		inventoryRepo: inventoryRepo,
+		productRepo:   productRepo,
 	}
 }
 
@@ -67,16 +71,17 @@ type CreateExpenseRequest struct {
 }
 
 type UpdateExpenseRequest struct {
-	CategoryID       *string `json:"category_id"`
-	ProductID        *string `json:"product_id"`
-	Quantity         *string `json:"quantity"`
-	AppliesInventory *bool   `json:"applies_inventory"`
-	Amount           *string `json:"amount"`
-	Description      *string `json:"description"`
-	ExpenseDate      *string `json:"expense_date"`
-	Vendor           *string `json:"vendor"`
-	ReferenceNumber  *string `json:"reference_number"`
-	Notes            *string `json:"notes"`
+	CategoryID        *string `json:"category_id"`
+	ProductID         *string `json:"product_id"`
+	Quantity          *string `json:"quantity"`
+	AppliesInventory  *bool   `json:"applies_inventory"`
+	Amount            *string `json:"amount"`
+	Description       *string `json:"description"`
+	ExpenseDate       *string `json:"expense_date"`
+	Vendor            *string `json:"vendor"`
+	ReferenceNumber   *string `json:"reference_number"`
+	Notes             *string `json:"notes"`
+	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
 type ExpenseResponse struct {

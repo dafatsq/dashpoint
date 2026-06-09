@@ -13,6 +13,7 @@ import (
 
 type saleStore interface {
 	Create(context.Context, *repository.CreateSaleRequest) (*models.Sale, error)
+	ValidateCart(context.Context, *repository.ValidateSaleCartRequest) error
 	GetByID(context.Context, uuid.UUID) (*models.Sale, error)
 	GetByInvoiceNo(context.Context, string) (*models.Sale, error)
 	List(context.Context, *repository.SaleFilter) ([]models.Sale, int, error)
@@ -65,11 +66,19 @@ type CreateSaleRequest struct {
 	DiscountValue  *string           `json:"discount_value"`
 	DiscountReason *string           `json:"discount_reason"`
 	Notes          *string           `json:"notes"`
+	ShiftID        *string           `json:"shift_id"`
+}
+
+// ValidateSaleCartRequest represents a cart validation request before checkout.
+type ValidateSaleCartRequest struct {
+	Items   []SaleItemRequest `json:"items"`
+	ShiftID *string           `json:"shift_id"`
 }
 
 // VoidSaleRequest represents the request to void a sale.
 type VoidSaleRequest struct {
-	Reason string `json:"reason"`
+	Reason            string  `json:"reason"`
+	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
 type saleCreateInput struct {
@@ -79,4 +88,10 @@ type saleCreateInput struct {
 	discountValue  *decimal.Decimal
 	discountReason *string
 	notes          *string
+	shiftID        *uuid.UUID
+}
+
+type saleCartValidationInput struct {
+	items   []repository.CreateSaleItemRequest
+	shiftID *uuid.UUID
 }

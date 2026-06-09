@@ -1,6 +1,6 @@
 'use client';
 
-import { Boxes, ImageIcon, Package, Settings2 } from "lucide-react";
+import { Boxes, ImageIcon, Package, Settings2, Sliders } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,7 +47,7 @@ export function InventoryLowStock({
           {items.map((item) => {
             const product = products.find((entry) => entry.id === item.id);
             return (
-              <div key={item.id} className="flex items-center justify-between rounded-lg border p-4">
+              <div key={item.id} className="@container flex items-center justify-between rounded-lg border p-4">
                 <div className="flex items-center gap-3 min-w-0">
                   {product?.image_url ? (
                     <div className="relative h-12 w-12 rounded border overflow-hidden flex-shrink-0 bg-muted">
@@ -71,7 +71,7 @@ export function InventoryLowStock({
                   )}
 
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{item.name}</p>
+                    <p className="font-medium break-words">{item.name}</p>
                     <p className="text-sm text-muted-foreground">SKU: {item.sku || "N/A"}</p>
                   </div>
                 </div>
@@ -81,14 +81,27 @@ export function InventoryLowStock({
                     <p className="text-xs text-muted-foreground">Available: {Number.parseFloat(item.available_quantity)}</p>
                   </div>
                   {canEditThreshold ? (
-                    <Button size="sm" variant="outline" onClick={() => onEditThreshold(item.id)}>
-                      Edit Threshold
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onEditThreshold(item.id)}
+                      className="h-8 w-8 p-0 @[460px]:h-8 @[460px]:w-auto @[460px]:px-3 lg:h-9 lg:w-9 lg:p-0"
+                      title="Edit threshold"
+                    >
+                      <Sliders className="h-3.5 w-3.5 @[460px]:mr-1.5 lg:h-4 lg:w-4 lg:mr-0" />
+                      <span className="hidden @[460px]:inline lg:hidden">Edit Threshold</span>
                     </Button>
                   ) : null}
                   {canModifyStock ? (
-                    <Button size="sm" variant="outline" onClick={() => onAdjust(item.id)}>
-                      <Settings2 className="h-4 w-4 mr-1" />
-                      Adjust
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onAdjust(item.id)}
+                      className="h-8 w-8 p-0 @[460px]:h-8 @[460px]:w-auto @[460px]:px-3 lg:h-9 lg:w-9 lg:p-0"
+                      title="Adjust stock"
+                    >
+                      <Settings2 className="h-3.5 w-3.5 @[460px]:mr-1.5 lg:h-4 lg:w-4 lg:mr-0" />
+                      <span className="hidden @[460px]:inline lg:hidden">Adjust</span>
                     </Button>
                   ) : null}
                 </div>

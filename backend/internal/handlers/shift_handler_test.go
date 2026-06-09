@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -98,6 +99,30 @@ func TestListShiftsUsesJakartaExclusiveDateBounds(t *testing.T) {
 	}
 	if got.EndDate == nil || !got.EndDate.Equal(expectedEnd) {
 		t.Fatalf("expected exclusive endDate %v, got %v", expectedEnd, got.EndDate)
+	}
+}
+
+func TestStartShiftReturnsConflictWhenRepositoryRejectsConcurrentOpenShift(t *testing.T) {
+	handler := NewShiftHandler(&fakeShiftStore{
+		createFunc: func(context.Context, *models.Shift) error {
+			return repository.ErrShiftAlreadyOpen
+		},
+	})
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", uuid.New())
+		return c.Next()
+	})
+	app.Post("/shifts/start", handler.StartShift)
+
+	req := httptest.NewRequest(http.MethodPost, "/shifts/start", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
 	}
 }
 

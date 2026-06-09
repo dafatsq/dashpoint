@@ -45,7 +45,7 @@ export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventor
             <CardTitle className="text-sm font-medium">Retail Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(inventoryReport.total_retail_value)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(inventoryReport.total_retail_value)}</div>
           </CardContent>
         </Card>
       </div>
@@ -59,7 +59,7 @@ export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventor
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-max">
                   <thead>
                     <tr className="border-b text-left text-sm text-muted-foreground">
                       <th className="pb-3 font-medium">Product</th>
@@ -82,8 +82,8 @@ export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventor
                         </td>
                         <td className="py-3 text-muted-foreground">{item.category_name || '-'}</td>
                         <td className="py-3 text-right">{formatNumber(item.quantity)}</td>
-                        <td className="py-3 text-right">{formatCurrency(item.sell_price)}</td>
-                        <td className="py-3 text-right font-bold">{formatCurrency(item.retail_value)}</td>
+                        <td className="py-3 text-right font-mono">{formatCurrency(item.sell_price)}</td>
+                        <td className="py-3 text-right font-bold font-mono">{formatCurrency(item.retail_value)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -98,7 +98,7 @@ export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventor
               <Card key={item.product_id}>
                 <CardContent className="p-4 space-y-3">
                   <div className="border-b pb-2">
-                    <p className="font-bold truncate">{item.product_name}</p>
+                    <p className="font-bold break-words">{item.product_name}</p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                       {item.product_sku ? <span>{item.product_sku}</span> : null}
                       {item.product_sku ? <span>•</span> : null}
@@ -112,11 +112,11 @@ export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventor
                     </div>
                     <div className="text-right">
                       <span className="text-xs text-muted-foreground block">Retail Value</span>
-                      <span className="font-bold">{formatCurrency(item.retail_value)}</span>
+                      <span className="font-bold font-mono">{formatCurrency(item.retail_value)}</span>
                     </div>
                     <div className="col-span-2 text-right">
                       <span className="text-xs text-muted-foreground block">Price</span>
-                      <span className="font-medium">{formatCurrency(item.sell_price)}</span>
+                      <span className="font-medium font-mono">{formatCurrency(item.sell_price)}</span>
                     </div>
                   </div>
                 </CardContent>

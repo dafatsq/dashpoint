@@ -39,6 +39,13 @@ export function InventoryThresholdDialog({
   const thresholdMessage =
     value.trim() === "" ? "Enter a low stock threshold to continue." : "Low stock threshold must be zero or greater.";
 
+  const originalThreshold = product?.inventory
+    ? product.inventory.low_stock_threshold !== null && product.inventory.low_stock_threshold !== undefined
+      ? String(product.inventory.low_stock_threshold)
+      : ""
+    : "";
+  const hasChanges = value.trim() !== originalThreshold;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -69,7 +76,7 @@ export function InventoryThresholdDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={isSubmitting || !isThresholdValid}>
+          <Button onClick={onSubmit} disabled={isSubmitting || !isThresholdValid || !hasChanges}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -3,6 +3,12 @@ import type { Expense, ExpenseCategory, ExpenseSummary } from "@/types";
 import type { ApiTransport } from "./transport";
 import type { ExpensesApi } from "./types";
 
+function withExpectedUpdatedAt(path: string, expectedUpdatedAt?: string): string {
+  if (!expectedUpdatedAt) return path;
+  const searchParams = new URLSearchParams({ expected_updated_at: expectedUpdatedAt });
+  return `${path}?${searchParams.toString()}`;
+}
+
 export function createExpensesApi(transport: ApiTransport): ExpensesApi {
   return {
     async getExpenseCategories(status = "active") {
@@ -34,13 +40,20 @@ export function createExpensesApi(transport: ApiTransport): ExpensesApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.data };
     },
-    deleteExpenseCategory(id) {
-      return transport.request(`/expenses/categories/${id}`, { method: "DELETE" });
+    deleteExpenseCategory(id, expectedUpdatedAt) {
+      return transport.request(
+        withExpectedUpdatedAt(`/expenses/categories/${id}`, expectedUpdatedAt),
+        { method: "DELETE" },
+      );
     },
-    permanentDeleteExpenseCategory(id) {
-      return transport.request(`/expenses/categories/${id}/permanent`, {
-        method: "DELETE",
-      });
+    permanentDeleteExpenseCategory(id, expectedUpdatedAt) {
+      return transport.request(
+        withExpectedUpdatedAt(
+          `/expenses/categories/${id}/permanent`,
+          expectedUpdatedAt,
+        ),
+        { method: "DELETE" },
+      );
     },
     async getExpenses(params) {
       const searchParams = new URLSearchParams();
@@ -77,8 +90,10 @@ export function createExpensesApi(transport: ApiTransport): ExpensesApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.data };
     },
-    deleteExpense(id) {
-      return transport.request(`/expenses/${id}`, { method: "DELETE" });
+    deleteExpense(id, expectedUpdatedAt) {
+      return transport.request(withExpectedUpdatedAt(`/expenses/${id}`, expectedUpdatedAt), {
+        method: "DELETE",
+      });
     },
     async getExpenseSummary(params) {
       const searchParams = new URLSearchParams();

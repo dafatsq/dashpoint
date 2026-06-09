@@ -3,7 +3,7 @@
 import { useAuth } from '@/contexts/auth-context';
 import { Menu, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useState } from 'react';
 
@@ -38,6 +38,13 @@ export function Header({ title }: HeaderProps) {
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <Sidebar onNavigate={() => setOpen(false)} />
+                </div>
+                <div className="border-t p-4">
+                  <SheetClose asChild>
+                    <Button variant="outline" className="w-full">
+                      Close Menu
+                    </Button>
+                  </SheetClose>
                 </div>
               </div>
             </SheetContent>

@@ -22,6 +22,7 @@ export interface Role {
   id: string;
   name: string;
   description?: string;
+  permissions?: string[];
 }
 
 export interface User {
@@ -58,4 +59,5 @@ export interface UpdateUserRequest {
   password?: string;
   pin?: string;
   permissions?: string[];
+  expected_updated_at?: string;
 }

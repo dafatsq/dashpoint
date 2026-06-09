@@ -157,7 +157,11 @@ export function SalesScreen() {
     }
 
     setIsVoiding(true);
-    const result = await api.voidSale(selectedSale.id, voidReason);
+    const result = await api.voidSale(
+      selectedSale.id,
+      voidReason,
+      selectedSale.updated_at,
+    );
     if (result.error) {
       showError("Void Failed", result.error);
       setIsVoiding(false);

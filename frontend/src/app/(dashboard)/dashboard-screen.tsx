@@ -62,6 +62,10 @@ const CHANGE_TABS: { value: ChangeTab; label: string; icon: ReactNode }[] = [
 
 export function DashboardScreen() {
   const { user, hasPermission } = useAuth();
+  const canViewSales = hasPermission(PERMISSIONS.SALES_VIEW);
+  const canViewInventory = hasPermission(PERMISSIONS.INVENTORY_VIEW);
+  const canViewShifts = hasPermission(PERMISSIONS.SHIFTS_VIEW);
+  const canViewChanges = hasPermission(PERMISSIONS.CHANGES_VIEW);
   const [stats, setStats] = useState<DashboardStatsData | null>(null);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,7 +83,7 @@ export function DashboardScreen() {
   const [changeLoading, setChangeLoading] = useState<
     Record<ChangeTab, boolean>
   >({
-    product: true,
+    product: false,
     inventory: false,
     sale: false,
     expense: false,
@@ -114,17 +118,19 @@ export function DashboardScreen() {
     setIsLoading(true);
     setDashboardError(null);
 
-    // Only fetch sales summary if user has permission — skip silently otherwise
-    const summaryPromise = hasPermission(PERMISSIONS.SALES_VIEW)
+    const summaryPromise = canViewSales
       ? api.getDailySummary()
       : Promise.resolve({ data: null, error: null });
+    const lowStockPromise = canViewInventory
+      ? api.getLowStock()
+      : Promise.resolve({ data: [], error: null });
 
     const [summaryResult, lowStockResult] = await Promise.all([
       summaryPromise,
-      api.getLowStock(),
+      lowStockPromise,
     ]);
 
-    if (lowStockResult.error) {
+    if (canViewInventory && lowStockResult.error) {
       setDashboardError(
         lowStockResult.error || "Could not load dashboard data",
       );
@@ -142,9 +148,16 @@ export function DashboardScreen() {
     );
     setLowStockItems(lowStock.slice(0, 5));
     setIsLoading(false);
-  }, [hasPermission]);
+  }, [canViewInventory, canViewSales]);
 
   const fetchShiftPreview = useCallback(async () => {
+    if (!canViewShifts) {
+      setShifts([]);
+      setIsShiftsLoading(false);
+      setShiftsError(null);
+      return;
+    }
+
     setIsShiftsLoading(true);
     setShiftsError(null);
     const result = await api.getShifts();
@@ -154,10 +167,18 @@ export function DashboardScreen() {
       setShifts((result.data || []).slice(0, 5));
     }
     setIsShiftsLoading(false);
-  }, []);
+  }, [canViewShifts]);
 
   const fetchChangeLogs = useCallback(
     async (entityType: ChangeTab) => {
+      if (!canViewChanges) {
+        setChangeTabState<AuditLog[]>(setChangeLogs, entityType, []);
+        setChangeTabState<boolean>(setChangeLoaded, entityType, true);
+        setChangeTabState<boolean>(setChangeLoading, entityType, false);
+        setChangeTabState<string | null>(setChangeErrors, entityType, null);
+        return;
+      }
+
       setChangeTabState<boolean>(setChangeLoading, entityType, true);
       setChangeTabState<string | null>(setChangeErrors, entityType, null);
       const result = await api.getDashboardChanges({
@@ -180,28 +201,30 @@ export function DashboardScreen() {
       setChangeTabState<boolean>(setChangeLoaded, entityType, true);
       setChangeTabState<boolean>(setChangeLoading, entityType, false);
     },
-    [setChangeTabState],
+    [canViewChanges, setChangeTabState],
   );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void fetchDashboardData();
       void fetchShiftPreview();
-      void fetchChangeLogs("product");
+      if (canViewChanges) {
+        void fetchChangeLogs("product");
+      }
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [fetchChangeLogs, fetchDashboardData, fetchShiftPreview]);
+  }, [canViewChanges, fetchChangeLogs, fetchDashboardData, fetchShiftPreview]);
 
   useEffect(() => {
-    if (!changeLoaded[activeChangeTab] && !changeLoading[activeChangeTab]) {
+    if (canViewChanges && !changeLoaded[activeChangeTab] && !changeLoading[activeChangeTab]) {
       const timer = window.setTimeout(() => {
         void fetchChangeLogs(activeChangeTab);
       }, 0);
 
       return () => window.clearTimeout(timer);
     }
-  }, [activeChangeTab, changeLoaded, changeLoading, fetchChangeLogs]);
+  }, [activeChangeTab, canViewChanges, changeLoaded, changeLoading, fetchChangeLogs]);
 
   const activeLogs = useMemo(
     () => changeLogs[activeChangeTab],
@@ -230,11 +253,12 @@ export function DashboardScreen() {
           </div>
         ) : (
           <>
-            <DashboardStats stats={stats} />
+            <DashboardStats stats={stats} showLowStock={canViewInventory} />
             <DashboardLowStock items={lowStockItems} />
           </>
         )}
 
+        {canViewShifts ? (
         <Card className="mb-6 flex flex-col border-0 shadow-none bg-transparent md:border md:shadow md:bg-card">
           <CardHeader className="px-0 pt-0 pb-4 md:p-6">
             <div className="flex items-center gap-2">
@@ -263,7 +287,9 @@ export function DashboardScreen() {
             </Button>
           </div>
         </Card>
+        ) : null}
 
+        {canViewChanges ? (
         <Card className="flex flex-col border-0 shadow-none bg-transparent md:border md:shadow md:bg-card">
           <CardHeader className="px-0 pt-0 pb-4 md:p-6">
             <div className="flex items-center gap-2">
@@ -319,6 +345,7 @@ export function DashboardScreen() {
             </Button>
           </div>
         </Card>
+        ) : null}
       </div>
     </div>
   );

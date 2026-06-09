@@ -29,6 +29,7 @@ import {
 import type { User, UserRole } from "@/types";
 import { ActiveArchivedToggle } from "@/components/shared/active-archived-toggle";
 import { DataTableContainer } from "@/components/shared/data-table-container";
+import { FilterCard } from "@/components/shared/filter-card";
 
 interface UsersListProps {
   pageError?: string | null;
@@ -116,46 +117,43 @@ export function UsersList({
   onRestore,
 }: UsersListProps) {
   return (
-    <div className="flex-1 p-6 overflow-auto">
+    <div className="p-6 pt-4">
       <ActiveArchivedToggle value={viewMode} onChange={onViewModeChange} className="mb-4" />
-
-      <Card className="mb-6">
-        <CardContent className="p-6">
-          {pageError && (
-            <div className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 p-3">
-              <p className="text-sm text-destructive">{pageError}</p>
-            </div>
-          )}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search users..."
-                value={searchQuery}
-                onChange={(event) => onSearchChange(event.target.value)}
-                className="pl-9 w-full"
-              />
-            </div>
-            <Select value={selectedRole} onValueChange={onRoleChange}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="All Roles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="owner">Owner</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="cashier">Cashier</SelectItem>
-              </SelectContent>
-            </Select>
-            {canCreateUser && viewMode === "active" && (
-              <Button onClick={onCreate} className="w-full sm:w-auto">
-                <Plus className="h-4 w-4 mr-2" />
-                Add User
-              </Button>
-            )}
+      <FilterCard>
+        {pageError && (
+          <div className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 p-3">
+            <p className="text-sm text-destructive">{pageError}</p>
           </div>
-        </CardContent>
-      </Card>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search users..."
+              value={searchQuery}
+              onChange={(event) => onSearchChange(event.target.value)}
+              className="pl-9 w-full"
+            />
+          </div>
+          <Select value={selectedRole} onValueChange={onRoleChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All Roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              <SelectItem value="owner">Owner</SelectItem>
+              <SelectItem value="manager">Manager</SelectItem>
+              <SelectItem value="cashier">Cashier</SelectItem>
+            </SelectContent>
+          </Select>
+          {canCreateUser && viewMode === "active" && (
+            <Button onClick={onCreate} className="w-full">
+              <Plus className="h-4 w-4 mr-2" />
+              Add User
+            </Button>
+          )}
+        </div>
+      </FilterCard>
 
       <DataTableContainer limit={limit} onLimitChange={onLimitChange} total={total} currentCount={users.length}>
 
@@ -178,7 +176,7 @@ export function UsersList({
           ) : (
             <>
               <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-max">
                   <thead>
                     <tr className="border-b text-left text-sm text-muted-foreground">
                       <th className="pb-3 font-medium">Name</th>
@@ -295,7 +293,7 @@ export function UsersList({
 
               <div className="lg:hidden space-y-4">
             {users.map((user) => (
-              <Card key={user.id}>
+              <Card key={user.id} className="@container">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex justify-between items-start border-b pb-2">
                     <div>
@@ -348,10 +346,11 @@ export function UsersList({
                               variant="outline"
                               size="sm"
                               onClick={() => onEdit(user)}
-                              className="h-8"
+                              className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3"
+                              title="Edit"
                             >
-                              <Pencil className="h-3.5 w-3.5 mr-1" />
-                              Edit
+                              <Pencil className="h-3.5 w-3.5 @[250px]:mr-1" />
+                              <span className="hidden @[250px]:inline">Edit</span>
                             </Button>
                           )}
                           {canDeleteUser(user) && (
@@ -359,10 +358,11 @@ export function UsersList({
                               variant="outline"
                               size="sm"
                               onClick={() => onArchive(user)}
-                              className="h-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-500 dark:hover:bg-amber-950/20"
+                              className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-500 dark:hover:bg-amber-950/20"
+                              title="Archive"
                             >
-                              <Archive className="h-3.5 w-3.5 mr-1" />
-                              Archive
+                              <Archive className="h-3.5 w-3.5 @[250px]:mr-1" />
+                              <span className="hidden @[250px]:inline">Archive</span>
                             </Button>
                           )}
                         </>
@@ -374,21 +374,23 @@ export function UsersList({
                               size="sm"
                               onClick={() => onRestore(user)}
                               disabled={isSubmitting}
-                              className="h-8"
+                              className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3"
+                              title="Restore"
                             >
-                              <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                              Restore
+                              <RotateCcw className="h-3.5 w-3.5 @[250px]:mr-1" />
+                              <span className="hidden @[250px]:inline">Restore</span>
                             </Button>
                           )}
                           {canDeleteUser(user) && (
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-8 text-destructive hover:text-destructive"
+                              className="h-8 w-8 p-0 @[250px]:w-auto @[250px]:px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
                               onClick={() => onPermanentDelete(user)}
+                              title="Delete"
                             >
-                              <Trash2 className="h-3.5 w-3.5 mr-1" />
-                              Delete
+                              <Trash2 className="h-3.5 w-3.5 @[250px]:mr-1" />
+                              <span className="hidden @[250px]:inline">Delete</span>
                             </Button>
                           )}
                         </>

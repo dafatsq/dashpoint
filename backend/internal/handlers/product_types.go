@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -32,7 +33,7 @@ type inventoryStore interface {
 	SetQuantity(context.Context, uuid.UUID, decimal.Decimal, *string, uuid.UUID) (*models.StockAdjustment, error)
 	UpdateThresholds(context.Context, uuid.UUID, decimal.Decimal) error
 	GetLowStockProducts(context.Context) ([]*models.ProductWithInventory, error)
-	GetAdjustmentHistory(context.Context, uuid.UUID, int, int, *models.AdjustmentType) ([]*models.StockAdjustment, int, error)
+	GetAdjustmentHistory(context.Context, uuid.UUID, int, int, *models.AdjustmentType, *uuid.UUID, *time.Time, *time.Time) ([]*models.StockAdjustment, int, error)
 }
 
 type categoryStore interface {
@@ -64,21 +65,21 @@ func NewProductHandler(
 
 // ProductResponse represents a product in API responses
 type ProductResponse struct {
-	ID                 string             `json:"id"`
-	SKU                *string            `json:"sku,omitempty"`
-	Barcode            *string            `json:"barcode,omitempty"`
-	Name               string             `json:"name"`
-	Description        *string            `json:"description,omitempty"`
-	CategoryID         *string            `json:"category_id,omitempty"`
-	CategoryName       *string            `json:"category_name,omitempty"`
-	Price              string             `json:"price"`
-	Cost               string             `json:"cost"`
-	TaxRate            string             `json:"tax_rate"`
-	IsActive           bool               `json:"is_active"`
-	ImageURL           *string            `json:"image_url,omitempty"`
-	Inventory          *InventoryResponse `json:"inventory,omitempty"`
-	CreatedAt          string             `json:"created_at"`
-	UpdatedAt          string             `json:"updated_at"`
+	ID           string             `json:"id"`
+	SKU          *string            `json:"sku,omitempty"`
+	Barcode      *string            `json:"barcode,omitempty"`
+	Name         string             `json:"name"`
+	Description  *string            `json:"description,omitempty"`
+	CategoryID   *string            `json:"category_id,omitempty"`
+	CategoryName *string            `json:"category_name,omitempty"`
+	Price        string             `json:"price"`
+	Cost         string             `json:"cost"`
+	TaxRate      string             `json:"tax_rate"`
+	IsActive     bool               `json:"is_active"`
+	ImageURL     *string            `json:"image_url,omitempty"`
+	Inventory    *InventoryResponse `json:"inventory,omitempty"`
+	CreatedAt    string             `json:"created_at"`
+	UpdatedAt    string             `json:"updated_at"`
 }
 
 type InventoryResponse struct {
@@ -86,33 +87,35 @@ type InventoryResponse struct {
 	AvailableQuantity string `json:"available_quantity"`
 	LowStockThreshold string `json:"low_stock_threshold"`
 	IsLowStock        bool   `json:"is_low_stock"`
+	UpdatedAt         string `json:"updated_at,omitempty"`
 }
 
 type CreateProductRequest struct {
-	SKU                *string `json:"sku"`
-	Barcode            *string `json:"barcode"`
-	Name               string  `json:"name"`
-	Description        *string `json:"description"`
-	CategoryID         *string `json:"category_id"`
-	Price              string  `json:"price"`
-	Cost               *string `json:"cost"`
-	TaxRate            *string `json:"tax_rate"`
-	InitialQuantity    *string `json:"initial_quantity"`
-	LowStockThreshold  *string `json:"low_stock_threshold"`
-	ImageURL           *string `json:"image_url"`
+	SKU               *string `json:"sku"`
+	Barcode           *string `json:"barcode"`
+	Name              string  `json:"name"`
+	Description       *string `json:"description"`
+	CategoryID        *string `json:"category_id"`
+	Price             string  `json:"price"`
+	Cost              *string `json:"cost"`
+	TaxRate           *string `json:"tax_rate"`
+	InitialQuantity   *string `json:"initial_quantity"`
+	LowStockThreshold *string `json:"low_stock_threshold"`
+	ImageURL          *string `json:"image_url"`
 }
 
 type UpdateProductRequest struct {
-	SKU                *string `json:"sku"`
-	Barcode            *string `json:"barcode"`
-	Name               *string `json:"name"`
-	Description        *string `json:"description"`
-	CategoryID         *string `json:"category_id"`
-	Price              *string `json:"price"`
-	Cost               *string `json:"cost"`
-	TaxRate            *string `json:"tax_rate"`
-	IsActive           *bool   `json:"is_active"`
-	ImageURL           *string `json:"image_url"`
+	SKU               *string `json:"sku"`
+	Barcode           *string `json:"barcode"`
+	Name              *string `json:"name"`
+	Description       *string `json:"description"`
+	CategoryID        *string `json:"category_id"`
+	Price             *string `json:"price"`
+	Cost              *string `json:"cost"`
+	TaxRate           *string `json:"tax_rate"`
+	IsActive          *bool   `json:"is_active"`
+	ImageURL          *string `json:"image_url"`
+	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
 type productCreateInput struct {
@@ -122,12 +125,14 @@ type productCreateInput struct {
 }
 
 type stockAdjustmentRequest struct {
-	ProductID      uuid.UUID
-	AdjustmentType models.AdjustmentType
-	Quantity       decimal.Decimal
-	Reason         *string
+	ProductID         uuid.UUID
+	AdjustmentType    models.AdjustmentType
+	Quantity          decimal.Decimal
+	Reason            *string
+	ExpectedUpdatedAt *string
 }
 
 type inventoryThresholdUpdateRequest struct {
 	LowStockThreshold decimal.Decimal
+	ExpectedUpdatedAt *string
 }

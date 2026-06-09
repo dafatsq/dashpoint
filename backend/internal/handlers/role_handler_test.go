@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,10 +15,13 @@ import (
 )
 
 type fakeRoleReader struct {
-	roles      []*models.Role
-	roleByID   *models.Role
-	listErr    error
-	getByIDErr error
+	roles       []*models.Role
+	roleByID    *models.Role
+	updatedID   uuid.UUID
+	updatedKeys []string
+	listErr     error
+	getByIDErr  error
+	updateErr   error
 }
 
 func (f *fakeRoleReader) List(context.Context) ([]*models.Role, error) {
@@ -26,6 +30,12 @@ func (f *fakeRoleReader) List(context.Context) ([]*models.Role, error) {
 
 func (f *fakeRoleReader) GetByID(context.Context, uuid.UUID) (*models.Role, error) {
 	return f.roleByID, f.getByIDErr
+}
+
+func (f *fakeRoleReader) UpdatePermissions(_ context.Context, id uuid.UUID, permissionKeys []string) error {
+	f.updatedID = id
+	f.updatedKeys = permissionKeys
+	return f.updateErr
 }
 
 func TestRoleHandlerListRolesSuccess(t *testing.T) {
@@ -90,13 +100,14 @@ func TestRoleHandlerGetRoleNotFound(t *testing.T) {
 	}
 }
 
-func TestRoleHandlerGetRoleReturnsDerivedPermissions(t *testing.T) {
+func TestRoleHandlerGetRoleReturnsStoredPermissions(t *testing.T) {
 	roleID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	handler := &RoleHandler{
 		roleRepo: &fakeRoleReader{
 			roleByID: &models.Role{
-				ID:   roleID,
-				Name: "manager",
+				ID:          roleID,
+				Name:        "manager",
+				Permissions: []string{"access_users_page", "manage_users_page"},
 			},
 		},
 	}
@@ -116,8 +127,180 @@ func TestRoleHandlerGetRoleReturnsDerivedPermissions(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode returned error: %v", err)
 	}
-	if len(body.Permissions) == 0 {
-		t.Fatal("expected derived permissions")
+	if len(body.Permissions) != 2 {
+		t.Fatalf("expected stored permissions, got %v", body.Permissions)
+	}
+}
+
+func TestRoleHandlerUpdatePermissionsAddsAccessParent(t *testing.T) {
+	roleID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	repo := &fakeRoleReader{
+		roleByID: &models.Role{
+			ID:   roleID,
+			Name: "manager",
+		},
+	}
+	handler := &RoleHandler{roleRepo: repo}
+	app := fiber.New()
+	app.Patch("/roles/:id/permissions", handler.UpdateRolePermissions)
+
+	req := httptest.NewRequest(
+		"PATCH",
+		"/roles/"+roleID.String()+"/permissions",
+		bytes.NewBufferString(`{"permissions":["manage_users_page"]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if repo.updatedID != roleID {
+		t.Fatalf("expected role %s to be updated, got %s", roleID, repo.updatedID)
+	}
+	if len(repo.updatedKeys) != 2 {
+		t.Fatalf("expected manage permission and access parent, got %v", repo.updatedKeys)
+	}
+}
+
+func TestRoleHandlerUpdatePermissionsRejectsInvalidPermission(t *testing.T) {
+	roleID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	handler := &RoleHandler{
+		roleRepo: &fakeRoleReader{
+			roleByID: &models.Role{ID: roleID, Name: "manager"},
+		},
+	}
+	app := fiber.New()
+	app.Patch("/roles/:id/permissions", handler.UpdateRolePermissions)
+
+	req := httptest.NewRequest(
+		"PATCH",
+		"/roles/"+roleID.String()+"/permissions",
+		bytes.NewBufferString(`{"permissions":["can_delete_everything"]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestRoleHandlerUpdatePermissionsRejectsStaleExpectedPermissions(t *testing.T) {
+	roleID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	repo := &fakeRoleReader{
+		roleByID: &models.Role{
+			ID:          roleID,
+			Name:        "manager",
+			Permissions: []string{"access_users_page", "manage_users_page"},
+		},
+	}
+	handler := &RoleHandler{roleRepo: repo}
+	app := fiber.New()
+	app.Patch("/roles/:id/permissions", handler.UpdateRolePermissions)
+
+	req := httptest.NewRequest(
+		"PATCH",
+		"/roles/"+roleID.String()+"/permissions",
+		bytes.NewBufferString(`{"permissions":["access_users_page"],"expected_permissions":["access_users_page"]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected status 409, got %d", resp.StatusCode)
+	}
+	if repo.updatedID != uuid.Nil {
+		t.Fatalf("expected stale permissions submit to be blocked")
+	}
+}
+
+func TestRoleHandlerUpdatePermissionsAcceptsExpectedPermissionsInDifferentOrder(t *testing.T) {
+	roleID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	repo := &fakeRoleReader{
+		roleByID: &models.Role{
+			ID:          roleID,
+			Name:        "manager",
+			Permissions: []string{"manage_users_page", "access_users_page"},
+		},
+	}
+	handler := &RoleHandler{roleRepo: repo}
+	app := fiber.New()
+	app.Patch("/roles/:id/permissions", handler.UpdateRolePermissions)
+
+	req := httptest.NewRequest(
+		"PATCH",
+		"/roles/"+roleID.String()+"/permissions",
+		bytes.NewBufferString(`{"permissions":["access_users_page"],"expected_permissions":["access_users_page","manage_users_page"]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if repo.updatedID != roleID {
+		t.Fatalf("expected role permissions update to continue")
+	}
+}
+
+func TestRoleHandlerUpdatePermissionsDropsDeprecatedSettingsPermission(t *testing.T) {
+	roleID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	repo := &fakeRoleReader{
+		roleByID: &models.Role{ID: roleID, Name: "manager"},
+	}
+	handler := &RoleHandler{roleRepo: repo}
+	app := fiber.New()
+	app.Patch("/roles/:id/permissions", handler.UpdateRolePermissions)
+
+	req := httptest.NewRequest(
+		"PATCH",
+		"/roles/"+roleID.String()+"/permissions",
+		bytes.NewBufferString(`{"permissions":["access_users_page","access_settings_page"]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if len(repo.updatedKeys) != 1 || repo.updatedKeys[0] != "access_users_page" {
+		t.Fatalf("expected deprecated settings permission to be dropped, got %v", repo.updatedKeys)
+	}
+}
+
+func TestRoleHandlerUpdatePermissionsLocksOwner(t *testing.T) {
+	roleID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	handler := &RoleHandler{
+		roleRepo: &fakeRoleReader{
+			roleByID: &models.Role{ID: roleID, Name: "owner"},
+		},
+	}
+	app := fiber.New()
+	app.Patch("/roles/:id/permissions", handler.UpdateRolePermissions)
+
+	req := httptest.NewRequest(
+		"PATCH",
+		"/roles/"+roleID.String()+"/permissions",
+		bytes.NewBufferString(`{"permissions":["access_users_page"]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", resp.StatusCode)
 	}
 }
 

@@ -16,6 +16,10 @@ func expenseInventoryReason(action string, expenseID uuid.UUID) *string {
 }
 
 func (h *ExpenseHandler) isInventoryPurchaseCategory(ctx context.Context, categoryID *uuid.UUID) (bool, error) {
+	return h.isInventoryPurchaseCategoryWithArchived(ctx, categoryID, false)
+}
+
+func (h *ExpenseHandler) isInventoryPurchaseCategoryWithArchived(ctx context.Context, categoryID *uuid.UUID, allowArchived bool) (bool, error) {
 	if categoryID == nil {
 		return false, nil
 	}
@@ -27,8 +31,33 @@ func (h *ExpenseHandler) isInventoryPurchaseCategory(ctx context.Context, catego
 	if category == nil {
 		return false, fmt.Errorf("Invalid category ID")
 	}
+	if !category.IsActive && !allowArchived {
+		return false, fmt.Errorf("Archived expense categories cannot be used")
+	}
 
 	return isInventoryPurchaseExpenseCategory(category), nil
+}
+
+func (h *ExpenseHandler) ensureExpenseInventoryProductActive(ctx context.Context, productID *uuid.UUID) error {
+	if productID == nil {
+		return nil
+	}
+	if h.productRepo == nil {
+		return fmt.Errorf("Failed to load product")
+	}
+
+	product, err := h.productRepo.GetByID(ctx, *productID)
+	if err != nil {
+		return fmt.Errorf("Failed to load product")
+	}
+	if product == nil {
+		return fmt.Errorf("Product not found")
+	}
+	if !product.IsActive {
+		return fmt.Errorf("Archived products cannot be changed")
+	}
+
+	return nil
 }
 
 func (h *ExpenseHandler) createExpenseModel(ctx context.Context, req CreateExpenseRequest, userID uuid.UUID) (*models.Expense, error) {
@@ -65,6 +94,9 @@ func (h *ExpenseHandler) createExpenseModel(ctx context.Context, req CreateExpen
 		if quantity == nil {
 			return nil, fmt.Errorf("Quantity is required for Inventory Purchase")
 		}
+		if err := h.ensureExpenseInventoryProductActive(ctx, productID); err != nil {
+			return nil, err
+		}
 	} else {
 		productID = nil
 		quantity = nil
@@ -88,6 +120,9 @@ func (h *ExpenseHandler) createExpenseModel(ctx context.Context, req CreateExpen
 func (h *ExpenseHandler) createExpense(ctx context.Context, expense *models.Expense, userID uuid.UUID) (*models.Expense, error) {
 	if !expense.AppliesInventory || expense.ProductID == nil || expense.Quantity == nil {
 		return h.repo.Create(ctx, expense)
+	}
+	if err := h.ensureExpenseInventoryProductActive(ctx, expense.ProductID); err != nil {
+		return nil, err
 	}
 
 	tx, err := h.repo.BeginTx(ctx)
@@ -146,6 +181,9 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 
 	isSameProduct := oldAppliesInventory && newAppliesInventory && *existing.ProductID == *finalProductID
 	if isSameProduct {
+		if err := h.ensureExpenseInventoryProductActive(ctx, finalProductID); err != nil {
+			return err
+		}
 		oldQuantity := decimal.Zero
 		if existing.Quantity != nil {
 			oldQuantity = *existing.Quantity
@@ -176,6 +214,9 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 	}
 
 	if oldAppliesInventory {
+		if err := h.ensureExpenseInventoryProductActive(ctx, existing.ProductID); err != nil {
+			return err
+		}
 		_, err := h.inventoryRepo.AdjustStockWithTx(
 			ctx,
 			tx,
@@ -193,6 +234,9 @@ func (h *ExpenseHandler) syncExpenseInventory(ctx context.Context, tx pgx.Tx, ex
 	}
 
 	if newAppliesInventory {
+		if err := h.ensureExpenseInventoryProductActive(ctx, finalProductID); err != nil {
+			return err
+		}
 		_, err := h.inventoryRepo.AdjustStockWithTx(
 			ctx,
 			tx,

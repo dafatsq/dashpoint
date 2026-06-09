@@ -73,7 +73,7 @@ export function DashboardChangesList({ logs, isLoading, error, onRetry }: Dashbo
                 </span>
                 <div className="flex items-center gap-1.5 text-sm font-medium">
                   <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="truncate max-w-[150px] sm:max-w-[200px]">{log.user_name || "System"}</span>
+                  <span className="break-words">{log.user_name || "System"}</span>
                 </div>
               </div>
               <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDashboardDate(log.created_at)}</span>

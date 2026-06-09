@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/middleware"
@@ -27,6 +30,28 @@ func (h *ProductHandler) GetInventory(c *fiber.Ctx) error {
 	if err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "INVALID_ADJUSTMENT_TYPE", err.Error())
 	}
+	adjustedBy, err := parseInventoryAdjustedByFilter(c.Query("user_id"))
+	if err != nil {
+		return productJSONError(c, fiber.StatusBadRequest, "INVALID_USER_ID", err.Error())
+	}
+
+	var startDate, endDate *time.Time
+	if startStr := c.Query("from"); startStr != "" {
+		parsed, err := parseReportDay(startStr, "from")
+		if err != nil {
+			return productJSONError(c, fiber.StatusBadRequest, "INVALID_START_DATE", "Invalid from format. Use YYYY-MM-DD")
+		}
+		parsed = reportDayStart(parsed)
+		startDate = &parsed
+	}
+	if endStr := c.Query("to"); endStr != "" {
+		parsed, err := parseReportDay(endStr, "to")
+		if err != nil {
+			return productJSONError(c, fiber.StatusBadRequest, "INVALID_END_DATE", "Invalid to format. Use YYYY-MM-DD")
+		}
+		exclusiveEnd := reportDayStart(parsed).Add(24 * time.Hour)
+		endDate = &exclusiveEnd
+	}
 
 	inventory, repoErr := h.inventoryRepo.GetByProductID(c.Context(), id)
 	if repoErr != nil {
@@ -36,13 +61,26 @@ func (h *ProductHandler) GetInventory(c *fiber.Ctx) error {
 		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Inventory not found")
 	}
 
-	adjustments, total, _ := h.inventoryRepo.GetAdjustmentHistory(c.Context(), id, limit, offset, adjustmentType)
+	adjustments, total, _ := h.inventoryRepo.GetAdjustmentHistory(c.Context(), id, limit, offset, adjustmentType, adjustedBy, startDate, endDate)
 
 	return c.JSON(fiber.Map{
 		"inventory":          inventoryResponse(inventory),
 		"recent_adjustments": adjustments,
 		"total_adjustments":  total,
 	})
+}
+
+func parseInventoryAdjustedByFilter(value string) (*uuid.UUID, error) {
+	if value == "" || value == "all" {
+		return nil, nil
+	}
+
+	userID, err := uuid.Parse(value)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "Invalid user_id format")
+	}
+
+	return &userID, nil
 }
 
 func parseInventoryAdjustmentTypeFilter(value string) (*models.AdjustmentType, error) {
@@ -100,6 +138,13 @@ func (h *ProductHandler) UpdateInventoryThreshold(c *fiber.Ctx) error {
 	if inventory == nil {
 		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Inventory not found")
 	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, inventory.UpdatedAt)
+	if staleErr != nil {
+		return productJSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return productJSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
+	}
 
 	oldThreshold := inventory.LowStockThreshold
 	if err := h.inventoryRepo.UpdateThresholds(c.Context(), id, req.LowStockThreshold); err != nil {
@@ -143,7 +188,7 @@ func inventoryResponse(inventory *models.InventoryItem) fiber.Map {
 		"available_quantity":  inventory.AvailableQuantity().String(),
 		"low_stock_threshold": inventory.LowStockThreshold.String(),
 		"is_low_stock":        inventory.IsLowStock(),
-		"updated_at":          inventory.UpdatedAt,
+		"updated_at":          inventory.UpdatedAt.Format(time.RFC3339Nano),
 	}
 }
 
@@ -163,6 +208,20 @@ func (h *ProductHandler) AdjustStock(c *fiber.Ctx) error {
 	}
 	if !product.IsActive {
 		return productJSONError(c, fiber.StatusConflict, "PRODUCT_INACTIVE", "Archived products cannot be changed")
+	}
+	inventory, repoErr := h.inventoryRepo.GetByProductID(c.Context(), req.ProductID)
+	if repoErr != nil {
+		return productInternalError(c, repoErr, "Failed to get inventory", "Failed to retrieve inventory")
+	}
+	if inventory == nil {
+		return productJSONError(c, fiber.StatusNotFound, "NOT_FOUND", "Inventory not found")
+	}
+	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, inventory.UpdatedAt)
+	if staleErr != nil {
+		return productJSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	}
+	if stale {
+		return productJSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
 	}
 
 	userID := middleware.GetUserID(c)

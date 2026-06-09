@@ -36,8 +36,9 @@ func NewCashDrawerHandler(cashDrawerRepo cashDrawerStore, shiftRepo shiftLookupS
 
 // CashDrawerRequest represents the request for pay-in/pay-out.
 type CashDrawerRequest struct {
-	Amount string `json:"amount"`
-	Reason string `json:"reason"`
+	Amount  string  `json:"amount"`
+	Reason  string  `json:"reason"`
+	ShiftID *string `json:"shift_id"`
 }
 
 // PayIn handles POST /api/v1/shifts/pay-in.
@@ -89,6 +90,13 @@ func (h *CashDrawerHandler) recordCashDrawerOperation(c *fiber.Ctx, opType model
 	req, amount, err := parseCashDrawerRequest(c)
 	if err != nil {
 		return respondAPIError(c, err)
+	}
+	expectedShiftID, err := parseExpectedUUID(req.ShiftID)
+	if err != nil {
+		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_SHIFT_ID", "Invalid shift_id")
+	}
+	if expectedShiftID != nil && *expectedShiftID != shift.ID {
+		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleShiftMessage)
 	}
 
 	op := &models.CashDrawerOperation{

@@ -182,7 +182,10 @@ export function SettingsScreen() {
     try {
       const result = await api.updateUser(
         user.id,
-        buildProfileUpdatePayload(user, editForm),
+        {
+          ...buildProfileUpdatePayload(user, editForm),
+          expected_updated_at: user.updated_at,
+        },
       );
       if (result.error) {
         showError("Update Failed", result.error);
@@ -245,6 +248,7 @@ export function SettingsScreen() {
         open={editProfileOpen}
         form={editForm}
         isSubmitting={isUpdatingProfile}
+        hasChanges={hasProfileEditChanges}
         onOpenChange={setEditProfileOpen}
         onFormChange={setEditForm}
         onSubmit={handleUpdateProfile}

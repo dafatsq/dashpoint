@@ -1,4 +1,4 @@
-import type { User } from "@/types";
+import type { Role, User } from "@/types";
 
 import type { ApiTransport } from "./transport";
 import type { UserApi, UsersResponse } from "./types";
@@ -24,6 +24,12 @@ function buildUsersPageQuery(params: {
 
   const query = searchParams.toString();
   return query ? `?${query}` : "";
+}
+
+function withExpectedUpdatedAt(path: string, expectedUpdatedAt?: string): string {
+  if (!expectedUpdatedAt) return path;
+  const searchParams = new URLSearchParams({ expected_updated_at: expectedUpdatedAt });
+  return `${path}?${searchParams.toString()}`;
 }
 
 export function createUserApi(transport: ApiTransport): UserApi {
@@ -77,18 +83,29 @@ export function createUserApi(transport: ApiTransport): UserApi {
       if (result.error) return { error: result.error };
       return { data: result.data?.user };
     },
-    deleteUser(id) {
-      return transport.request(`/users/${id}`, { method: "DELETE" });
+    deleteUser(id, expectedUpdatedAt) {
+      return transport.request(withExpectedUpdatedAt(`/users/${id}`, expectedUpdatedAt), {
+        method: "DELETE",
+      });
     },
-    permanentDeleteUser(id) {
-      return transport.request(`/users/${id}/permanent`, { method: "DELETE" });
+    permanentDeleteUser(id, expectedUpdatedAt) {
+      return transport.request(
+        withExpectedUpdatedAt(`/users/${id}/permanent`, expectedUpdatedAt),
+        { method: "DELETE" },
+      );
     },
     async getRoles() {
-      const result = await transport.request<{
-        roles: { id: string; name: string; description: string }[];
-      }>("/roles");
+      const result = await transport.request<{ roles: Role[] }>("/roles");
       if (result.error) return { error: result.error };
       return { data: result.data?.roles || [] };
+    },
+    async updateRolePermissions(id, permissions, expectedPermissions) {
+      const result = await transport.request<{ role: Role }>(`/roles/${id}/permissions`, {
+        method: "PATCH",
+        body: { permissions, expected_permissions: expectedPermissions },
+      });
+      if (result.error) return { error: result.error };
+      return { data: result.data?.role };
     },
   };
 }

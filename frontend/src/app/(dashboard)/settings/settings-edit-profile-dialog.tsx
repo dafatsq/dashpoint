@@ -20,6 +20,7 @@ interface SettingsEditProfileDialogProps {
   form: SettingsProfileForm;
 
   isSubmitting: boolean;
+  hasChanges: boolean;
   onOpenChange: (open: boolean) => void;
   onFormChange: (form: SettingsProfileForm) => void;
   onSubmit: (event: React.FormEvent) => void;
@@ -29,6 +30,7 @@ export function SettingsEditProfileDialog({
   open,
   form,
   isSubmitting,
+  hasChanges,
   onOpenChange,
   onFormChange,
   onSubmit,
@@ -111,16 +113,17 @@ export function SettingsEditProfileDialog({
               />
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse gap-2 pt-2">
             <Button
               type="button"
               variant="outline"
+              className="w-full"
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" className="w-full" disabled={isSubmitting || !hasChanges}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -36,6 +36,11 @@ type CreateSaleRequest struct {
 	Notes          *string
 }
 
+// ValidateSaleCartRequest contains cart items to validate before checkout.
+type ValidateSaleCartRequest struct {
+	Items []CreateSaleItemRequest
+}
+
 // CreateSaleItemRequest contains data for a sale item.
 type CreateSaleItemRequest struct {
 	ProductID      uuid.UUID

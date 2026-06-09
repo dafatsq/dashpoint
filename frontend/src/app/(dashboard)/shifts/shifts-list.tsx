@@ -78,7 +78,7 @@ export function ShiftsList({ shifts, isLoading, error, page, limit, total, hasMo
                 )}
                 <div className="flex items-center gap-1 text-sm font-medium flex-wrap">
                   <UserIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                  <span className="truncate max-w-[120px] sm:max-w-[200px]">Opened by {shift.opened_by_name || "Unknown"}</span>
+                  <span className="break-words">Opened by {shift.opened_by_name || "Unknown"}</span>
                   {!summary.isOpen && shift.closed_by_name ? (
                     <span className="text-muted-foreground text-[10px] sm:text-xs font-normal">(Closed by {shift.closed_by_name})</span>
                   ) : null}
@@ -90,15 +90,15 @@ export function ShiftsList({ shifts, isLoading, error, page, limit, total, hasMo
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm mt-3">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className="text-muted-foreground text-xs">Open:</span>
-                <span className="font-medium">{formatShiftCurrency(summary.openingCash)}</span>
+                <span className="font-medium font-mono">{formatShiftCurrency(summary.openingCash)}</span>
               </div>
               {!summary.isOpen && summary.closingCash !== null ? (
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
                   <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
                   <span className="text-muted-foreground text-xs sm:ml-0">Close:</span>
-                  <span className="font-medium">{formatShiftCurrency(summary.closingCash)}</span>
+                  <span className="font-medium font-mono">{formatShiftCurrency(summary.closingCash)}</span>
                   {summary.cashDifference !== null ? (
-                    <span className={`text-xs ml-1 font-medium ${getShiftCashDifferenceTone(summary.cashDifference)}`}>
+                    <span className={`text-xs ml-1 font-medium font-mono ${getShiftCashDifferenceTone(summary.cashDifference)}`}>
                       ({summary.cashDifference > 0 ? "+" : ""}
                       {formatShiftCurrency(summary.cashDifference)})
                     </span>
@@ -129,7 +129,7 @@ export function ShiftsList({ shifts, isLoading, error, page, limit, total, hasMo
                           <span>{formatShiftDateTime(operation.created_at)}</span>
                         </div>
                       </div>
-                      <span className="font-medium whitespace-nowrap">{formatShiftCurrency(Number.parseFloat(operation.amount))}</span>
+                      <span className="font-medium whitespace-nowrap font-mono">{formatShiftCurrency(Number.parseFloat(operation.amount))}</span>
                     </div>
                   ))}
                 </div>

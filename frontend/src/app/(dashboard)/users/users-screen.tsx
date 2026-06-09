@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ShieldCheck, Users as UsersIcon } from "lucide-react";
 
 import { Header } from "@/components/layout/header";
 import api from "@/lib/api";
 import { PERMISSIONS, useAuth } from "@/contexts/auth-context";
 import { useGlobalError } from "@/contexts/error-context";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   CreateUserRequest,
+  Role,
   UpdateUserRequest,
   User,
 } from "@/types";
@@ -22,17 +25,14 @@ import {
 import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
 import { UsersFormDialog } from "./users-form-dialog";
 import { UsersList } from "./users-list";
+import { UsersRolePermissionsDialog } from "./users-role-permissions-dialog";
+import { normalizeRolePermissionKeys } from "./users-role-permissions";
+import { UsersRolesList } from "./users-roles-list";
 
 export default function UsersScreen() {
   const { user: currentUser, hasPermission } = useAuth();
-  const canEditUserAny =
-    hasPermission(PERMISSIONS.USERS_EDIT) ||
-    hasPermission("can_edit_manager_users") ||
-    hasPermission("can_edit_cashier_users");
-  const canDeleteUserAny =
-    hasPermission(PERMISSIONS.USERS_DELETE) ||
-    hasPermission("can_delete_manager_users") ||
-    hasPermission("can_delete_cashier_users");
+  const canEditUserAny = hasPermission(PERMISSIONS.USERS_EDIT);
+  const canDeleteUserAny = hasPermission(PERMISSIONS.USERS_DELETE);
   const isOwner = currentUser?.role_name === "owner";
   const assignableCreateRoles = useMemo(
     () =>
@@ -46,7 +46,8 @@ export default function UsersScreen() {
   const canCreateUser = assignableCreateRoles.length > 0;
 
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Array<{ id: string; name: string; description?: string }>>([]);
+  const [activeTab, setActiveTab] = useState<"users" | "roles">("users");
+  const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,6 +64,10 @@ export default function UsersScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [rolePermissionsDialogOpen, setRolePermissionsDialogOpen] = useState(false);
+  const [rolePermissionValues, setRolePermissionValues] = useState<string[]>([]);
+  const [isSubmittingRolePermissions, setIsSubmittingRolePermissions] = useState(false);
   const { showError } = useGlobalError();
 
   const [formData, setFormData] = useState<CreateUserRequest>({
@@ -136,6 +141,15 @@ export default function UsersScreen() {
     fetchRoles();
   }, []);
 
+  const refreshRoles = async () => {
+    const result = await api.getRoles();
+    if (result.error) {
+      showError("Load Failed", result.error);
+      return;
+    }
+    setRoles(result.data || []);
+  };
+
   const resetForm = () => {
     setFormData({
       email: "",
@@ -182,6 +196,19 @@ export default function UsersScreen() {
         : assignableCreateRoles,
     [assignableCreateRoles, currentUser, editingUser, hasPermission, isOwner],
   );
+  const hasRolePermissionChanges = useMemo(() => {
+    if (!editingRole) {
+      return false;
+    }
+
+    const savedPermissions = normalizeRolePermissionKeys(editingRole.permissions || []);
+    const nextPermissions = normalizeRolePermissionKeys(rolePermissionValues);
+    if (savedPermissions.length !== nextPermissions.length) {
+      return true;
+    }
+
+    return savedPermissions.some((permission, index) => permission !== nextPermissions[index]);
+  }, [editingRole, rolePermissionValues]);
 
   const submitUserForm = async () => {
     if (!hasChanges) {
@@ -224,6 +251,7 @@ export default function UsersScreen() {
           name: formData.name,
           role_id: roleID,
           email: formData.email,
+          expected_updated_at: editingUser.updated_at,
         };
         if (formData.password) updateData.password = formData.password;
         if (formData.pin) updateData.pin = formData.pin;
@@ -264,7 +292,7 @@ export default function UsersScreen() {
 
     setIsSubmitting(true);
     try {
-      const result = await api.deleteUser(deletingUser.id);
+      const result = await api.deleteUser(deletingUser.id, deletingUser.updated_at);
       if (result.error) {
         showError("Archive Failed", result.error);
         return;
@@ -281,7 +309,10 @@ export default function UsersScreen() {
     setIsSubmitting(true);
     setPageError(null);
     try {
-      const result = await api.updateUser(user.id, { is_active: true });
+      const result = await api.updateUser(user.id, {
+        is_active: true,
+        expected_updated_at: user.updated_at,
+      });
       if (result.error) {
         showError("Restore Failed", result.error);
         return;
@@ -299,7 +330,10 @@ export default function UsersScreen() {
 
     setIsSubmitting(true);
     try {
-      const result = await api.permanentDeleteUser(deletingUser.id);
+      const result = await api.permanentDeleteUser(
+        deletingUser.id,
+        deletingUser.updated_at,
+      );
       if (result.error) {
         showError("Delete Failed", result.error);
         return;
@@ -309,6 +343,50 @@ export default function UsersScreen() {
       setDeletingUser(null);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const openRolePermissionsDialog = (role: Role) => {
+    if (!isOwner || role.name === "owner") {
+      return;
+    }
+
+    setEditingRole(role);
+    setRolePermissionValues(normalizeRolePermissionKeys(role.permissions || []));
+    setRolePermissionsDialogOpen(true);
+  };
+
+  const submitRolePermissions = async () => {
+    if (!editingRole || !isOwner) {
+      return;
+    }
+    if (!hasRolePermissionChanges) {
+      return;
+    }
+
+    setIsSubmittingRolePermissions(true);
+    try {
+      const result = await api.updateRolePermissions(
+        editingRole.id,
+        normalizeRolePermissionKeys(rolePermissionValues),
+        normalizeRolePermissionKeys(editingRole.permissions || []),
+      );
+      if (result.error) {
+        showError("Save Failed", result.error);
+        return;
+      }
+      if (result.data) {
+        const savedRole = result.data;
+        setRoles((current) =>
+          current.map((role) => (role.id === savedRole.id ? savedRole : role)),
+        );
+        setEditingRole(savedRole);
+        setRolePermissionValues(normalizeRolePermissionKeys(savedRole.permissions || []));
+      } else {
+        await refreshRoles();
+      }
+    } finally {
+      setIsSubmittingRolePermissions(false);
     }
   };
 
@@ -351,40 +429,67 @@ export default function UsersScreen() {
   return (
     <div className="flex flex-col h-full">
       <Header title="Users" />
-      <UsersList
-        pageError={pageError}
-        users={users}
-        viewMode={viewMode}
-        isLoading={isLoading}
-        canCreateUser={canCreateUser}
-        canEditUserAny={canEditUserAny}
-        canDeleteUserAny={canDeleteUserAny}
-        searchQuery={searchQuery}
-        selectedRole={selectedRole}
-        page={page}
-        limit={limit}
-        total={total}
-        hasMore={hasMore}
-        isSubmitting={isSubmitting}
-        onCreate={openCreateDialog}
-        onSearchChange={handleSearchChange}
-        onRoleChange={handleRoleChange}
-        onViewModeChange={handleViewModeChange}
-        onLimitChange={handleLimitChange}
-        onPageChange={setPage}
-        canEditUser={userCanEdit}
-        canDeleteUser={userCanDelete}
-        onEdit={openEditDialog}
-        onArchive={(user) => {
-          setDeletingUser(user);
-          setDeleteDialogOpen(true);
-        }}
-        onPermanentDelete={(user) => {
-          setDeletingUser(user);
-          setPermanentDeleteDialogOpen(true);
-        }}
-        onRestore={restoreUser}
-      />
+      <div className="flex-1 overflow-auto">
+        <div className="px-6 pt-6">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "users" | "roles")} className="w-full xl:w-auto">
+            <TabsList className="grid w-full grid-cols-2 xl:min-w-[400px]">
+              <TabsTrigger value="users" className="flex items-center gap-2">
+                <UsersIcon className="h-4 w-4 shrink-0" />
+                Users
+              </TabsTrigger>
+              <TabsTrigger value="roles" className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                Roles
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {activeTab === "users" ? (
+          <UsersList
+            pageError={pageError}
+            users={users}
+            viewMode={viewMode}
+            isLoading={isLoading}
+            canCreateUser={canCreateUser}
+            canEditUserAny={canEditUserAny}
+            canDeleteUserAny={canDeleteUserAny}
+            searchQuery={searchQuery}
+            selectedRole={selectedRole}
+            page={page}
+            limit={limit}
+            total={total}
+            hasMore={hasMore}
+            isSubmitting={isSubmitting}
+            onCreate={openCreateDialog}
+            onSearchChange={handleSearchChange}
+            onRoleChange={handleRoleChange}
+            onViewModeChange={handleViewModeChange}
+            onLimitChange={handleLimitChange}
+            onPageChange={setPage}
+            canEditUser={userCanEdit}
+            canDeleteUser={userCanDelete}
+            onEdit={openEditDialog}
+            onArchive={(user) => {
+              setDeletingUser(user);
+              setDeleteDialogOpen(true);
+            }}
+            onPermanentDelete={(user) => {
+              setDeletingUser(user);
+              setPermanentDeleteDialogOpen(true);
+            }}
+            onRestore={restoreUser}
+          />
+        ) : (
+          <div className="p-6 pt-4">
+            <UsersRolesList
+              roles={roles}
+              isOwner={isOwner}
+              onEditPermissions={openRolePermissionsDialog}
+            />
+          </div>
+        )}
+      </div>
 
       <UsersFormDialog
         open={dialogOpen}
@@ -395,6 +500,7 @@ export default function UsersScreen() {
         setFormData={setFormData}
         formErrors={formErrors}
         isSubmitting={isSubmitting}
+        hasChanges={hasChanges}
         availableRoles={availableDialogRoles}
         onSubmit={submitUserForm}
       />
@@ -420,6 +526,24 @@ export default function UsersScreen() {
         isSubmitting={isSubmitting}
         loadingText="Deleting..."
         onConfirm={permanentlyDeleteUser}
+      />
+
+      <UsersRolePermissionsDialog
+        open={rolePermissionsDialogOpen}
+        role={editingRole}
+        selectedPermissions={rolePermissionValues}
+        isSubmitting={isSubmittingRolePermissions}
+        hasChanges={hasRolePermissionChanges}
+        onOpenChange={(open) => {
+          setRolePermissionsDialogOpen(open);
+          if (!open) {
+            setEditingRole(null);
+            setRolePermissionValues([]);
+            setIsSubmittingRolePermissions(false);
+          }
+        }}
+        onPermissionsChange={setRolePermissionValues}
+        onSubmit={() => void submitRolePermissions()}
       />
     </div>
   );

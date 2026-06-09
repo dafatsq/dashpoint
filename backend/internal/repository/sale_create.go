@@ -84,6 +84,21 @@ func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*m
 	return sale, nil
 }
 
+// ValidateCart verifies live product state for a cart without creating a sale.
+func (r *SaleRepository) ValidateCart(ctx context.Context, req *ValidateSaleCartRequest) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, _, _, _, err := prepareSaleItems(ctx, tx, req.Items, time.Now()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func prepareSaleItems(ctx context.Context, tx pgx.Tx, items []CreateSaleItemRequest, now time.Time) ([]salePreparedItem, decimal.Decimal, decimal.Decimal, decimal.Decimal, error) {
 	var subtotal, taxAmount, itemDiscountAmount decimal.Decimal
 	preparedItems := make([]salePreparedItem, 0, len(items))
@@ -92,6 +107,9 @@ func prepareSaleItems(ctx context.Context, tx pgx.Tx, items []CreateSaleItemRequ
 		item := &items[i]
 		product, err := loadSaleProductForUpdate(ctx, tx, item.ProductID)
 		if err != nil {
+			return nil, decimal.Zero, decimal.Zero, decimal.Zero, err
+		}
+		if err := validateSaleItemUnitPrice(product, item); err != nil {
 			return nil, decimal.Zero, decimal.Zero, decimal.Zero, err
 		}
 
@@ -109,6 +127,13 @@ func prepareSaleItems(ctx context.Context, tx pgx.Tx, items []CreateSaleItemRequ
 	}
 
 	return preparedItems, subtotal, taxAmount, itemDiscountAmount, nil
+}
+
+func validateSaleItemUnitPrice(product *models.Product, item *CreateSaleItemRequest) error {
+	if item.UnitPrice.Equal(product.Price) {
+		return nil
+	}
+	return fmt.Errorf("product price changed for %s: current price is %s, submitted price is %s", product.Name, product.Price.String(), item.UnitPrice.String())
 }
 
 func buildPreparedSaleItem(product *models.Product, item *CreateSaleItemRequest, productQty decimal.Decimal, now time.Time) salePreparedItem {

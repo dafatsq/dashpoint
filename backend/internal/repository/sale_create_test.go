@@ -21,7 +21,7 @@ func TestBuildPreparedSaleItemUsesLiveProductPrice(t *testing.T) {
 	clientItem := &CreateSaleItemRequest{
 		ProductID:      product.ID,
 		Quantity:       decimal.RequireFromString("2"),
-		UnitPrice:      decimal.RequireFromString("12.00"),
+		UnitPrice:      decimal.RequireFromString("15.00"),
 		DiscountAmount: decimal.RequireFromString("1.00"),
 	}
 
@@ -38,5 +38,37 @@ func TestBuildPreparedSaleItemUsesLiveProductPrice(t *testing.T) {
 	}
 	if !prepared.SaleItem.Total.Equal(decimal.RequireFromString("32.00")) {
 		t.Fatalf("expected total 32.00, got %s", prepared.SaleItem.Total)
+	}
+}
+
+func TestValidateSaleItemUnitPriceRejectsStaleCartPrice(t *testing.T) {
+	product := &models.Product{
+		Name:  "Cola",
+		Price: decimal.RequireFromString("4500"),
+	}
+	item := &CreateSaleItemRequest{
+		UnitPrice: decimal.RequireFromString("450"),
+	}
+
+	err := validateSaleItemUnitPrice(product, item)
+	if err == nil {
+		t.Fatal("expected stale price to be rejected")
+	}
+	if err.Error() != "product price changed for Cola: current price is 4500, submitted price is 450" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSaleItemUnitPriceAcceptsMatchingPriceWithDifferentScale(t *testing.T) {
+	product := &models.Product{
+		Name:  "Cola",
+		Price: decimal.RequireFromString("4500.00"),
+	}
+	item := &CreateSaleItemRequest{
+		UnitPrice: decimal.RequireFromString("4500"),
+	}
+
+	if err := validateSaleItemUnitPrice(product, item); err != nil {
+		t.Fatalf("expected matching price to be accepted, got %v", err)
 	}
 }

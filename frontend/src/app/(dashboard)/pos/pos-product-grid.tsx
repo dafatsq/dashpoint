@@ -62,10 +62,10 @@ function ProductCard({
           style={{ display: product.image_url ? "none" : "block" }}
         />
       </div>
-      <p className="font-medium text-sm truncate">{product.name}</p>
+      <p className="font-medium text-sm break-words">{product.name}</p>
       <p className="text-xs text-muted-foreground">{product.category_name}</p>
       <div className="flex flex-col gap-1 mt-2">
-        <span className="font-bold text-primary">{formatCurrency(price)}</span>
+        <span className="font-bold text-primary font-mono">{formatCurrency(price)}</span>
         <span
           className={`text-xs font-medium ${
             isOutOfStock ? "text-red-600" : isLowStock ? "text-yellow-600" : "text-muted-foreground"

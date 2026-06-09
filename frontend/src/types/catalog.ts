@@ -13,6 +13,7 @@ export interface ProductInventory {
   available_quantity: string;
   low_stock_threshold: string;
   is_low_stock: boolean;
+  updated_at?: string;
 }
 
 export interface Product {
@@ -58,4 +59,5 @@ export interface UpdateProductRequest {
   category_id?: string;
   is_active?: boolean;
   image_url?: string;
+  expected_updated_at?: string;
 }
