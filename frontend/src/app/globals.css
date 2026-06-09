@@ -118,3 +118,14 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
+
+/* Remove double borders and gap when DialogHeader is directly followed by DialogFooter (empty dialog content) */
+[data-slot="dialog-header"]:has(+ [data-slot="dialog-footer"]) {
+  border-bottom-width: 0px !important;
+}
+
+[data-slot="dialog-header"] + [data-slot="dialog-footer"] {
+  margin-top: -1rem !important; /* cancels out DialogContent's gap-4 */
+  border-top-width: 0px !important;
+}
+
