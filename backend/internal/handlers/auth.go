@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -35,15 +37,22 @@ func NewAuthHandler(
 // Login handles POST /api/v1/auth/login.
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req LoginRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictAuthJSON(c, &req, false); err != nil {
 		return authInvalidRequest(c)
 	}
 
+	req.Email = normalizeLoginEmail(req.Email)
 	if req.Email == "" || req.Password == "" {
 		return authValidationError(c, "Email and password are required")
 	}
+	if len(req.Email) > 254 || !strings.Contains(req.Email, "@") {
+		return authValidationError(c, "Invalid email format")
+	}
+	if len(req.Password) > 128 {
+		return authValidationError(c, "Password is too long")
+	}
 
-	user, err := h.userRepo.GetByEmail(c.Context(), normalizeLoginEmail(req.Email))
+	user, err := h.userRepo.GetByEmail(c.Context(), req.Email)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get user by email")
 		return authInternalError(c, "An error occurred during login")
@@ -85,14 +94,19 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 // PINLogin handles POST /api/v1/auth/pin-login.
 func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 	var req PINLoginRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictAuthJSON(c, &req, false); err != nil {
 		return authInvalidRequest(c)
 	}
+	req.UserID = strings.TrimSpace(req.UserID)
+	req.PIN = strings.TrimSpace(req.PIN)
 	if req.UserID == "" {
 		return authValidationError(c, "User ID is required")
 	}
 	if req.PIN == "" {
 		return authValidationError(c, "PIN is required")
+	}
+	if len(req.PIN) > 32 {
+		return authValidationError(c, "PIN is too long")
 	}
 
 	userID, err := parseAuthUserID(req.UserID)
@@ -153,26 +167,26 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 
 // Refresh handles POST /api/v1/auth/refresh.
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
-	var req RefreshRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictAuthJSON(c, &struct{}{}, true); err != nil {
 		return authInvalidRequest(c)
 	}
-	if req.RefreshToken == "" {
-		return authValidationError(c, "Refresh token is required")
+	refreshToken := refreshTokenFromCookie(c)
+	if refreshToken == "" {
+		return authValidationError(c, "Refresh token cookie is required")
 	}
 
-	claims, err := h.jwtManager.ValidateRefreshToken(req.RefreshToken)
+	claims, err := h.jwtManager.ValidateRefreshToken(refreshToken)
 	if err != nil {
 		return authUnauthorized(c, "INVALID_TOKEN", "Invalid or expired refresh token")
 	}
 
-	tokenHash := hashToken(req.RefreshToken)
+	tokenHash := hashToken(refreshToken)
 	storedToken, err := h.refreshTokenRepo.GetByTokenHash(c.Context(), tokenHash)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get refresh token from database")
 		return authInternalError(c, "An error occurred during token refresh")
 	}
-	if storedToken == nil || !storedToken.IsValid() {
+	if storedToken == nil || !storedToken.IsValid() || storedToken.UserID != claims.UserID {
 		return authUnauthorized(c, "INVALID_TOKEN", "Refresh token has been revoked or expired")
 	}
 
@@ -190,16 +204,17 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 
 // Logout handles POST /api/v1/auth/logout.
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
-	var req RefreshRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictAuthJSON(c, &struct{}{}, true); err != nil {
 		return authInvalidRequest(c)
 	}
 
-	if req.RefreshToken != "" {
-		if err := h.refreshTokenRepo.Revoke(c.Context(), hashToken(req.RefreshToken), "user_logout"); err != nil {
+	refreshToken := refreshTokenFromCookie(c)
+	if refreshToken != "" {
+		if err := h.refreshTokenRepo.Revoke(c.Context(), hashToken(refreshToken), "user_logout"); err != nil {
 			log.Error().Err(err).Msg("Failed to revoke refresh token")
 		}
 	}
+	clearRefreshTokenCookie(c)
 
 	return c.JSON(fiber.Map{
 		"message": "Logged out successfully",

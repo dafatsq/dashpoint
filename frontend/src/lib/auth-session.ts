@@ -23,16 +23,11 @@ export function getAccessToken(): string | null {
   return getSessionItem("access_token");
 }
 
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return getSessionItem("refresh_token");
-}
-
-export function setAuthTokens(accessToken: string, refreshToken: string): void {
+export function setAuthTokens(accessToken: string): void {
   if (typeof window === "undefined") return;
 
   setSessionItem("access_token", accessToken);
-  setSessionItem("refresh_token", refreshToken);
+  removeSessionItem("refresh_token");
 }
 
 export function persistUserSession(user: User): void {
@@ -101,7 +96,7 @@ export function persistAuthPayload(
   payload: AuthPayload,
   options: { saveAccount?: boolean } = {},
 ): User | null {
-  setAuthTokens(payload.access_token, payload.refresh_token);
+  setAuthTokens(payload.access_token);
 
   if (!payload.user) {
     return null;
@@ -133,14 +128,11 @@ function normalizeStoredUser(storedUser: string): User | null {
 }
 
 export async function refreshSessionTokens(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-
   try {
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: "include",
     });
 
     if (!response.ok) {

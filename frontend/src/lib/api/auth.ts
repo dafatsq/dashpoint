@@ -2,7 +2,6 @@ import type { ApiTransport } from "./transport";
 import type { ApiResponse, AuthApi } from "./types";
 import type { AuthPayload } from "@/lib/auth-user";
 import type { User } from "@/types";
-import { getRefreshToken } from "@/lib/auth-session";
 
 export function createAuthApi(transport: ApiTransport): AuthApi & {
   request: ApiTransport["request"];
@@ -29,19 +28,23 @@ export function createAuthApi(transport: ApiTransport): AuthApi & {
       return request<AuthPayload>("/auth/login", {
         method: "POST",
         body: { email, password },
+        credentials: "include",
+        skipAuth: true,
       });
     },
     pinLogin(userId: string, pin: string) {
       return request<AuthPayload>("/auth/pin-login", {
         method: "POST",
         body: { user_id: userId, pin },
+        credentials: "include",
+        skipAuth: true,
       });
     },
     async logout() {
-      const refreshToken = getRefreshToken();
       const result = await request("/auth/logout", {
         method: "POST",
-        body: { refresh_token: refreshToken || "" },
+        credentials: "include",
+        skipAuth: true,
       });
       clearTokens();
       return result;

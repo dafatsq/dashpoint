@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 
 	"dashpoint/backend/internal/models"
 )
+
+var ErrRefreshTokenNotActive = errors.New("refresh token is not active")
 
 // RefreshTokenRepository handles refresh token database operations
 type RefreshTokenRepository struct {
@@ -118,12 +121,16 @@ func rotateRefreshTokenTx(ctx context.Context, tx refreshTokenTx, currentTokenHa
 	}
 	replacement.CreatedAt = now
 
-	if _, err := tx.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 		UPDATE refresh_tokens
 		SET revoked_at = $1, revoked_reason = $2
 		WHERE token_hash = $3 AND revoked_at IS NULL
-	`, now, reason, currentTokenHash); err != nil {
+	`, now, reason, currentTokenHash)
+	if err != nil {
 		return fmt.Errorf("failed to revoke refresh token during rotation: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrRefreshTokenNotActive
 	}
 
 	if _, err := tx.Exec(ctx, `

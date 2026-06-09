@@ -9,10 +9,11 @@ import (
 	"github.com/google/uuid"
 
 	authpkg "dashpoint/backend/internal/auth"
+	"dashpoint/backend/internal/models"
 )
 
 func TestEventsHandlerSubscribeRequiresToken(t *testing.T) {
-	handler := NewEventsHandler(&fakeJWTManager{}, []string{"http://localhost:3000"})
+	handler := NewEventsHandler(&fakeJWTManager{}, &fakeAuthUserRepo{}, []string{"http://localhost:3000"})
 	app := fiber.New()
 	app.Get("/events/subscribe", handler.Subscribe)
 
@@ -27,11 +28,12 @@ func TestEventsHandlerSubscribeRequiresToken(t *testing.T) {
 }
 
 func TestEventsHandlerSubscribeRejectsInvalidToken(t *testing.T) {
-	handler := NewEventsHandler(&fakeJWTManager{validateAccessErr: fiber.ErrUnauthorized}, []string{"http://localhost:3000"})
+	handler := NewEventsHandler(&fakeJWTManager{validateAccessErr: fiber.ErrUnauthorized}, &fakeAuthUserRepo{}, []string{"http://localhost:3000"})
 	app := fiber.New()
 	app.Get("/events/subscribe", handler.Subscribe)
 
-	req := httptest.NewRequest("GET", "/events/subscribe?token=bad-token", nil)
+	req := httptest.NewRequest("GET", "/events/subscribe", nil)
+	req.Header.Set("Authorization", "Bearer bad-token")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
@@ -62,12 +64,12 @@ func TestEventStreamTokenPrefersAuthorizationHeader(t *testing.T) {
 	}
 }
 
-func TestEventStreamTokenFallsBackToQueryParam(t *testing.T) {
+func TestEventStreamTokenRejectsQueryParam(t *testing.T) {
 	app := fiber.New()
 	app.Get("/", func(c *fiber.Ctx) error {
 		token := eventStreamToken(c)
-		if token != "query-token" {
-			t.Fatalf("expected query token, got %q", token)
+		if token != "" {
+			t.Fatalf("expected empty token, got %q", token)
 		}
 		return c.SendStatus(fiber.StatusNoContent)
 	})
@@ -82,12 +84,33 @@ func TestEventStreamTokenFallsBackToQueryParam(t *testing.T) {
 	}
 }
 
+func TestEventsHandlerSubscribeRejectsInactiveUser(t *testing.T) {
+	userID := uuid.New()
+	handler := NewEventsHandler(
+		&fakeJWTManager{validateAccessClaims: &authpkg.Claims{UserID: userID}},
+		&fakeAuthUserRepo{userByID: &models.User{ID: userID, IsActive: false}},
+		[]string{"http://localhost:3000"},
+	)
+	app := fiber.New()
+	app.Get("/events/subscribe", handler.Subscribe)
+
+	req := httptest.NewRequest("GET", "/events/subscribe", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", resp.StatusCode)
+	}
+}
+
 func TestEventsHandlerBroadcastToMatchingUser(t *testing.T) {
 	userID := uuid.New()
 	otherID := uuid.New()
 	handler := NewEventsHandler(&fakeJWTManager{
 		validateAccessClaims: &authpkg.Claims{UserID: userID},
-	}, []string{"http://localhost:3000"})
+	}, &fakeAuthUserRepo{}, []string{"http://localhost:3000"})
 
 	matchClient := &Client{ID: "1", UserID: userID, Channel: make(chan UserEvent, 1), Done: make(chan struct{})}
 	otherClient := &Client{ID: "2", UserID: otherID, Channel: make(chan UserEvent, 1), Done: make(chan struct{})}
@@ -111,7 +134,7 @@ func TestEventsHandlerBroadcastToMatchingUser(t *testing.T) {
 
 func TestEventsHandlerDisconnectUserRemovesClients(t *testing.T) {
 	userID := uuid.New()
-	handler := NewEventsHandler(&fakeJWTManager{}, []string{"http://localhost:3000"})
+	handler := NewEventsHandler(&fakeJWTManager{}, &fakeAuthUserRepo{}, []string{"http://localhost:3000"})
 	handler.clients["1"] = &Client{ID: "1", UserID: userID, Channel: make(chan UserEvent, 1), Done: make(chan struct{})}
 	handler.clients["2"] = &Client{ID: "2", UserID: uuid.New(), Channel: make(chan UserEvent, 1), Done: make(chan struct{})}
 

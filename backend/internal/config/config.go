@@ -9,6 +9,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
+const (
+	defaultJWTExpiryMinutes       = 15
+	maxProductionJWTExpiryMinutes = 15
+	minProductionJWTSecretLength  = 32
+)
+
 // Config holds all configuration for the application
 type Config struct {
 	// Server
@@ -39,9 +45,9 @@ func Load() (*Config, error) {
 	}
 
 	// Parse JWT expiry
-	jwtExpiry, err := strconv.Atoi(getEnv("JWT_EXPIRY_MINUTES", "60"))
+	jwtExpiry, err := strconv.Atoi(getEnv("JWT_EXPIRY_MINUTES", strconv.Itoa(defaultJWTExpiryMinutes)))
 	if err != nil {
-		jwtExpiry = 60
+		jwtExpiry = defaultJWTExpiryMinutes
 	}
 	cfg.JWTExpiryMinutes = jwtExpiry
 
@@ -58,8 +64,17 @@ func Load() (*Config, error) {
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET is required")
 	}
+	if cfg.JWTExpiryMinutes <= 0 {
+		return nil, fmt.Errorf("JWT_EXPIRY_MINUTES must be greater than 0")
+	}
 	if !cfg.IsDevelopment() && !hasExplicitEnv("CORS_ORIGINS") {
 		return nil, fmt.Errorf("CORS_ORIGINS is required outside development")
+	}
+	if cfg.IsProduction() && len(cfg.JWTSecret) < minProductionJWTSecretLength {
+		return nil, fmt.Errorf("JWT_SECRET must be at least %d characters in production", minProductionJWTSecretLength)
+	}
+	if cfg.IsProduction() && cfg.JWTExpiryMinutes > maxProductionJWTExpiryMinutes {
+		return nil, fmt.Errorf("JWT_EXPIRY_MINUTES must be %d or less in production", maxProductionJWTExpiryMinutes)
 	}
 
 	return cfg, nil

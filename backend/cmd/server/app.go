@@ -19,6 +19,7 @@ import (
 )
 
 const uploadDirectory = "./uploads"
+const apiReadBufferSize = 32 * 1024
 
 type serverDependencies struct {
 	jwtManager        *auth.JWTManager
@@ -65,7 +66,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 
 	healthHandler := handlers.NewHealthHandler(db)
 	authHandler := handlers.NewAuthHandler(userRepo, refreshTokenRepo, jwtManager)
-	eventsHandler := handlers.NewEventsHandler(jwtManager, cfg.CORSOrigins)
+	eventsHandler := handlers.NewEventsHandler(jwtManager, userRepo, cfg.CORSOrigins)
 	userHandler := handlers.NewUserHandler(userRepo, roleRepo)
 	userHandler.SetEventsHandler(eventsHandler)
 
@@ -109,13 +110,7 @@ func newPermissionChecker(userRepo *repository.UserRepository) middleware.Permis
 }
 
 func newServerApp(cfg *config.Config, deps *serverDependencies) *fiber.App {
-	app := fiber.New(fiber.Config{
-		AppName:      "DashPoint POS API",
-		ErrorHandler: errorHandler,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 0,
-		IdleTimeout:  120 * time.Second,
-	})
+	app := fiber.New(serverFiberConfig())
 
 	app.Use(middleware.Recover())
 	app.Use(middleware.Logger())
@@ -135,6 +130,17 @@ func newServerApp(cfg *config.Config, deps *serverDependencies) *fiber.App {
 
 	registerRoutes(app, deps)
 	return app
+}
+
+func serverFiberConfig() fiber.Config {
+	return fiber.Config{
+		AppName:        "DashPoint POS API",
+		ErrorHandler:   errorHandler,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   0,
+		IdleTimeout:    120 * time.Second,
+		ReadBufferSize: apiReadBufferSize,
+	}
 }
 
 func errorHandler(c *fiber.Ctx, err error) error {
