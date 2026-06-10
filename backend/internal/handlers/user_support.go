@@ -4,6 +4,8 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -27,6 +29,10 @@ type userRepository interface {
 	NameExists(context.Context, string, *uuid.UUID) (bool, error)
 }
 
+type userRefreshTokenRevoker interface {
+	RevokeAllForUser(context.Context, uuid.UUID, string) error
+}
+
 type roleReader interface {
 	GetByID(context.Context, uuid.UUID) (*models.Role, error)
 }
@@ -46,6 +52,13 @@ const (
 	userActionCreate userAction = "create"
 	userActionEdit   userAction = "edit"
 	userActionDelete userAction = "delete"
+
+	userMaxJSONBodyBytes = 8192
+	userMaxNameLength    = 100
+	userMaxEmailLength   = 254
+	userMaxPasswordBytes = 128
+	userMaxPINLength     = 6
+	userMinPINLength     = 4
 )
 
 func badUserRequest(c *fiber.Ctx, code, message string) error {
@@ -129,6 +142,107 @@ func baseUserAuditValues(user *models.User) map[string]interface{} {
 		values["email"] = *user.Email
 	}
 	return values
+}
+
+func parseStrictUserJSON(c *fiber.Ctx, dest interface{}) error {
+	return parseStrictJSONBody(c, dest, userMaxJSONBodyBytes)
+}
+
+func validateUserName(name string, required bool) string {
+	name = strings.TrimSpace(name)
+	if required && name == "" {
+		return "Name is required"
+	}
+	if len(name) > userMaxNameLength {
+		return "Name is too long"
+	}
+	return ""
+}
+
+func validateUserEmail(email *string, required bool) string {
+	if email == nil {
+		if required {
+			return "Email is required"
+		}
+		return ""
+	}
+
+	value := strings.TrimSpace(*email)
+	if value == "" {
+		if required {
+			return "Email is required"
+		}
+		return ""
+	}
+	if len(value) > userMaxEmailLength || !strings.Contains(value, "@") {
+		return "Invalid email format"
+	}
+	return ""
+}
+
+func validateUserPassword(password *string, required bool) string {
+	if password == nil {
+		if required {
+			return "Password is required"
+		}
+		return ""
+	}
+
+	value := *password
+	if value == "" {
+		if required {
+			return "Password is required"
+		}
+		return ""
+	}
+	if len(value) > userMaxPasswordBytes {
+		return "Password is too long"
+	}
+	return ""
+}
+
+func validateUserPIN(pin *string, required bool) string {
+	if pin == nil {
+		if required {
+			return "PIN is required"
+		}
+		return ""
+	}
+
+	value := strings.TrimSpace(*pin)
+	if value == "" {
+		if required {
+			return "PIN is required"
+		}
+		return ""
+	}
+	if len(value) < userMinPINLength || len(value) > userMaxPINLength {
+		return "PIN must be 4 to 6 digits"
+	}
+	for _, r := range value {
+		if !unicode.IsDigit(r) {
+			return "PIN must contain digits only"
+		}
+	}
+	return ""
+}
+
+func requireExpectedUpdatedAt(c *fiber.Ctx, expectedUpdatedAt *string, actualUpdatedAt time.Time) (bool, error) {
+	if expectedUpdatedAt == nil || strings.TrimSpace(*expectedUpdatedAt) == "" {
+		_ = badUserRequest(c, "EXPECTED_UPDATED_AT_REQUIRED", "expected_updated_at is required")
+		return false, nil
+	}
+
+	stale, staleErr := isStaleSubmit(expectedUpdatedAt, actualUpdatedAt)
+	if staleErr != nil {
+		_ = badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+		return false, nil
+	}
+	if stale {
+		_ = userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+		return false, nil
+	}
+	return true, nil
 }
 
 func isRoleName(roleName, expected string) bool {

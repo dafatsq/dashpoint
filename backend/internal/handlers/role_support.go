@@ -14,7 +14,14 @@ import (
 type roleEndpointReader interface {
 	List(ctx context.Context) ([]*models.Role, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Role, error)
+	ListActiveUserIDs(ctx context.Context, roleID uuid.UUID) ([]uuid.UUID, error)
 	UpdatePermissions(ctx context.Context, id uuid.UUID, permissionKeys []string) error
+}
+
+const rolePermissionMaxJSONBodyBytes = 8192
+
+func parseStrictRoleJSON(c *fiber.Ctx, dest interface{}) error {
+	return parseStrictJSONBody(c, dest, rolePermissionMaxJSONBodyBytes)
 }
 
 func parseRoleID(c *fiber.Ctx) (uuid.UUID, error) {
@@ -89,6 +96,10 @@ var deprecatedRolePermissionKeys = map[string]bool{
 }
 
 func normalizeRolePermissionKeys(keys []string) ([]string, bool) {
+	if len(keys) > 64 {
+		return nil, false
+	}
+
 	permissionSet := make(map[string]bool, len(keys))
 	for _, key := range keys {
 		if deprecatedRolePermissionKeys[key] {

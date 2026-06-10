@@ -109,3 +109,25 @@ func (r *RoleRepository) List(ctx context.Context) ([]*models.Role, error) {
 
 	return roles, nil
 }
+
+// ListActiveUserIDs returns active users currently assigned to a role.
+func (r *RoleRepository) ListActiveUserIDs(ctx context.Context, roleID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id FROM users WHERE role_id = $1 AND is_active = true`, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query active users for role: %w", err)
+	}
+	defer rows.Close()
+
+	userIDs := []uuid.UUID{}
+	for rows.Next() {
+		var userID uuid.UUID
+		if err := rows.Scan(&userID); err != nil {
+			return nil, fmt.Errorf("failed to scan role user ID: %w", err)
+		}
+		userIDs = append(userIDs, userID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read role user IDs: %w", err)
+	}
+	return userIDs, nil
+}

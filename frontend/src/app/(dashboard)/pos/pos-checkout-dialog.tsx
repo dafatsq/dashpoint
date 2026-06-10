@@ -14,9 +14,11 @@ import { Banknote, Building2, CheckCircle, CreditCard, Loader2, QrCode } from "l
 import type { PaymentMethod } from "@/types";
 
 import {
+  formatCurrencyInputValue,
   formatCurrency,
   parseNumericInput,
   QUICK_CASH_AMOUNTS,
+  roundCurrencyAmount,
 } from "./pos-helpers";
 
 interface PosCheckoutDialogProps {
@@ -49,7 +51,7 @@ export function PosCheckoutDialog({
   onSubmit,
 }: PosCheckoutDialogProps) {
   const amountPaidNumber = parseNumericInput(amountPaid);
-  const change = amountPaidNumber - total;
+  const change = roundCurrencyAmount(amountPaidNumber - total);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -144,7 +146,7 @@ export function PosCheckoutDialog({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => onAmountPaidChange(total.toString())}
+                      onClick={() => onAmountPaidChange(formatCurrencyInputValue(total))}
                       className="col-span-2 w-full"
                     >
                       Exact

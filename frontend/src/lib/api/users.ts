@@ -68,17 +68,23 @@ export function createUserApi(transport: ApiTransport): UserApi {
       return { data: result.data?.user };
     },
     async createUser(user) {
+      const { role, permissions, ...payload } = user;
+      void role;
+      void permissions;
       const result = await transport.request<{ user: User }>("/users", {
         method: "POST",
-        body: user,
+        body: payload,
       });
       if (result.error) return { error: result.error };
       return { data: result.data?.user };
     },
     async updateUser(id, user) {
+      const { role, permissions, ...payload } = user;
+      void role;
+      void permissions;
       const result = await transport.request<{ user: User }>(`/users/${id}`, {
         method: "PATCH",
-        body: user,
+        body: payload,
       });
       if (result.error) return { error: result.error };
       return { data: result.data?.user };

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
@@ -18,8 +20,11 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 	}
 
 	var req UpdatePasswordRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictUserJSON(c, &req); err != nil {
 		return badUserRequest(c, "INVALID_REQUEST", "Invalid request body")
+	}
+	if message := validateUserPassword(&req.Password, true); message != "" {
+		return badUserRequest(c, "VALIDATION_ERROR", message)
 	}
 
 	user, err := h.userRepo.GetByID(c.Context(), id)
@@ -29,12 +34,8 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 	if !user.IsActive {
 		return userArchivedConflict(c, "Archived users cannot be changed")
 	}
-	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, user.UpdatedAt)
-	if staleErr != nil {
-		return badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-	}
-	if stale {
-		return userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+	if ok, err := requireExpectedUpdatedAt(c, req.ExpectedUpdatedAt, user.UpdatedAt); !ok {
+		return err
 	}
 
 	if middleware.GetUserID(c) != id {
@@ -42,10 +43,6 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 		if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
 			return nil
 		}
-	}
-
-	if req.Password == "" {
-		return badUserRequest(c, "VALIDATION_ERROR", "Password is required")
 	}
 
 	hash, err := auth.HashPassword(req.Password)
@@ -56,6 +53,9 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 	if err := h.userRepo.UpdatePassword(c.Context(), id, hash); err != nil {
 		log.Error().Err(err).Msg("Failed to update password")
 		return userInternalError(c, "Failed to update password")
+	}
+	if err := h.revokeUserRefreshTokens(c, id, "user_password_changed"); err != nil {
+		return err
 	}
 
 	user, _ = h.userRepo.GetByID(c.Context(), id)
@@ -75,8 +75,18 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 	}
 
 	var req UpdatePINRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictUserJSON(c, &req); err != nil {
 		return badUserRequest(c, "INVALID_REQUEST", "Invalid request body")
+	}
+	if req.PIN == nil {
+		return badUserRequest(c, "VALIDATION_ERROR", "PIN is required")
+	}
+	if req.PIN != nil {
+		trimmed := strings.TrimSpace(*req.PIN)
+		req.PIN = &trimmed
+		if message := validateUserPIN(req.PIN, false); message != "" {
+			return badUserRequest(c, "VALIDATION_ERROR", message)
+		}
 	}
 
 	user, err := h.userRepo.GetByID(c.Context(), id)
@@ -86,12 +96,8 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 	if !user.IsActive {
 		return userArchivedConflict(c, "Archived users cannot be changed")
 	}
-	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, user.UpdatedAt)
-	if staleErr != nil {
-		return badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-	}
-	if stale {
-		return userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+	if ok, err := requireExpectedUpdatedAt(c, req.ExpectedUpdatedAt, user.UpdatedAt); !ok {
+		return err
 	}
 
 	if middleware.GetUserID(c) != id {
@@ -114,6 +120,9 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 	if err := h.userRepo.UpdatePIN(c.Context(), id, pinHash); err != nil {
 		log.Error().Err(err).Msg("Failed to update PIN")
 		return userInternalError(c, "Failed to update PIN")
+	}
+	if err := h.revokeUserRefreshTokens(c, id, "user_pin_changed"); err != nil {
+		return err
 	}
 
 	user, _ = h.userRepo.GetByID(c.Context(), id)

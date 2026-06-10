@@ -7,3 +7,11 @@ export function filterSwitchableAccounts(
   if (!excludeUserId) return accounts;
   return accounts.filter((account) => account.id !== excludeUserId);
 }
+
+export function shouldRemoveSavedAccountAfterPINFailure(error?: string): boolean {
+  return (
+    error === "Invalid credentials" ||
+    error === "Account is inactive" ||
+    error === "Your account has been deactivated"
+  );
+}

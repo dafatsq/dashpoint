@@ -6,7 +6,8 @@ import (
 
 // RoleHandler handles role endpoints.
 type RoleHandler struct {
-	roleRepo roleEndpointReader
+	roleRepo      roleEndpointReader
+	eventsHandler userEventBroadcaster
 }
 
 // NewRoleHandler creates a new role handler.
@@ -14,6 +15,11 @@ func NewRoleHandler(roleRepo *repository.RoleRepository) *RoleHandler {
 	return &RoleHandler{
 		roleRepo: roleRepo,
 	}
+}
+
+// SetEventsHandler sets the handler used to notify active users when a role changes.
+func (h *RoleHandler) SetEventsHandler(eventsHandler userEventBroadcaster) {
+	h.eventsHandler = eventsHandler
 }
 
 // RoleDetailResponse represents a role with its derived capabilities.

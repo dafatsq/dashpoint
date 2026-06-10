@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { AccountManager, SavedAccount } from '@/lib/account-manager';
-import { filterSwitchableAccounts } from './account-switcher-utils';
+import {
+  filterSwitchableAccounts,
+  shouldRemoveSavedAccountAfterPINFailure,
+} from './account-switcher-utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -99,7 +102,18 @@ export function AccountSwitcher({
         onAccountSelect?.();
         router.push('/');
       } else {
-        setError(result.error || 'Invalid PIN');
+        const errorMessage = result.error || 'Invalid PIN';
+        if (shouldRemoveSavedAccountAfterPINFailure(errorMessage)) {
+          AccountManager.removeAccount(selectedAccount.id);
+          refreshAccounts();
+          onAccountsChange?.();
+          setError(
+            'This saved Quick Access account is no longer valid. Sign in with email and save Quick Access again.',
+          );
+          return;
+        }
+
+        setError(errorMessage);
       }
     } catch {
       setError('An unexpected error occurred');

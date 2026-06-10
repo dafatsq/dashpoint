@@ -16,6 +16,55 @@ export interface SavedAccount {
 
 const STORAGE_KEY = 'dashpoint_saved_accounts';
 const MAX_ACCOUNTS = 10;
+const ROLE_NAMES = new Set<SavedAccount['role_name']>([
+  'owner',
+  'manager',
+  'cashier',
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeStoredAccount(value: unknown): SavedAccount | null {
+  if (!isRecord(value)) return null;
+
+  const id = typeof value.id === 'string' ? value.id.trim() : '';
+  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  const email = typeof value.email === 'string' ? value.email.trim() : '';
+  const roleName = value.role_name;
+  const hasPin = value.has_pin;
+  const savedAt = typeof value.saved_at === 'string' ? value.saved_at : '';
+
+  if (
+    !id ||
+    !name ||
+    !email ||
+    typeof roleName !== 'string' ||
+    !ROLE_NAMES.has(roleName as SavedAccount['role_name'])
+  ) {
+    return null;
+  }
+
+  if (typeof hasPin !== 'boolean' || Number.isNaN(Date.parse(savedAt))) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    email,
+    role_name: roleName as SavedAccount['role_name'],
+    has_pin: hasPin,
+    saved_at: savedAt,
+  };
+}
+
+function sortSavedAccounts(accounts: SavedAccount[]): SavedAccount[] {
+  return accounts.sort(
+    (a, b) => new Date(b.saved_at).getTime() - new Date(a.saved_at).getTime(),
+  );
+}
 
 export class AccountManager {
   /**
@@ -28,8 +77,24 @@ export class AccountManager {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (!stored) return [];
       
-      const accounts = JSON.parse(stored) as SavedAccount[];
-      return accounts.sort((a, b) => new Date(b.saved_at).getTime() - new Date(a.saved_at).getTime());
+      const parsed = JSON.parse(stored) as unknown;
+      if (!Array.isArray(parsed)) {
+        localStorage.removeItem(STORAGE_KEY);
+        return [];
+      }
+
+      const accounts = sortSavedAccounts(
+        parsed.flatMap((account) => {
+          const normalized = normalizeStoredAccount(account);
+          return normalized ? [normalized] : [];
+        }),
+      );
+
+      if (accounts.length !== parsed.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+      }
+
+      return accounts;
     } catch {
       return [];
     }

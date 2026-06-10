@@ -28,12 +28,8 @@ func (h *UserHandler) Delete(c *fiber.Ctx) error {
 	if !user.IsActive {
 		return userArchivedConflict(c, "User is already archived")
 	}
-	stale, staleErr := isStaleSubmit(expectedUpdatedAtFromQuery(c), user.UpdatedAt)
-	if staleErr != nil {
-		return badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-	}
-	if stale {
-		return userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+	if ok, err := requireExpectedUpdatedAt(c, expectedUpdatedAtFromQuery(c), user.UpdatedAt); !ok {
+		return err
 	}
 
 	targetRoleName := roleNameOfUser(user)
@@ -73,12 +69,8 @@ func (h *UserHandler) PermanentDelete(c *fiber.Ctx) error {
 	if err != nil || user == nil {
 		return userNotFound(c)
 	}
-	stale, staleErr := isStaleSubmit(expectedUpdatedAtFromQuery(c), user.UpdatedAt)
-	if staleErr != nil {
-		return badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-	}
-	if stale {
-		return userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+	if ok, err := requireExpectedUpdatedAt(c, expectedUpdatedAtFromQuery(c), user.UpdatedAt); !ok {
+		return err
 	}
 
 	targetRoleName := roleNameOfUser(user)

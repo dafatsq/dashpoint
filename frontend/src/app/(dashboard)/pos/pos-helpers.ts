@@ -7,12 +7,28 @@ export function parseNumericInput(value: string): number {
   return parseFloat(value || "0");
 }
 
+export function roundCurrencyAmount(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+export function formatCurrencyInputValue(value: number): string {
+  return roundCurrencyAmount(value)
+    .toFixed(2)
+    .replace(/\.00$/, "")
+    .replace(/(\.\d)0$/, "$1");
+}
+
+export function formatCurrencyRequestValue(value: number): string {
+  return formatCurrencyInputValue(value);
+}
+
 export function getImageUrl(path: string | null | undefined): string {
   return path ? buildBackendUrl(path) : "";
 }
 
 export function getProductPrice(product: Product): number {
-  return parseFloat(product.price) || 0;
+  return roundCurrencyAmount(parseFloat(product.price) || 0);
 }
 
 export function getProductQuantity(product: Product): number {
@@ -70,20 +86,24 @@ export function calculateCartTotals(
   total: number;
   change: number;
 } {
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + getProductPrice(item.product) * item.quantity,
-    0,
+  const subtotal = roundCurrencyAmount(
+    cartItems.reduce(
+      (sum, item) => sum + getProductPrice(item.product) * item.quantity,
+      0,
+    ),
   );
 
-  const totalTax = cartItems.reduce((sum, item) => {
-    const itemSubtotal = getProductPrice(item.product) * item.quantity;
+  const totalTax = roundCurrencyAmount(cartItems.reduce((sum, item) => {
+    const itemSubtotal = roundCurrencyAmount(
+      getProductPrice(item.product) * item.quantity,
+    );
     const taxRate = item.product.tax_rate ? parseFloat(item.product.tax_rate) || 0 : 0;
-    return sum + (itemSubtotal * taxRate) / 100;
-  }, 0);
+    return sum + roundCurrencyAmount((itemSubtotal * taxRate) / 100);
+  }, 0));
 
-  const discountAmount = (subtotal * discount) / 100;
-  const total = subtotal + totalTax - discountAmount;
-  const change = amountPaid - total;
+  const discountAmount = roundCurrencyAmount((subtotal * discount) / 100);
+  const total = roundCurrencyAmount(subtotal + totalTax - discountAmount);
+  const change = roundCurrencyAmount(amountPaid - total);
 
   return {
     subtotal,
@@ -159,7 +179,9 @@ export function buildSaleRequest(
   amountPaid: number,
   shiftId?: string,
 ): CreateSaleRequest {
-  const change = amountPaid - total;
+  const normalizedTotal = roundCurrencyAmount(total);
+  const normalizedAmountPaid = roundCurrencyAmount(amountPaid);
+  const change = roundCurrencyAmount(normalizedAmountPaid - normalizedTotal);
 
   const request: CreateSaleRequest = {
     items: cartItems.map((item) => ({
@@ -170,9 +192,15 @@ export function buildSaleRequest(
     payments: [
       {
         payment_method: paymentMethod,
-        amount: total.toString(),
-        amount_tendered: paymentMethod === "cash" ? amountPaid.toString() : undefined,
-        change_given: paymentMethod === "cash" && change > 0 ? change.toString() : undefined,
+        amount: formatCurrencyRequestValue(normalizedTotal),
+        amount_tendered:
+          paymentMethod === "cash"
+            ? formatCurrencyRequestValue(normalizedAmountPaid)
+            : undefined,
+        change_given:
+          paymentMethod === "cash" && change > 0
+            ? formatCurrencyRequestValue(change)
+            : undefined,
       },
     ],
     discount_value: discount > 0 ? discount.toString() : undefined,

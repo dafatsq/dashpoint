@@ -15,6 +15,7 @@ export const DASHBOARD_ACTION_LABELS: Record<string, string> = {
   adjust: "Adjusted",
   count: "Counted",
   threshold_update: "Updated",
+  permission_change: "Updated",
   start: "Started",
   close: "Closed",
   archive: "Archived",
@@ -26,11 +27,41 @@ const DASHBOARD_SKIP_FIELDS = new Set([
   "affected_category",
   "affected_expense",
   "affected_user",
+  "affected_role",
   "product_name",
   "invoice_no",
   "category_id",
   "product_id",
 ]);
+
+const DASHBOARD_PERMISSION_LABELS: Record<string, string> = {
+  access_pos_page: "Access POS",
+  manage_pos_page: "Process Sales",
+  access_products_page: "Access Products",
+  manage_products_page: "Manage Products",
+  access_inventory_page: "Access Inventory",
+  manage_inventory_page: "Manage Inventory",
+  access_sales_page: "Access Sales",
+  manage_sales_page: "Void Sales",
+  access_reports_page: "Access Reports",
+  manage_reports_page: "Export Reports",
+  access_expenses_page: "Access Expenses",
+  manage_expenses_page: "Manage Expenses",
+  access_categories_page: "Access Categories",
+  manage_categories_page: "Manage Categories",
+  access_users_page: "Access Users",
+  manage_users_page: "Manage Users",
+  access_shifts_page: "Access Shifts",
+  manage_shifts_page: "Operate Shifts",
+  access_changes_page: "Access Recent Changes",
+  access_audit_page: "Access Audit Logs",
+};
+
+function formatDashboardPermissionList(value: string[]): string {
+  return value
+    .map((permission) => DASHBOARD_PERMISSION_LABELS[permission] || permission)
+    .join(", ");
+}
 
 export function getDashboardActionVerb(action: string): string {
   const parts = action.split(".");
@@ -43,6 +74,7 @@ export function getDashboardActionBadgeColor(action: string): string {
     case "start":
       return "bg-green-600 text-white";
     case "update":
+    case "permission_change":
     case "close":
     case "restore":
       return "bg-yellow-600 text-white";
@@ -176,10 +208,52 @@ export function getDashboardChangeDescription(log: AuditLog): string {
     if (verb === "delete") return name || "Deleted user";
   }
 
+  if (log.entity_type === "role") {
+    const roleName = String(
+      newVals.affected_role || oldVals.affected_role || newVals.name || oldVals.name || "",
+    );
+    if (verb === "permission_change") {
+      return roleName ? `Updated role permissions: ${roleName}` : "Updated role permissions";
+    }
+  }
+
   return `${DASHBOARD_ACTION_LABELS[verb] || verb} ${log.entity_type}`;
 }
 
-export function getDashboardFieldChanges(log: AuditLog): { key: string; oldVal: unknown; newVal: unknown }[] {
+function buildDashboardPermissionFieldChanges(
+  oldVal: unknown,
+  newVal: unknown,
+): { key: string; oldVal: unknown; newVal: unknown; label: string }[] {
+  const oldPermissions = Array.isArray(oldVal) ? oldVal.map(String) : [];
+  const newPermissions = Array.isArray(newVal) ? newVal.map(String) : [];
+
+  const removed = oldPermissions
+    .filter((permission) => !newPermissions.includes(permission))
+    .map((permission) => ({
+      key: "permissions",
+      label: DASHBOARD_PERMISSION_LABELS[permission] || permission,
+      oldVal: "Enabled",
+      newVal: "Disabled",
+    }));
+
+  const added = newPermissions
+    .filter((permission) => !oldPermissions.includes(permission))
+    .map((permission) => ({
+      key: "permissions",
+      label: DASHBOARD_PERMISSION_LABELS[permission] || permission,
+      oldVal: "Disabled",
+      newVal: "Enabled",
+    }));
+
+  return [...removed, ...added];
+}
+
+export function getDashboardFieldChanges(log: AuditLog): {
+  key: string;
+  oldVal: unknown;
+  newVal: unknown;
+  label?: string;
+}[] {
   const oldVals = log.old_values || {};
   const newVals = log.new_values || {};
   const verb = getDashboardActionVerb(log.action);
@@ -192,7 +266,17 @@ export function getDashboardFieldChanges(log: AuditLog): { key: string; oldVal: 
     const oldVal = oldVals[key];
     const newVal = newVals[key];
 
-    if (verb === "update" || verb === "close" || verb === "restore") {
+    if (key === "permissions" && verb === "permission_change") {
+      changes.push(...buildDashboardPermissionFieldChanges(oldVal, newVal));
+      return;
+    }
+
+    if (
+      verb === "update" ||
+      verb === "permission_change" ||
+      verb === "close" ||
+      verb === "restore"
+    ) {
       if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
         changes.push({ key, oldVal, newVal });
       }
@@ -218,6 +302,7 @@ export function formatDashboardFieldName(key: string, action: string): string {
   const verb = getDashboardActionVerb(action);
   if (key === "image_url") return "Photo";
   if (key === "is_active") return "Active";
+  if (key === "permissions") return "Permissions";
   if (key === "adjustment_type") return "Type";
   if (key === "new_quantity") return "New Stock";
   if (key === "quantity") return "Change";
@@ -228,6 +313,9 @@ export function formatDashboardFieldName(key: string, action: string): string {
 export function formatDashboardFieldValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (key === "permissions" && Array.isArray(value)) {
+    return formatDashboardPermissionList(value.map(String));
+  }
   if (typeof value === "object") return JSON.stringify(value);
   if (key === "tax_rate") return `${String(value)}%`;
   if (key === "total" || key === "amount") return formatDashboardCurrency(Number(value));
