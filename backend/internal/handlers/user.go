@@ -25,9 +25,10 @@ func normalizeEmail(email *string) *string {
 
 // UserHandler handles user management endpoints.
 type UserHandler struct {
-	userRepo      userRepository
-	roleRepo      roleReader
-	eventsHandler userEventBroadcaster
+	userRepo         userRepository
+	roleRepo         roleReader
+	eventsHandler    userEventBroadcaster
+	refreshTokenRepo userRefreshTokenRevoker
 }
 
 // NewUserHandler creates a new user handler.
@@ -38,6 +39,11 @@ func NewUserHandler(userRepo *repository.UserRepository, roleRepo *repository.Ro
 // SetEventsHandler sets the events handler for broadcasting user updates.
 func (h *UserHandler) SetEventsHandler(eventsHandler userEventBroadcaster) {
 	h.eventsHandler = eventsHandler
+}
+
+// SetRefreshTokenRevoker sets the repository used to invalidate user sessions after credential changes.
+func (h *UserHandler) SetRefreshTokenRevoker(refreshTokenRepo userRefreshTokenRevoker) {
+	h.refreshTokenRepo = refreshTokenRepo
 }
 
 func (h *UserHandler) broadcastUserEvent(userID uuid.UUID, eventType UserEventType, changedBy uuid.UUID, details interface{}) {
@@ -54,6 +60,17 @@ func (h *UserHandler) broadcastUserEvent(userID uuid.UUID, eventType UserEventTy
 		Timestamp: time.Now(),
 		Details:   details,
 	})
+}
+
+func (h *UserHandler) revokeUserRefreshTokens(c *fiber.Ctx, userID uuid.UUID, reason string) error {
+	if h.refreshTokenRepo == nil {
+		return nil
+	}
+	if err := h.refreshTokenRepo.RevokeAllForUser(c.Context(), userID, reason); err != nil {
+		log.Error().Err(err).Str("user_id", userID.String()).Msg("Failed to revoke user refresh tokens")
+		return userInternalError(c, "Failed to revoke user sessions")
+	}
+	return nil
 }
 
 type UserListResponse struct {
@@ -116,23 +133,33 @@ type UpdatePINRequest struct {
 // Create handles POST /api/v1/users.
 func (h *UserHandler) Create(c *fiber.Ctx) error {
 	var req CreateUserRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictUserJSON(c, &req); err != nil {
 		return badUserRequest(c, "INVALID_REQUEST", "Invalid request body")
 	}
-	if req.Name == "" {
-		return badUserRequest(c, "VALIDATION_ERROR", "Name is required")
+	req.Name = strings.TrimSpace(req.Name)
+	req.RoleID = strings.TrimSpace(req.RoleID)
+	if req.Email != nil {
+		trimmed := strings.TrimSpace(*req.Email)
+		req.Email = &trimmed
+	}
+	if req.PIN != nil {
+		trimmed := strings.TrimSpace(*req.PIN)
+		req.PIN = &trimmed
+	}
+	if message := validateUserName(req.Name, true); message != "" {
+		return badUserRequest(c, "VALIDATION_ERROR", message)
 	}
 	if req.RoleID == "" {
 		return badUserRequest(c, "VALIDATION_ERROR", "Role ID is required")
 	}
-	if req.Email == nil || *req.Email == "" {
-		return badUserRequest(c, "VALIDATION_ERROR", "Email is required")
+	if message := validateUserEmail(req.Email, true); message != "" {
+		return badUserRequest(c, "VALIDATION_ERROR", message)
 	}
-	if req.Password == nil || *req.Password == "" {
-		return badUserRequest(c, "VALIDATION_ERROR", "Password is required")
+	if message := validateUserPassword(req.Password, true); message != "" {
+		return badUserRequest(c, "VALIDATION_ERROR", message)
 	}
-	if req.PIN == nil || *req.PIN == "" {
-		return badUserRequest(c, "VALIDATION_ERROR", "PIN is required")
+	if message := validateUserPIN(req.PIN, true); message != "" {
+		return badUserRequest(c, "VALIDATION_ERROR", message)
 	}
 
 	roleID, err := uuid.Parse(req.RoleID)
@@ -217,15 +244,40 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 	}
 
 	var req UpdateUserRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictUserJSON(c, &req); err != nil {
 		return badUserRequest(c, "INVALID_REQUEST", "Invalid request body")
 	}
-	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, user.UpdatedAt)
-	if staleErr != nil {
-		return badUserRequest(c, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
+	if ok, err := requireExpectedUpdatedAt(c, req.ExpectedUpdatedAt, user.UpdatedAt); !ok {
+		return err
 	}
-	if stale {
-		return userConflict(c, "STALE_SUBMIT", staleSubmitMessage)
+
+	if req.Name != nil {
+		trimmed := strings.TrimSpace(*req.Name)
+		req.Name = &trimmed
+		if message := validateUserName(trimmed, false); message != "" {
+			return badUserRequest(c, "VALIDATION_ERROR", message)
+		}
+	}
+	if req.Email != nil {
+		trimmed := strings.TrimSpace(*req.Email)
+		req.Email = &trimmed
+		if message := validateUserEmail(req.Email, false); message != "" {
+			return badUserRequest(c, "VALIDATION_ERROR", message)
+		}
+	}
+	if req.RoleID != nil {
+		trimmed := strings.TrimSpace(*req.RoleID)
+		req.RoleID = &trimmed
+	}
+	if message := validateUserPassword(req.Password, false); message != "" {
+		return badUserRequest(c, "VALIDATION_ERROR", message)
+	}
+	if req.PIN != nil {
+		trimmed := strings.TrimSpace(*req.PIN)
+		req.PIN = &trimmed
+		if message := validateUserPIN(req.PIN, false); message != "" {
+			return badUserRequest(c, "VALIDATION_ERROR", message)
+		}
 	}
 	if !user.IsActive && (req.IsActive == nil || !*req.IsActive) {
 		return userArchivedConflict(c, "Archived users cannot be changed")
@@ -333,6 +385,11 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 		log.Error().Err(err).Msg("Failed to update user")
 		return userInternalError(c, "Failed to update user")
 	}
+	if credentialsChangedByUpdate(req) {
+		if err := h.revokeUserRefreshTokens(c, id, "user_credentials_changed"); err != nil {
+			return err
+		}
+	}
 
 	updatedForAudit, _ := h.userRepo.GetByID(c.Context(), id)
 	newValues := baseUserAuditValues(user)
@@ -386,6 +443,16 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "User updated successfully", "user": h.toUserDetailResponse(updatedUser)})
+}
+
+func credentialsChangedByUpdate(req UpdateUserRequest) bool {
+	if req.Email != nil {
+		return true
+	}
+	if req.Password != nil && *req.Password != "" {
+		return true
+	}
+	return req.PIN != nil
 }
 
 func getRoleLevel(roleName string) int {

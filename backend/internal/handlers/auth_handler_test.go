@@ -113,6 +113,17 @@ func TestAuthHandlerLoginSuccess(t *testing.T) {
 	}
 
 	email := "owner@example.com"
+	postLoginUser := &models.User{
+		ID:           userID,
+		Email:        &email,
+		Name:         "Owner",
+		PasswordHash: &passwordHash,
+		RoleID:       roleID,
+		IsActive:     true,
+		CreatedAt:    time.Unix(100, 0),
+		UpdatedAt:    time.Unix(250, 0),
+		Role:         &models.Role{ID: roleID, Name: "owner"},
+	}
 	userRepo := &fakeAuthUserRepo{
 		userByEmail: &models.User{
 			ID:           userID,
@@ -125,6 +136,7 @@ func TestAuthHandlerLoginSuccess(t *testing.T) {
 			UpdatedAt:    time.Unix(200, 0),
 			Role:         &models.Role{ID: roleID, Name: "owner"},
 		},
+		userByID: postLoginUser,
 	}
 
 	tokenStore := &fakeRefreshTokenStore{}
@@ -180,6 +192,9 @@ func TestAuthHandlerLoginSuccess(t *testing.T) {
 	}
 	if len(body.User.Permissions) == 0 {
 		t.Fatalf("expected role-derived permissions in response")
+	}
+	if body.User.UpdatedAt != postLoginUser.UpdatedAt.Format(time.RFC3339) {
+		t.Fatalf("expected post-login updated_at %q, got %q", postLoginUser.UpdatedAt.Format(time.RFC3339), body.User.UpdatedAt)
 	}
 
 	var rawBody map[string]any
@@ -288,6 +303,19 @@ func TestAuthHandlerRefreshRotatesToken(t *testing.T) {
 	}
 	if cookie := findCookie(resp.Cookies(), refreshTokenCookie); cookie == nil || cookie.Value == "" || !cookie.HttpOnly {
 		t.Fatalf("expected rotated HttpOnly refresh token cookie")
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll returned error: %v", err)
+	}
+	var body AuthResponse
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		t.Fatalf("Unmarshal returned error: %v", err)
+	}
+	expectedUpdatedAt := userRepo.userByID.UpdatedAt.Format(time.RFC3339)
+	if body.User.UpdatedAt != expectedUpdatedAt {
+		t.Fatalf("expected refresh updated_at %q, got %q", expectedUpdatedAt, body.User.UpdatedAt)
 	}
 }
 

@@ -69,6 +69,9 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 	eventsHandler := handlers.NewEventsHandler(jwtManager, userRepo, cfg.CORSOrigins)
 	userHandler := handlers.NewUserHandler(userRepo, roleRepo)
 	userHandler.SetEventsHandler(eventsHandler)
+	userHandler.SetRefreshTokenRevoker(refreshTokenRepo)
+	roleHandler := handlers.NewRoleHandler(roleRepo)
+	roleHandler.SetEventsHandler(eventsHandler)
 
 	deps := &serverDependencies{
 		jwtManager:        jwtManager,
@@ -78,7 +81,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 		authHandler:       authHandler,
 		eventsHandler:     eventsHandler,
 		userHandler:       userHandler,
-		roleHandler:       handlers.NewRoleHandler(roleRepo),
+		roleHandler:       roleHandler,
 		productHandler:    handlers.NewProductHandler(productRepo, inventoryRepo, categoryRepo, uploadDirectory),
 		categoryHandler:   handlers.NewCategoryHandler(categoryRepo),
 		shiftHandler:      handlers.NewShiftHandler(shiftRepo),

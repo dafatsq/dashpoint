@@ -11,6 +11,7 @@ export interface ActivityFieldChange {
   key: string;
   oldVal: unknown;
   newVal: unknown;
+  label?: string;
 }
 
 type ActivityValues = Record<string, unknown>;
@@ -33,6 +34,7 @@ export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   "auth.login_failed": "Login Failed",
   "auth.logout": "Logout",
   "auth.pin_login": "PIN Login",
+  "user.permission_change": "Update Permissions",
   "user.create": "Create User",
   "user.update": "Update User",
   "user.delete": "Delete User",
@@ -71,10 +73,12 @@ export const ACTIVITY_ENTITY_LABELS: Record<string, string> = {
   shift: "Shift",
   inventory: "Inventory",
   expense: "Expense",
+  role: "Role",
 };
 
 const ACTIVITY_SKIP_FIELDS = new Set([
   "affected_user",
+  "affected_role",
   "affected_product",
   "affected_category",
   "affected_expense",
@@ -84,7 +88,12 @@ const ACTIVITY_SKIP_FIELDS = new Set([
   "product_id",
 ]);
 
-const ACTIVITY_UPDATE_VERBS = new Set(["update", "close", "restore"]);
+const ACTIVITY_UPDATE_VERBS = new Set([
+  "update",
+  "close",
+  "restore",
+  "permission_change",
+]);
 const ACTIVITY_CREATE_LIKE_VERBS = new Set([
   "create",
   "start",
@@ -103,6 +112,69 @@ function getActivityValues(log: AuditLog): {
     oldVals: log.old_values || {},
     newVals: log.new_values || {},
   };
+}
+
+const ACTIVITY_PERMISSION_LABELS: Record<string, string> = {
+  access_pos_page: "Access POS",
+  manage_pos_page: "Process Sales",
+  access_products_page: "Access Products",
+  manage_products_page: "Manage Products",
+  access_inventory_page: "Access Inventory",
+  manage_inventory_page: "Manage Inventory",
+  access_sales_page: "Access Sales",
+  manage_sales_page: "Void Sales",
+  access_reports_page: "Access Reports",
+  manage_reports_page: "Export Reports",
+  access_expenses_page: "Access Expenses",
+  manage_expenses_page: "Manage Expenses",
+  access_categories_page: "Access Categories",
+  manage_categories_page: "Manage Categories",
+  access_users_page: "Access Users",
+  manage_users_page: "Manage Users",
+  access_shifts_page: "Access Shifts",
+  manage_shifts_page: "Operate Shifts",
+  access_changes_page: "Access Recent Changes",
+  access_audit_page: "Access Audit Logs",
+};
+
+function formatPermissionList(value: unknown): string {
+  if (!Array.isArray(value)) {
+    return String(value);
+  }
+
+  return value
+    .map((permission) =>
+      ACTIVITY_PERMISSION_LABELS[String(permission)] || String(permission),
+    )
+    .join(", ");
+}
+
+function buildPermissionFieldChanges(
+  oldVal: unknown,
+  newVal: unknown,
+): ActivityFieldChange[] {
+  const oldPermissions = Array.isArray(oldVal) ? oldVal.map(String) : [];
+  const newPermissions = Array.isArray(newVal) ? newVal.map(String) : [];
+
+  const removed = oldPermissions
+    .filter((permission) => !newPermissions.includes(permission))
+    .map((permission) => ({
+      key: "permissions",
+      label: ACTIVITY_PERMISSION_LABELS[permission] || permission,
+      oldVal: "Enabled",
+      newVal: "Disabled",
+    }));
+
+  const added = newPermissions
+    .filter((permission) => !oldPermissions.includes(permission))
+    .map((permission) => ({
+      key: "permissions",
+      label: ACTIVITY_PERMISSION_LABELS[permission] || permission,
+      oldVal: "Disabled",
+      newVal: "Enabled",
+    }));
+
+  return [...removed, ...added];
 }
 
 export function getActivityActionVerb(action: string): string {
@@ -130,6 +202,7 @@ export function getActivityBadgeColor(action: string): string {
     case "start":
       return "bg-green-600 text-white";
     case "update":
+    case "permission_change":
     case "close":
     case "restore":
       return "bg-yellow-600 text-white";
@@ -186,6 +259,7 @@ export function formatActivityFieldName(key: string, action: string): string {
 
   if (key === "image_url") return "Photo";
   if (key === "is_active") return "Active";
+  if (key === "permissions") return "Permissions";
   if (key === "adjustment_type") return "Type";
   if (key === "new_quantity") return "New Stock";
   if (key === "quantity") return "Change";
@@ -197,6 +271,7 @@ export function formatActivityFieldName(key: string, action: string): string {
 export function formatActivityFieldValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (key === "permissions") return formatPermissionList(value);
   if (typeof value === "object") return JSON.stringify(value);
   if (key === "tax_rate") return `${String(value)}%`;
   if (key === "total" || key === "amount")
@@ -222,6 +297,11 @@ export function buildActivityFieldChanges(
 
     const oldVal = oldVals[key];
     const newVal = newVals[key];
+
+    if (key === "permissions" && verb === "permission_change") {
+      changes.push(...buildPermissionFieldChanges(oldVal, newVal));
+      return;
+    }
 
     if (ACTIVITY_UPDATE_VERBS.has(verb)) {
       if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
@@ -377,6 +457,21 @@ export function buildActivityDescription(log: AuditLog): string {
       return name ? `Restored user: ${name}` : "Restored user";
     if (verb === "delete")
       return name ? `Deleted user: ${name}` : "Deleted user";
+  }
+
+  if (log.entity_type === "role") {
+    const roleName = String(
+      newVals.affected_role ||
+        oldVals.affected_role ||
+        newVals.name ||
+        oldVals.name ||
+        "",
+    );
+    if (verb === "permission_change") {
+      return roleName
+        ? `Updated role permissions: ${roleName}`
+        : "Updated role permissions";
+    }
   }
 
   if (log.entity_type === "category") {

@@ -96,9 +96,14 @@ func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user
 }
 
 func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, tokenPair *auth.TokenPair, isRefresh bool) error {
+	responseUser := user
 	if !isRefresh {
 		if err := w.userRepo.UpdateLastLogin(c.Context(), user.ID); err != nil {
 			log.Error().Err(err).Msg("Failed to update last login")
+		} else if updatedUser, err := w.userRepo.GetByID(c.Context(), user.ID); err != nil {
+			log.Error().Err(err).Msg("Failed to refresh user after login")
+		} else if updatedUser != nil {
+			responseUser = updatedUser
 		}
 	}
 
@@ -119,7 +124,7 @@ func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, token
 	return c.JSON(AuthResponse{
 		AccessToken: tokenPair.AccessToken,
 		ExpiresAt:   tokenPair.AccessTokenExpiresAt,
-		User:        authUserResponse(user, permissions, false),
+		User:        authUserResponse(responseUser, permissions, true),
 	})
 }
 

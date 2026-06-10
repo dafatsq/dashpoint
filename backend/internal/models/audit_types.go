@@ -57,6 +57,7 @@ type AuditEntityType string
 
 const (
 	AuditEntityUser      AuditEntityType = "user"
+	AuditEntityRole      AuditEntityType = "role"
 	AuditEntityProduct   AuditEntityType = "product"
 	AuditEntityCategory  AuditEntityType = "category"
 	AuditEntityInventory AuditEntityType = "inventory"

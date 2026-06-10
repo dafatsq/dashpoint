@@ -30,6 +30,7 @@ import {
   canSubmitStartShift,
   calculateCartTotals,
   formatCurrency,
+  formatCurrencyInputValue,
   parseNumericInput,
   removeCartItem,
   updateCartItemQuantity,
@@ -483,7 +484,7 @@ export function POSScreen() {
       return;
     }
 
-    setAmountPaid(totals.total.toString());
+    setAmountPaid(formatCurrencyInputValue(totals.total));
     setCheckoutDialogOpen(true);
   }, [cartItems, showError, totals.total]);
 

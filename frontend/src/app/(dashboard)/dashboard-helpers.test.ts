@@ -64,6 +64,23 @@ describe("dashboard helpers", () => {
     expect(
       getDashboardChangeDescription(
         buildAuditLog({
+          entity_type: "role",
+          action: "user.permission_change",
+          old_values: {
+            affected_role: "manager",
+            permissions: ["access_users_page"],
+          },
+          new_values: {
+            affected_role: "manager",
+            permissions: ["access_users_page", "manage_users_page"],
+          },
+        }),
+      ),
+    ).toBe("Updated role permissions: manager");
+
+    expect(
+      getDashboardChangeDescription(
+        buildAuditLog({
           entity_type: "sale",
           action: "sale.create",
           new_values: { invoice_no: "INV-1" },
@@ -84,11 +101,44 @@ describe("dashboard helpers", () => {
     expect(changes.map((change) => change.key)).toEqual(["name", "image_url"]);
   });
 
+  test("collects permission changes for role audit entries", () => {
+    const changes = getDashboardFieldChanges(
+      buildAuditLog({
+        entity_type: "role",
+        action: "user.permission_change",
+        old_values: {
+          affected_role: "manager",
+          permissions: ["access_users_page"],
+        },
+        new_values: {
+          affected_role: "manager",
+          permissions: ["access_users_page", "manage_users_page"],
+        },
+      }),
+    );
+
+    expect(changes).toEqual([
+      {
+        key: "permissions",
+        label: "Manage Users",
+        oldVal: "Disabled",
+        newVal: "Enabled",
+      },
+    ]);
+  });
+
   test("formats field names and values for display", () => {
     expect(formatDashboardFieldName("image_url", "product.update")).toBe("Photo");
     expect(formatDashboardFieldName("reason", "sale.void")).toBe("Reason");
+    expect(formatDashboardFieldName("permissions", "user.permission_change")).toBe("Permissions");
     expect(formatDashboardFieldValue("tax_rate", "11")).toBe("11%");
     expect(formatDashboardFieldValue("amount", "15000")).toContain("Rp");
+    expect(
+      formatDashboardFieldValue("permissions", [
+        "access_users_page",
+        "manage_users_page",
+      ]),
+    ).toBe("Access Users, Manage Users");
   });
 
   test("flags image fields correctly", () => {

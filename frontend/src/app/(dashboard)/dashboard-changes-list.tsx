@@ -83,10 +83,10 @@ export function DashboardChangesList({ logs, isLoading, error, onRetry }: Dashbo
               <p className="text-base font-medium leading-snug mb-3">{getDashboardChangeDescription(log)}</p>
               {fieldChanges.length > 0 ? (
                 <div className="mt-2 ml-0 space-y-0.5">
-                  {fieldChanges.map(({ key, oldVal, newVal }) => (
-                    <div key={key} className="text-xs flex items-start gap-1.5 text-muted-foreground">
+                  {fieldChanges.map(({ key, oldVal, newVal, label }) => (
+                    <div key={`${key}-${label ?? "default"}`} className="text-xs flex items-start gap-1.5 text-muted-foreground">
                       <span className="font-medium text-foreground/70 shrink-0 pt-0.5">
-                        {formatDashboardFieldName(key, log.action)}:
+                        {label ?? formatDashboardFieldName(key, log.action)}:
                       </span>
                       {isDashboardImageField(key) ? (
                         <div className="flex items-center gap-1.5">

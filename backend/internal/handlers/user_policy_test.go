@@ -6,12 +6,17 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"dashpoint/backend/internal/models"
 )
+
+var userPolicyUpdatedAt = time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
+
+const userPolicyUpdatedAtString = "2026-06-05T10:00:00Z"
 
 type fakeUserRepo struct {
 	getByIDUser          *models.User
@@ -66,6 +71,19 @@ func (f *fakeUserRepo) NameExists(context.Context, string, *uuid.UUID) (bool, er
 type fakeRoleRepo struct{}
 
 func (f *fakeRoleRepo) GetByID(context.Context, uuid.UUID) (*models.Role, error) { return nil, nil }
+
+type fakeRefreshTokenRevoker struct {
+	calls  int
+	userID uuid.UUID
+	reason string
+}
+
+func (f *fakeRefreshTokenRevoker) RevokeAllForUser(_ context.Context, userID uuid.UUID, reason string) error {
+	f.calls++
+	f.userID = userID
+	f.reason = reason
+	return nil
+}
 
 func TestUserHandlerEnforceTargetUserActionRejectsPeerManager(t *testing.T) {
 	handler := &UserHandler{
@@ -130,7 +148,7 @@ func TestUserHandlerPermanentDeleteRejectsExpenseHistory(t *testing.T) {
 	targetUserID := uuid.New()
 	handler := &UserHandler{
 		userRepo: &fakeUserRepo{
-			getByIDUser:       &models.User{ID: targetUserID, Name: "Cashier", Role: &models.Role{Name: "cashier"}},
+			getByIDUser:       &models.User{ID: targetUserID, Name: "Cashier", UpdatedAt: userPolicyUpdatedAt, Role: &models.Role{Name: "cashier"}},
 			permissions:       []string{"manage_users_page"},
 			hasExpenseHistory: true,
 		},
@@ -143,7 +161,7 @@ func TestUserHandlerPermanentDeleteRejectsExpenseHistory(t *testing.T) {
 		return handler.PermanentDelete(c)
 	})
 
-	req := httptest.NewRequest(http.MethodDelete, "/users/"+targetUserID.String()+"/permanent", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/users/"+targetUserID.String()+"/permanent?expected_updated_at="+userPolicyUpdatedAtString, nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
@@ -156,7 +174,7 @@ func TestUserHandlerPermanentDeleteRejectsExpenseHistory(t *testing.T) {
 func TestUserHandlerUpdateRejectsArchivedUserWithoutRestore(t *testing.T) {
 	targetUserID := uuid.New()
 	repo := &fakeUserRepo{
-		getByIDUser: &models.User{ID: targetUserID, Name: "Cashier", IsActive: false, Role: &models.Role{Name: "cashier"}},
+		getByIDUser: &models.User{ID: targetUserID, Name: "Cashier", IsActive: false, UpdatedAt: userPolicyUpdatedAt, Role: &models.Role{Name: "cashier"}},
 		permissions: []string{"manage_users_page"},
 	}
 	handler := &UserHandler{userRepo: repo}
@@ -168,7 +186,7 @@ func TestUserHandlerUpdateRejectsArchivedUserWithoutRestore(t *testing.T) {
 		return handler.Update(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String(), strings.NewReader(`{"name":"Renamed"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String(), strings.NewReader(`{"name":"Renamed","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -187,13 +205,93 @@ func TestUserHandlerUpdateAllowsSelfProfileWithoutManageUsers(t *testing.T) {
 	roleID := uuid.New()
 	repo := &fakeUserRepo{
 		getByIDUser: &models.User{
-			ID:       targetUserID,
-			Name:     "Cashier",
-			RoleID:   roleID,
-			IsActive: true,
-			Role:     &models.Role{ID: roleID, Name: "cashier"},
+			ID:        targetUserID,
+			Name:      "Cashier",
+			RoleID:    roleID,
+			IsActive:  true,
+			UpdatedAt: userPolicyUpdatedAt,
+			Role:      &models.Role{ID: roleID, Name: "cashier"},
 		},
 		permissions: []string{},
+	}
+	handler := &UserHandler{userRepo: repo}
+
+	app := fiber.New()
+	app.Patch("/users/:id", func(c *fiber.Ctx) error {
+		c.Locals("user_id", targetUserID)
+		c.Locals("role_name", "cashier")
+		return handler.Update(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String(), strings.NewReader(`{"name":"Cashier One","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if !repo.updateCalled {
+		t.Fatalf("expected self profile update to be allowed")
+	}
+}
+
+func TestUserHandlerUpdateRevokesRefreshTokensForCredentialChange(t *testing.T) {
+	targetUserID := uuid.New()
+	roleID := uuid.New()
+	email := "cashier@example.com"
+	repo := &fakeUserRepo{
+		getByIDUser: &models.User{
+			ID:        targetUserID,
+			Email:     &email,
+			Name:      "Cashier",
+			RoleID:    roleID,
+			IsActive:  true,
+			UpdatedAt: userPolicyUpdatedAt,
+			Role:      &models.Role{ID: roleID, Name: "cashier"},
+		},
+		permissions: []string{},
+	}
+	revoker := &fakeRefreshTokenRevoker{}
+	handler := &UserHandler{userRepo: repo, refreshTokenRepo: revoker}
+
+	app := fiber.New()
+	app.Patch("/users/:id", func(c *fiber.Ctx) error {
+		c.Locals("user_id", targetUserID)
+		c.Locals("role_name", "cashier")
+		return handler.Update(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String(), strings.NewReader(`{"email":"renamed@example.com","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if revoker.calls != 1 {
+		t.Fatalf("expected one refresh token revocation, got %d", revoker.calls)
+	}
+	if revoker.userID != targetUserID || revoker.reason != "user_credentials_changed" {
+		t.Fatalf("unexpected revocation target/reason: %s %q", revoker.userID, revoker.reason)
+	}
+}
+
+func TestUserHandlerUpdateRequiresExpectedUpdatedAt(t *testing.T) {
+	targetUserID := uuid.New()
+	roleID := uuid.New()
+	repo := &fakeUserRepo{
+		getByIDUser: &models.User{
+			ID:        targetUserID,
+			Name:      "Cashier",
+			RoleID:    roleID,
+			IsActive:  true,
+			UpdatedAt: userPolicyUpdatedAt,
+			Role:      &models.Role{ID: roleID, Name: "cashier"},
+		},
 	}
 	handler := &UserHandler{userRepo: repo}
 
@@ -210,11 +308,32 @@ func TestUserHandlerUpdateAllowsSelfProfileWithoutManageUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
 	}
-	if !repo.updateCalled {
-		t.Fatalf("expected self profile update to be allowed")
+	if repo.updateCalled {
+		t.Fatalf("expected missing expected_updated_at to be blocked")
+	}
+}
+
+func TestUserHandlerCreateRejectsUnknownFields(t *testing.T) {
+	handler := &UserHandler{userRepo: &fakeUserRepo{}, roleRepo: &fakeRoleRepo{}}
+
+	app := fiber.New()
+	app.Post("/users", func(c *fiber.Ctx) error {
+		c.Locals("user_id", uuid.New())
+		c.Locals("role_name", "owner")
+		return handler.Create(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(`{"name":"Cashier","email":"cashier@example.com","password":"new-secret","pin":"1234","role_id":"11111111-1111-1111-1111-111111111111","is_admin":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
 	}
 }
 
@@ -223,11 +342,12 @@ func TestUserHandlerUpdateRejectsSelfStatusChange(t *testing.T) {
 	roleID := uuid.New()
 	repo := &fakeUserRepo{
 		getByIDUser: &models.User{
-			ID:       targetUserID,
-			Name:     "Cashier",
-			RoleID:   roleID,
-			IsActive: true,
-			Role:     &models.Role{ID: roleID, Name: "cashier"},
+			ID:        targetUserID,
+			Name:      "Cashier",
+			RoleID:    roleID,
+			IsActive:  true,
+			UpdatedAt: userPolicyUpdatedAt,
+			Role:      &models.Role{ID: roleID, Name: "cashier"},
 		},
 		permissions: []string{},
 	}
@@ -240,7 +360,7 @@ func TestUserHandlerUpdateRejectsSelfStatusChange(t *testing.T) {
 		return handler.Update(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String(), strings.NewReader(`{"is_active":false}`))
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String(), strings.NewReader(`{"is_active":false,"expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -257,7 +377,7 @@ func TestUserHandlerUpdateRejectsSelfStatusChange(t *testing.T) {
 func TestUserHandlerUpdatePasswordRejectsArchivedUser(t *testing.T) {
 	targetUserID := uuid.New()
 	repo := &fakeUserRepo{
-		getByIDUser: &models.User{ID: targetUserID, Name: "Cashier", IsActive: false, Role: &models.Role{Name: "cashier"}},
+		getByIDUser: &models.User{ID: targetUserID, Name: "Cashier", IsActive: false, UpdatedAt: userPolicyUpdatedAt, Role: &models.Role{Name: "cashier"}},
 		permissions: []string{"manage_users_page"},
 	}
 	handler := &UserHandler{userRepo: repo}
@@ -269,7 +389,7 @@ func TestUserHandlerUpdatePasswordRejectsArchivedUser(t *testing.T) {
 		return handler.UpdatePassword(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/password", strings.NewReader(`{"password":"new-secret"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/password", strings.NewReader(`{"password":"new-secret","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -283,16 +403,58 @@ func TestUserHandlerUpdatePasswordRejectsArchivedUser(t *testing.T) {
 	}
 }
 
+func TestUserHandlerUpdatePasswordRevokesRefreshTokens(t *testing.T) {
+	targetUserID := uuid.New()
+	roleID := uuid.New()
+	repo := &fakeUserRepo{
+		getByIDUser: &models.User{
+			ID:        targetUserID,
+			Name:      "Cashier",
+			RoleID:    roleID,
+			IsActive:  true,
+			UpdatedAt: userPolicyUpdatedAt,
+			Role:      &models.Role{ID: roleID, Name: "cashier"},
+		},
+		permissions: []string{},
+	}
+	revoker := &fakeRefreshTokenRevoker{}
+	handler := &UserHandler{userRepo: repo, refreshTokenRepo: revoker}
+
+	app := fiber.New()
+	app.Patch("/users/:id/password", func(c *fiber.Ctx) error {
+		c.Locals("user_id", targetUserID)
+		c.Locals("role_name", "cashier")
+		return handler.UpdatePassword(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/password", strings.NewReader(`{"password":"new-secret","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if revoker.calls != 1 {
+		t.Fatalf("expected one refresh token revocation, got %d", revoker.calls)
+	}
+	if revoker.userID != targetUserID || revoker.reason != "user_password_changed" {
+		t.Fatalf("unexpected revocation target/reason: %s %q", revoker.userID, revoker.reason)
+	}
+}
+
 func TestUserHandlerUpdatePINAllowsSelfWithoutManageUsers(t *testing.T) {
 	targetUserID := uuid.New()
 	roleID := uuid.New()
 	repo := &fakeUserRepo{
 		getByIDUser: &models.User{
-			ID:       targetUserID,
-			Name:     "Cashier",
-			RoleID:   roleID,
-			IsActive: true,
-			Role:     &models.Role{ID: roleID, Name: "cashier"},
+			ID:        targetUserID,
+			Name:      "Cashier",
+			RoleID:    roleID,
+			IsActive:  true,
+			UpdatedAt: userPolicyUpdatedAt,
+			Role:      &models.Role{ID: roleID, Name: "cashier"},
 		},
 		permissions: []string{},
 	}
@@ -305,7 +467,7 @@ func TestUserHandlerUpdatePINAllowsSelfWithoutManageUsers(t *testing.T) {
 		return handler.UpdatePIN(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/pin", strings.NewReader(`{"pin":"1234"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/pin", strings.NewReader(`{"pin":"1234","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -319,10 +481,51 @@ func TestUserHandlerUpdatePINAllowsSelfWithoutManageUsers(t *testing.T) {
 	}
 }
 
+func TestUserHandlerUpdatePINRevokesRefreshTokens(t *testing.T) {
+	targetUserID := uuid.New()
+	roleID := uuid.New()
+	repo := &fakeUserRepo{
+		getByIDUser: &models.User{
+			ID:        targetUserID,
+			Name:      "Cashier",
+			RoleID:    roleID,
+			IsActive:  true,
+			UpdatedAt: userPolicyUpdatedAt,
+			Role:      &models.Role{ID: roleID, Name: "cashier"},
+		},
+		permissions: []string{},
+	}
+	revoker := &fakeRefreshTokenRevoker{}
+	handler := &UserHandler{userRepo: repo, refreshTokenRepo: revoker}
+
+	app := fiber.New()
+	app.Patch("/users/:id/pin", func(c *fiber.Ctx) error {
+		c.Locals("user_id", targetUserID)
+		c.Locals("role_name", "cashier")
+		return handler.UpdatePIN(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/pin", strings.NewReader(`{"pin":"1234","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if revoker.calls != 1 {
+		t.Fatalf("expected one refresh token revocation, got %d", revoker.calls)
+	}
+	if revoker.userID != targetUserID || revoker.reason != "user_pin_changed" {
+		t.Fatalf("unexpected revocation target/reason: %s %q", revoker.userID, revoker.reason)
+	}
+}
+
 func TestUserHandlerDeleteRejectsAlreadyArchivedUser(t *testing.T) {
 	targetUserID := uuid.New()
 	repo := &fakeUserRepo{
-		getByIDUser: &models.User{ID: targetUserID, Name: "Cashier", IsActive: false, Role: &models.Role{Name: "cashier"}},
+		getByIDUser: &models.User{ID: targetUserID, Name: "Cashier", IsActive: false, UpdatedAt: userPolicyUpdatedAt, Role: &models.Role{Name: "cashier"}},
 		permissions: []string{"manage_users_page"},
 	}
 	handler := &UserHandler{userRepo: repo}
@@ -334,7 +537,7 @@ func TestUserHandlerDeleteRejectsAlreadyArchivedUser(t *testing.T) {
 		return handler.Delete(c)
 	})
 
-	req := httptest.NewRequest(http.MethodDelete, "/users/"+targetUserID.String(), nil)
+	req := httptest.NewRequest(http.MethodDelete, "/users/"+targetUserID.String()+"?expected_updated_at="+userPolicyUpdatedAtString, nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)

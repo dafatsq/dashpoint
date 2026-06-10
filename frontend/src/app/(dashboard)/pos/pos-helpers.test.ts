@@ -10,9 +10,11 @@ import {
   canSubmitStartShift,
   calculateCartTotals,
   classifyStock,
+  formatCurrencyInputValue,
   getProductMinQuantity,
   getProductPrice,
   getProductQuantity,
+  roundCurrencyAmount,
   removeCartItem,
   updateCartItemQuantity,
 } from "./pos-helpers";
@@ -56,6 +58,26 @@ describe("POS helpers", () => {
       total: 30000,
       change: 20000,
     });
+  });
+
+  test("normalizes decimal POS totals to two decimal places", () => {
+    const items: CartItem[] = [
+      {
+        product: createProduct({ price: "3016.67", tax_rate: "5" }),
+        quantity: 2,
+      },
+    ];
+
+    expect(calculateCartTotals(items, 0, 6335.01)).toEqual({
+      subtotal: 6033.34,
+      totalTax: 301.67,
+      discountAmount: 0,
+      total: 6335.01,
+      change: 0,
+    });
+
+    expect(roundCurrencyAmount(6335.0070000000005)).toBe(6335.01);
+    expect(formatCurrencyInputValue(6335.0070000000005)).toBe("6335.01");
   });
 
   test("adds and updates cart items", () => {

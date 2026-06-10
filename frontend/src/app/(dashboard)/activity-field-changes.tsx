@@ -25,9 +25,11 @@ export function ActivityFieldChanges({ log, emptyMessage = null }: ActivityField
 
   return (
     <div className="space-y-2">
-      {changes.map(({ key, oldVal, newVal }) => (
-        <div key={key} className="text-sm border-b pb-2 last:border-b-0">
-          <div className="font-medium capitalize">{formatActivityFieldName(key, log.action)}</div>
+      {changes.map(({ key, oldVal, newVal, label }) => (
+        <div key={`${key}-${label ?? "default"}`} className="text-sm border-b pb-2 last:border-b-0">
+          <div className="font-medium capitalize">
+            {label ?? formatActivityFieldName(key, log.action)}
+          </div>
           <div className="mt-1 flex items-start gap-2 text-xs text-muted-foreground">
             {isActivityImageField(key) ? (
               <div className="flex items-center gap-2">

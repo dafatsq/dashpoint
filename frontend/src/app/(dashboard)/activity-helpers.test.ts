@@ -37,10 +37,12 @@ describe("activity helpers", () => {
     expect(getActivityActionVerb("inventory.adjust")).toBe("adjust");
     expect(getActivityActionLabel("inventory.threshold_update")).toBe("Update Threshold");
     expect(getActivityActionLabel("auth.login_failed")).toBe("Login Failed");
+    expect(getActivityActionLabel("user.permission_change")).toBe("Update Permissions");
   });
 
   test("maps entity labels and badge colors", () => {
     expect(getActivityEntityLabel("auth")).toBe("Authentication");
+    expect(getActivityEntityLabel("role")).toBe("Role");
     expect(getActivityBadgeColor("category.archive")).toContain(
       "bg-orange-500",
     );
@@ -81,6 +83,22 @@ describe("activity helpers", () => {
     expect(
       buildActivityDescription({
         ...baseLog,
+        entity_type: "role",
+        action: "user.permission_change",
+        old_values: {
+          affected_role: "manager",
+          permissions: ["access_users_page"],
+        },
+        new_values: {
+          affected_role: "manager",
+          permissions: ["access_users_page", "manage_users_page"],
+        },
+      }),
+    ).toBe("Updated role permissions: manager");
+
+    expect(
+      buildActivityDescription({
+        ...baseLog,
         entity_type: "expense",
         action: "expense.create",
         new_values: {
@@ -116,12 +134,43 @@ describe("activity helpers", () => {
     ]);
   });
 
+  test("builds permission changes for role audit entries", () => {
+    const changes = buildActivityFieldChanges({
+      ...baseLog,
+      action: "user.permission_change",
+      entity_type: "role",
+      old_values: {
+        affected_role: "manager",
+        permissions: ["access_users_page"],
+      },
+      new_values: {
+        affected_role: "manager",
+        permissions: ["access_users_page", "manage_users_page"],
+      },
+    });
+
+    expect(changes).toEqual([
+      {
+        key: "permissions",
+        label: "Manage Users",
+        oldVal: "Disabled",
+        newVal: "Enabled",
+      },
+    ]);
+  });
+
   test("formats activity field values consistently", () => {
     expect(normalizeCurrency(formatActivityFieldValue("amount", "15000"))).toBe(
       "Rp15.000",
     );
     expect(formatActivityFieldValue("tax_rate", 11)).toBe("11%");
     expect(formatActivityFieldValue("is_active", true)).toBe("Yes");
+    expect(
+      formatActivityFieldValue("permissions", [
+        "access_users_page",
+        "manage_users_page",
+      ]),
+    ).toBe("Access Users, Manage Users");
     expect(formatActivityFieldValue("metadata", { foo: "bar" })).toBe(
       '{"foo":"bar"}',
     );
