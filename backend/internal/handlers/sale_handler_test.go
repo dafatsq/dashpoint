@@ -95,6 +95,38 @@ func TestCreateSaleRejectsInvalidSaleDiscountValue(t *testing.T) {
 	}
 }
 
+func TestCreateSaleRejectsUnsupportedSaleDiscountType(t *testing.T) {
+	handler := NewSaleHandler(&fakeSaleStore{}, &fakeShiftLookup{})
+	app := saleTestApp(handler, uuid.New(), "owner")
+	body := `{
+		"items":[{"product_id":"00000000-0000-0000-0000-000000000001","quantity":"1","unit_price":"10.00","discount_value":"0","discount_amount":"0"}],
+		"payments":[{"payment_method":"cash","amount":"10.00"}],
+		"discount_type":"free",
+		"discount_value":"10"
+	}`
+
+	resp := performJSONRequest(t, app, http.MethodPost, "/sales", body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateSaleRejectsOutOfRangeSaleDiscountPercentage(t *testing.T) {
+	handler := NewSaleHandler(&fakeSaleStore{}, &fakeShiftLookup{})
+	app := saleTestApp(handler, uuid.New(), "owner")
+	body := `{
+		"items":[{"product_id":"00000000-0000-0000-0000-000000000001","quantity":"1","unit_price":"10.00","discount_value":"0","discount_amount":"0"}],
+		"payments":[{"payment_method":"cash","amount":"10.00"}],
+		"discount_type":"percentage",
+		"discount_value":"101"
+	}`
+
+	resp := performJSONRequest(t, app, http.MethodPost, "/sales", body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
 func TestCreateSaleRejectsInvalidAmountTendered(t *testing.T) {
 	handler := NewSaleHandler(&fakeSaleStore{}, &fakeShiftLookup{})
 	app := saleTestApp(handler, uuid.New(), "owner")
