@@ -76,12 +76,20 @@ func TestApplyUpdateProductRequestRejectsInvalidTaxRate(t *testing.T) {
 	}
 }
 
+func testParseStockAdjustmentRoute(c *fiber.Ctx) error {
+	_, err := parseStockAdjustmentRequest(c)
+	if err == nil {
+		return nil
+	}
+	if handled, writeErr := writeProductRequestError(c, err); handled {
+		return writeErr
+	}
+	return err
+}
+
 func TestParseStockAdjustmentRequestRejectsInvalidQuantity(t *testing.T) {
 	app := fiber.New()
-	app.Post("/", func(c *fiber.Ctx) error {
-		_, err := parseStockAdjustmentRequest(c)
-		return err
-	})
+	app.Post("/", testParseStockAdjustmentRoute)
 
 	req := strings.NewReader(`{"product_id":"00000000-0000-0000-0000-000000000001","adjustment_type":"purchase","quantity":"oops"}`)
 	httpReq := httptest.NewRequest("POST", "/", req)
@@ -117,10 +125,7 @@ func TestParseStockAdjustmentRequestAllowsDestructiveAdjustmentsWithoutReason(t 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			app := fiber.New()
-			app.Post("/", func(c *fiber.Ctx) error {
-				_, err := parseStockAdjustmentRequest(c)
-				return err
-			})
+			app.Post("/", testParseStockAdjustmentRoute)
 
 			httpReq := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
 			httpReq.Header.Set("Content-Type", "application/json")
@@ -132,6 +137,81 @@ func TestParseStockAdjustmentRequestAllowsDestructiveAdjustmentsWithoutReason(t 
 				t.Fatalf("expected 200, got %d", resp.StatusCode)
 			}
 		})
+	}
+}
+
+func TestParseStockAdjustmentRequestRejectsNegativeDamageOrLossQuantity(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "negative damage",
+			body: `{"product_id":"00000000-0000-0000-0000-000000000001","adjustment_type":"damage","quantity":"-2"}`,
+		},
+		{
+			name: "negative loss",
+			body: `{"product_id":"00000000-0000-0000-0000-000000000001","adjustment_type":"loss","quantity":"-1"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := fiber.New()
+			app.Post("/", testParseStockAdjustmentRoute)
+
+			httpReq := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
+			httpReq.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(httpReq)
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusBadRequest {
+				t.Fatalf("expected 400, got %d", resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestParseStockAdjustmentRequestAllowsStockCountToZero(t *testing.T) {
+	app := fiber.New()
+	app.Post("/", func(c *fiber.Ctx) error {
+		req, err := parseStockAdjustmentRequest(c)
+		if err != nil {
+			return err
+		}
+		if req.AdjustmentType != models.AdjustmentCount {
+			t.Fatalf("expected count adjustment, got %q", req.AdjustmentType)
+		}
+		if !req.Quantity.Equal(decimal.Zero) {
+			t.Fatalf("expected quantity 0, got %s", req.Quantity)
+		}
+		return nil
+	})
+
+	httpReq := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"product_id":"00000000-0000-0000-0000-000000000001","adjustment_type":"count","quantity":"0"}`))
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(httpReq)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestParseStockAdjustmentRequestRejectsNegativeStockCount(t *testing.T) {
+	app := fiber.New()
+	app.Post("/", testParseStockAdjustmentRoute)
+
+	httpReq := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"product_id":"00000000-0000-0000-0000-000000000001","adjustment_type":"count","quantity":"-1"}`))
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(httpReq)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
 }
 
@@ -650,6 +730,51 @@ func TestAdjustStockConvertsDamageRemovalToNegativeDelta(t *testing.T) {
 	}
 	if !capturedQuantity.Equal(decimal.RequireFromString("-10")) {
 		t.Fatalf("expected quantity -10, got %s", capturedQuantity)
+	}
+}
+
+func TestAdjustStockRejectsNegativeDamageQuantity(t *testing.T) {
+	productID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	adjustCalled := false
+	handler := NewProductHandler(&fakeProductStore{
+		getByIDFunc: func(_ context.Context, id uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = id
+			return product, nil
+		},
+	}, &fakeInventoryStore{
+		getByProductIDFunc: func(_ context.Context, id uuid.UUID) (*models.InventoryItem, error) {
+			return &models.InventoryItem{
+				ProductID:         id,
+				Quantity:          decimal.RequireFromString("100"),
+				LowStockThreshold: decimal.Zero,
+				UpdatedAt:         time.Now(),
+			}, nil
+		},
+		adjustStockFunc: func(context.Context, uuid.UUID, models.AdjustmentType, decimal.Decimal, *string, *string, *uuid.UUID, uuid.UUID) (*models.StockAdjustment, error) {
+			adjustCalled = true
+			return &models.StockAdjustment{ID: uuid.New()}, nil
+		},
+	}, &fakeCategoryStore{}, "")
+
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", uuid.New())
+		return c.Next()
+	})
+	app.Post("/inventory/adjust", handler.AdjustStock)
+
+	req := httptest.NewRequest(http.MethodPost, "/inventory/adjust", strings.NewReader(`{"product_id":"`+productID.String()+`","adjustment_type":"damage","quantity":"-10"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+	if adjustCalled {
+		t.Fatalf("expected negative damage adjustment to be rejected before repository mutation")
 	}
 }
 

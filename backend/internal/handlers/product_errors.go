@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,6 +11,32 @@ import (
 
 	"dashpoint/backend/internal/middleware"
 )
+
+type productRequestError struct {
+	status  int
+	code    string
+	message string
+}
+
+func (e *productRequestError) Error() string {
+	return e.message
+}
+
+func newProductRequestError(status int, code, message string) error {
+	return &productRequestError{
+		status:  status,
+		code:    code,
+		message: message,
+	}
+}
+
+func writeProductRequestError(c *fiber.Ctx, err error) (bool, error) {
+	var requestErr *productRequestError
+	if !errors.As(err, &requestErr) {
+		return false, nil
+	}
+	return true, productJSONError(c, requestErr.status, requestErr.code, requestErr.message)
+}
 
 func productJSONError(c *fiber.Ctx, status int, code, message string) error {
 	return middleware.JSONError(c, status, code, message)
