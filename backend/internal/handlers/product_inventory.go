@@ -196,6 +196,9 @@ func inventoryResponse(inventory *models.InventoryItem) fiber.Map {
 func (h *ProductHandler) AdjustStock(c *fiber.Ctx) error {
 	req, err := parseStockAdjustmentRequest(c)
 	if err != nil {
+		if handled, writeErr := writeProductRequestError(c, err); handled {
+			return writeErr
+		}
 		return err
 	}
 

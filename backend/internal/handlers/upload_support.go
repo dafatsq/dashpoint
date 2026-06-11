@@ -3,7 +3,9 @@ package handlers
 import (
 	"fmt"
 	"mime/multipart"
+	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -17,6 +19,22 @@ var allowedUploadImageTypes = map[string]bool{
 	"image/png":  true,
 	"image/gif":  true,
 	"image/webp": true,
+}
+
+var uploadImageExtensionsByType = map[string]string{
+	"image/jpeg": ".jpg",
+	"image/jpg":  ".jpg",
+	"image/png":  ".png",
+	"image/gif":  ".gif",
+	"image/webp": ".webp",
+}
+
+var allowedUploadImageExtensions = map[string]bool{
+	".jpg":  true,
+	".jpeg": true,
+	".png":  true,
+	".gif":  true,
+	".webp": true,
 }
 
 type uploadValidationError struct {
@@ -35,29 +53,69 @@ func uploadJSONError(c *fiber.Ctx, status int, code, message string) error {
 	})
 }
 
-func validateUploadImage(file *multipart.FileHeader) error {
+func validateUploadImage(file *multipart.FileHeader) (string, error) {
 	if file == nil {
-		return &uploadValidationError{
+		return "", &uploadValidationError{
 			code:    "NO_FILE",
 			message: "No file provided",
 		}
 	}
 	contentType := file.Header.Get("Content-Type")
 	if !allowedUploadImageTypes[contentType] {
-		return &uploadValidationError{
+		return "", &uploadValidationError{
 			code:    "INVALID_FILE_TYPE",
 			message: "Only image files (JPEG, PNG, GIF, WebP) are allowed",
 		}
 	}
 	if file.Size > maxUploadImageSize {
-		return &uploadValidationError{
+		return "", &uploadValidationError{
 			code:    "FILE_TOO_LARGE",
 			message: "File size must be less than 5MB",
 		}
 	}
-	return nil
+
+	openedFile, err := file.Open()
+	if err != nil {
+		return "", &uploadValidationError{
+			code:    "INVALID_FILE",
+			message: "Unable to read uploaded file",
+		}
+	}
+	defer openedFile.Close()
+
+	buffer := make([]byte, 512)
+	n, err := openedFile.Read(buffer)
+	if err != nil && n == 0 {
+		return "", &uploadValidationError{
+			code:    "INVALID_FILE",
+			message: "Unable to read uploaded file",
+		}
+	}
+	detectedType := http.DetectContentType(buffer[:n])
+	if !allowedUploadImageTypes[detectedType] {
+		return "", &uploadValidationError{
+			code:    "INVALID_FILE_TYPE",
+			message: "Only image files (JPEG, PNG, GIF, WebP) are allowed",
+		}
+	}
+	return detectedType, nil
 }
 
-func buildUploadFilename(originalName string) string {
-	return fmt.Sprintf("%s%s", uuid.New().String(), filepath.Ext(originalName))
+func buildUploadFilename(contentType string) string {
+	extension := uploadImageExtensionsByType[contentType]
+	if extension == "" {
+		extension = ".bin"
+	}
+	return fmt.Sprintf("%s%s", uuid.New().String(), extension)
+}
+
+func normalizeUploadFilenameParam(filename string) (string, error) {
+	if filename == "" || strings.Contains(filename, "\x00") || filename != filepath.Base(filename) {
+		return "", fmt.Errorf("invalid filename")
+	}
+	extension := strings.ToLower(filepath.Ext(filename))
+	if !allowedUploadImageExtensions[extension] {
+		return "", fmt.Errorf("invalid filename")
+	}
+	return filename, nil
 }

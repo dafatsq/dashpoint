@@ -97,15 +97,54 @@ func (r *InventoryRepository) AdjustStockWithTx(
 
 // SetQuantity sets the inventory quantity directly (for stock count)
 func (r *InventoryRepository) SetQuantity(ctx context.Context, productID uuid.UUID, newQuantity decimal.Decimal, reason *string, adjustedBy uuid.UUID) (*models.StockAdjustment, error) {
-	item, err := r.GetByProductID(ctx, productID)
+	if newQuantity.LessThan(decimal.Zero) {
+		return nil, fmt.Errorf("quantity cannot be negative")
+	}
+
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	if item == nil {
-		return nil, fmt.Errorf("inventory not found for product")
+	defer tx.Rollback(ctx)
+
+	now := time.Now()
+	currentQty, err := getInventoryQuantityForUpdateTx(ctx, tx, productID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("inventory not found for product")
+		}
+		return nil, fmt.Errorf("failed to get current quantity: %w", err)
 	}
-	quantityChange := newQuantity.Sub(item.Quantity)
-	return r.AdjustStock(ctx, productID, models.AdjustmentCount, quantityChange, reason, nil, nil, adjustedBy)
+	quantityChange := newQuantity.Sub(currentQty)
+
+	if err := setInventoryQuantityTx(ctx, tx, productID, newQuantity, now); err != nil {
+		return nil, fmt.Errorf("failed to update inventory: %w", err)
+	}
+
+	adjustment := &models.StockAdjustment{
+		ID:             uuid.New(),
+		ProductID:      productID,
+		AdjustmentType: models.AdjustmentCount,
+		QuantityBefore: currentQty,
+		QuantityChange: quantityChange,
+		QuantityAfter:  newQuantity,
+		Reason:         reason,
+		AdjustedBy:     adjustedBy,
+		CreatedAt:      now,
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO stock_adjustments (id, product_id, adjustment_type, quantity_before, quantity_change, quantity_after, reason, reference_type, reference_id, adjusted_by, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL, $8, $9)
+	`, adjustment.ID, adjustment.ProductID, adjustment.AdjustmentType, adjustment.QuantityBefore, adjustment.QuantityChange, adjustment.QuantityAfter, adjustment.Reason, adjustment.AdjustedBy, adjustment.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to record adjustment: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return adjustment, nil
 }
 
 // UpdateThresholds updates the low stock threshold.

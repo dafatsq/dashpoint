@@ -165,12 +165,12 @@ func parseStockAdjustmentRequest(c *fiber.Ctx) (*stockAdjustmentRequest, error) 
 	}
 
 	if err := c.BodyParser(&req); err != nil {
-		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return nil, newProductRequestError(fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 	}
 
 	productID, err := uuid.Parse(req.ProductID)
 	if err != nil {
-		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_PRODUCT_ID", "Invalid product ID format")
+		return nil, newProductRequestError(fiber.StatusBadRequest, "INVALID_PRODUCT_ID", "Invalid product ID format")
 	}
 
 	adjType := models.AdjustmentType(req.AdjustmentType)
@@ -182,12 +182,15 @@ func parseStockAdjustmentRequest(c *fiber.Ctx) (*stockAdjustmentRequest, error) 
 		models.AdjustmentCount:      true,
 	}
 	if !validTypes[adjType] {
-		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_ADJUSTMENT_TYPE", "Invalid adjustment type. Valid types: purchase, adjustment, damage, loss, count")
+		return nil, newProductRequestError(fiber.StatusBadRequest, "INVALID_ADJUSTMENT_TYPE", "Invalid adjustment type. Valid types: purchase, adjustment, damage, loss, count")
 	}
 
 	quantity, err := parseDecimalField(req.Quantity, "quantity", true)
 	if err != nil {
-		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_QUANTITY", "Invalid quantity")
+		return nil, newProductRequestError(fiber.StatusBadRequest, "INVALID_QUANTITY", "Invalid quantity")
+	}
+	if err := validateStockAdjustmentQuantity(adjType, quantity); err != nil {
+		return nil, newProductRequestError(fiber.StatusBadRequest, "INVALID_QUANTITY", err.Error())
 	}
 
 	var reason *string
@@ -203,6 +206,24 @@ func parseStockAdjustmentRequest(c *fiber.Ctx) (*stockAdjustmentRequest, error) 
 		Reason:            reason,
 		ExpectedUpdatedAt: req.ExpectedUpdatedAt,
 	}, nil
+}
+
+func validateStockAdjustmentQuantity(adjType models.AdjustmentType, quantity decimal.Decimal) error {
+	switch adjType {
+	case models.AdjustmentPurchase, models.AdjustmentDamage, models.AdjustmentLoss:
+		if quantity.LessThanOrEqual(decimal.Zero) {
+			return fmt.Errorf("quantity must be greater than zero")
+		}
+	case models.AdjustmentCount:
+		if quantity.LessThan(decimal.Zero) {
+			return fmt.Errorf("quantity cannot be negative for stock count")
+		}
+	case models.AdjustmentAdjustment:
+		if quantity.Equal(decimal.Zero) {
+			return fmt.Errorf("quantity cannot be zero")
+		}
+	}
+	return nil
 }
 
 func parseInventoryThresholdUpdateRequest(c *fiber.Ctx) (*inventoryThresholdUpdateRequest, error) {

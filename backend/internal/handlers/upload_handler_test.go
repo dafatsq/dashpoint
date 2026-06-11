@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	"mime/multipart"
-	"net/textproto"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,7 +61,7 @@ func TestUploadHandlerSavesImageAndReturnsURL(t *testing.T) {
 	app := fiber.New()
 	app.Post("/upload", handler.UploadImage)
 
-	req := newMultipartUploadRequest(t, "/upload", "image", "photo.png", "image/png", []byte("png-data"))
+	req := newMultipartUploadRequest(t, "/upload", "image", "photo.png", "image/png", samplePNGBytes())
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
@@ -80,8 +80,45 @@ func TestUploadHandlerSavesImageAndReturnsURL(t *testing.T) {
 	if body.URL == "" || body.Filename == "" {
 		t.Fatalf("expected upload url and filename, got %+v", body)
 	}
+	if filepath.Ext(body.Filename) != ".png" {
+		t.Fatalf("expected normalized png filename, got %q", body.Filename)
+	}
 	if _, err := os.Stat(filepath.Join(dir, body.Filename)); err != nil {
 		t.Fatalf("expected uploaded file to exist: %v", err)
+	}
+}
+
+func TestUploadHandlerRejectsSpoofedImageContentType(t *testing.T) {
+	dir := t.TempDir()
+	handler := NewUploadHandler(dir)
+	app := fiber.New()
+	app.Post("/upload", handler.UploadImage)
+
+	req := newMultipartUploadRequest(t, "/upload", "image", "photo.png", "image/png", []byte("not actually an image"))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if body.Code != "INVALID_FILE_TYPE" {
+		t.Fatalf("expected INVALID_FILE_TYPE, got %q", body.Code)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("failed to read upload dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected no saved files, got %d", len(entries))
 	}
 }
 
@@ -130,7 +167,7 @@ func TestValidateUploadImageRejectsOversizedFiles(t *testing.T) {
 		},
 	}
 
-	if err := validateUploadImage(file); err == nil {
+	if _, err := validateUploadImage(file); err == nil {
 		t.Fatal("expected validation error")
 	}
 }
@@ -143,7 +180,7 @@ func TestValidateUploadImagePreservesInvalidFileTypeCodeForOversizedNonImageFile
 		},
 	}
 
-	err := validateUploadImage(file)
+	_, err := validateUploadImage(file)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -154,6 +191,15 @@ func TestValidateUploadImagePreservesInvalidFileTypeCodeForOversizedNonImageFile
 	}
 	if validationErr.code != "INVALID_FILE_TYPE" {
 		t.Fatalf("expected INVALID_FILE_TYPE, got %q", validationErr.code)
+	}
+}
+
+func TestNormalizeUploadFilenameParamRejectsTraversal(t *testing.T) {
+	if _, err := normalizeUploadFilenameParam("../secret.png"); err == nil {
+		t.Fatal("expected traversal filename to be rejected")
+	}
+	if _, err := normalizeUploadFilenameParam("photo.exe"); err == nil {
+		t.Fatal("expected unsupported extension to be rejected")
 	}
 }
 
@@ -180,4 +226,11 @@ func newMultipartUploadRequest(t *testing.T, target, fieldName, filename, conten
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("X-File-Content-Type", contentType)
 	return req
+}
+
+func samplePNGBytes() []byte {
+	return []byte{
+		0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',
+		0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R',
+	}
 }

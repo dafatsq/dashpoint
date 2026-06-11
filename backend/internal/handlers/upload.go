@@ -32,7 +32,8 @@ func (h *UploadHandler) UploadImage(c *fiber.Ctx) error {
 		return uploadJSONError(c, fiber.StatusBadRequest, "NO_FILE", "No file provided")
 	}
 
-	if err := validateUploadImage(file); err != nil {
+	detectedType, err := validateUploadImage(file)
+	if err != nil {
 		var validationErr *uploadValidationError
 		if errors.As(err, &validationErr) {
 			return uploadJSONError(c, fiber.StatusBadRequest, validationErr.code, validationErr.message)
@@ -40,7 +41,7 @@ func (h *UploadHandler) UploadImage(c *fiber.Ctx) error {
 		return uploadJSONError(c, fiber.StatusBadRequest, "INVALID_FILE_TYPE", err.Error())
 	}
 
-	filename := buildUploadFilename(file.Filename)
+	filename := buildUploadFilename(detectedType)
 	filePath := filepath.Join(h.uploadDir, filename)
 
 	if err := c.SaveFile(file, filePath); err != nil {
@@ -58,9 +59,10 @@ func (h *UploadHandler) UploadImage(c *fiber.Ctx) error {
 
 // DeleteImage handles DELETE /api/v1/upload/image/:filename
 func (h *UploadHandler) DeleteImage(c *fiber.Ctx) error {
-	filename := c.Params("filename")
-
-	filename = filepath.Base(filename)
+	filename, err := normalizeUploadFilenameParam(c.Params("filename"))
+	if err != nil {
+		return uploadJSONError(c, fiber.StatusBadRequest, "INVALID_FILENAME", "Invalid filename")
+	}
 
 	filePath := filepath.Join(h.uploadDir, filename)
 
