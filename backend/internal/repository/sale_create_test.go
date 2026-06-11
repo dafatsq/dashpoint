@@ -72,3 +72,101 @@ func TestValidateSaleItemUnitPriceAcceptsMatchingPriceWithDifferentScale(t *test
 		t.Fatalf("expected matching price to be accepted, got %v", err)
 	}
 }
+
+func TestValidateSaleFinancialIntegrityRejectsPaymentMismatch(t *testing.T) {
+	err := validateSaleFinancialIntegrity(
+		decimal.RequireFromString("10000"),
+		[]CreatePaymentRequest{{
+			PaymentMethod: models.PaymentMethodCard,
+			Amount:        decimal.RequireFromString("9000"),
+		}},
+	)
+
+	if err == nil || err.Error() != "payment amount does not match sale total" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSaleFinancialIntegrityRejectsCashChangeMismatch(t *testing.T) {
+	tendered := decimal.RequireFromString("15000")
+	change := decimal.RequireFromString("4000")
+	err := validateSaleFinancialIntegrity(
+		decimal.RequireFromString("10000"),
+		[]CreatePaymentRequest{{
+			PaymentMethod:  models.PaymentMethodCash,
+			Amount:         decimal.RequireFromString("10000"),
+			AmountTendered: &tendered,
+			ChangeGiven:    &change,
+		}},
+	)
+
+	if err == nil || err.Error() != "cash change does not match amount tendered" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSaleFinancialIntegrityRejectsNonCashTenderFields(t *testing.T) {
+	tendered := decimal.RequireFromString("10000")
+	err := validateSaleFinancialIntegrity(
+		decimal.RequireFromString("10000"),
+		[]CreatePaymentRequest{{
+			PaymentMethod:  models.PaymentMethodQRIS,
+			Amount:         decimal.RequireFromString("10000"),
+			AmountTendered: &tendered,
+		}},
+	)
+
+	if err == nil || err.Error() != "amount tendered and change are only valid for cash payments" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSaleFinancialIntegrityAcceptsValidCashTender(t *testing.T) {
+	tendered := decimal.RequireFromString("15000")
+	change := decimal.RequireFromString("5000")
+	err := validateSaleFinancialIntegrity(
+		decimal.RequireFromString("10000"),
+		[]CreatePaymentRequest{{
+			PaymentMethod:  models.PaymentMethodCash,
+			Amount:         decimal.RequireFromString("10000"),
+			AmountTendered: &tendered,
+			ChangeGiven:    &change,
+		}},
+	)
+
+	if err != nil {
+		t.Fatalf("expected valid cash tender to pass, got %v", err)
+	}
+}
+
+func TestValidateSaleFinancialIntegrityRejectsNegativeTotal(t *testing.T) {
+	err := validateSaleFinancialIntegrity(
+		decimal.RequireFromString("-1"),
+		[]CreatePaymentRequest{{
+			PaymentMethod: models.PaymentMethodCash,
+			Amount:        decimal.RequireFromString("1"),
+		}},
+	)
+
+	if err == nil || err.Error() != "sale total cannot be negative" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSaleItemDiscountRejectsOutOfBoundsValues(t *testing.T) {
+	product := &models.Product{Name: "Cola"}
+	item := &CreateSaleItemRequest{
+		DiscountAmount: decimal.RequireFromString("11"),
+	}
+
+	err := validateSaleItemDiscount(
+		product,
+		item,
+		decimal.RequireFromString("10"),
+		decimal.Zero,
+	)
+
+	if err == nil || err.Error() != "discount exceeds item total for Cola" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

@@ -82,6 +82,9 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validateSaleDiscountRequest(req.DiscountType, discountValue); err != nil {
+		return nil, err
+	}
 	var shiftID *uuid.UUID
 	if req.ShiftID != nil && *req.ShiftID != "" {
 		parsedShiftID, err := uuid.Parse(*req.ShiftID)
@@ -255,5 +258,29 @@ func isValidPaymentMethod(method models.PaymentMethod) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func validateSaleDiscountRequest(discountType *string, discountValue *decimal.Decimal) error {
+	if discountType == nil && discountValue == nil {
+		return nil
+	}
+	if discountType == nil || discountValue == nil {
+		return saleValidationAPIError("INVALID_DISCOUNT", "Discount type and value must be provided together")
+	}
+	if discountValue.LessThan(decimal.Zero) {
+		return saleValidationAPIError("INVALID_DISCOUNT", "Discount value cannot be negative")
+	}
+
+	switch *discountType {
+	case "fixed":
+		return nil
+	case "percentage":
+		if discountValue.GreaterThan(decimal.NewFromInt(100)) {
+			return saleValidationAPIError("INVALID_DISCOUNT", "Discount percentage cannot exceed 100")
+		}
+		return nil
+	default:
+		return saleValidationAPIError("INVALID_DISCOUNT", "Invalid discount type")
 	}
 }

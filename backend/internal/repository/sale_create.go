@@ -39,6 +39,9 @@ func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*m
 
 	discountAmount := calculateSaleDiscount(subtotal, itemDiscountAmount, req.DiscountType, req.DiscountValue)
 	totalAmount := subtotal.Add(taxAmount).Sub(discountAmount)
+	if err := validateSaleFinancialIntegrity(totalAmount, req.Payments); err != nil {
+		return nil, err
+	}
 	amountPaid, paymentStatus, changeAmount := calculateSalePaymentStatus(totalAmount, req.Payments)
 
 	sale := &models.Sale{
@@ -118,6 +121,12 @@ func prepareSaleItems(ctx context.Context, tx pgx.Tx, items []CreateSaleItemRequ
 			return nil, decimal.Zero, decimal.Zero, decimal.Zero, fmt.Errorf("insufficient stock for %s: available %s, requested %s", product.Name, productQty.String(), item.Quantity.String())
 		}
 
+		itemSubtotal := product.Price.Mul(item.Quantity)
+		itemTax := itemSubtotal.Mul(product.TaxRate).Div(decimal.NewFromInt(100))
+		if err := validateSaleItemDiscount(product, item, itemSubtotal, itemTax); err != nil {
+			return nil, decimal.Zero, decimal.Zero, decimal.Zero, err
+		}
+
 		prepared := buildPreparedSaleItem(product, item, productQty, now)
 		preparedItems = append(preparedItems, prepared)
 
@@ -134,6 +143,16 @@ func validateSaleItemUnitPrice(product *models.Product, item *CreateSaleItemRequ
 		return nil
 	}
 	return fmt.Errorf("product price changed for %s: current price is %s, submitted price is %s", product.Name, product.Price.String(), item.UnitPrice.String())
+}
+
+func validateSaleItemDiscount(product *models.Product, item *CreateSaleItemRequest, itemSubtotal decimal.Decimal, itemTax decimal.Decimal) error {
+	if item.DiscountValue.LessThan(decimal.Zero) || item.DiscountAmount.LessThan(decimal.Zero) {
+		return fmt.Errorf("discount cannot be negative for %s", product.Name)
+	}
+	if item.DiscountAmount.GreaterThan(itemSubtotal.Add(itemTax)) {
+		return fmt.Errorf("discount exceeds item total for %s", product.Name)
+	}
+	return nil
 }
 
 func buildPreparedSaleItem(product *models.Product, item *CreateSaleItemRequest, productQty decimal.Decimal, now time.Time) salePreparedItem {
@@ -216,6 +235,53 @@ func calculateSalePaymentStatus(totalAmount decimal.Decimal, payments []CreatePa
 	}
 
 	return amountPaid, paymentStatus, changeAmount
+}
+
+func validateSaleFinancialIntegrity(totalAmount decimal.Decimal, payments []CreatePaymentRequest) error {
+	if totalAmount.LessThan(decimal.Zero) {
+		return fmt.Errorf("sale total cannot be negative")
+	}
+
+	amountPaid := decimal.Zero
+	for _, payment := range payments {
+		amountPaid = amountPaid.Add(payment.Amount)
+		if err := validateSalePaymentTender(payment); err != nil {
+			return err
+		}
+	}
+	if !amountPaid.Equal(totalAmount) {
+		return fmt.Errorf("payment amount does not match sale total")
+	}
+	return nil
+}
+
+func validateSalePaymentTender(payment CreatePaymentRequest) error {
+	if payment.PaymentMethod != models.PaymentMethodCash {
+		if payment.AmountTendered != nil || payment.ChangeGiven != nil {
+			return fmt.Errorf("amount tendered and change are only valid for cash payments")
+		}
+		return nil
+	}
+
+	if payment.AmountTendered == nil {
+		if payment.ChangeGiven != nil && !payment.ChangeGiven.Equal(decimal.Zero) {
+			return fmt.Errorf("cash change requires amount tendered")
+		}
+		return nil
+	}
+
+	if payment.AmountTendered.LessThan(payment.Amount) {
+		return fmt.Errorf("cash amount tendered is less than payment amount")
+	}
+	expectedChange := payment.AmountTendered.Sub(payment.Amount)
+	actualChange := decimal.Zero
+	if payment.ChangeGiven != nil {
+		actualChange = *payment.ChangeGiven
+	}
+	if !actualChange.Equal(expectedChange) {
+		return fmt.Errorf("cash change does not match amount tendered")
+	}
+	return nil
 }
 
 func insertSaleTx(ctx context.Context, tx pgx.Tx, sale *models.Sale) error {
