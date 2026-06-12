@@ -4,20 +4,13 @@ import type { ApiTransport } from "./transport";
 import type { InventoryValuationResponse, ReportsApi, TopSellersResponse } from "./types";
 
 export function createReportsApi(transport: ApiTransport): ReportsApi {
-  const getAuthHeader = () => ({
-    Authorization: `Bearer ${transport.getAccessToken()}`,
-  });
-
-  async function exportBlobUrl(path: string): Promise<string> {
-    const response = await fetch(path, {
-      headers: getAuthHeader(),
-    });
-    if (!response.ok) {
-      throw new Error(`Export failed: ${response.statusText}`);
+  async function exportBlobUrl(endpoint: string): Promise<string> {
+    const result = await transport.requestBlob(endpoint);
+    if (result.error || !result.data) {
+      throw new Error(result.error || "Export failed");
     }
 
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
+    return URL.createObjectURL(result.data);
   }
 
   return {
@@ -93,12 +86,12 @@ export function createReportsApi(transport: ApiTransport): ReportsApi {
       searchParams.set("start_date", params.start_date);
       searchParams.set("end_date", params.end_date);
       return exportBlobUrl(
-        `${transport.getBaseUrl()}/reports/export/sales?${searchParams.toString()}`,
+        `/reports/export/sales?${searchParams.toString()}`,
       );
     },
     exportInventoryCSV() {
       return exportBlobUrl(
-        `${transport.getBaseUrl()}/reports/export/inventory`,
+        `/reports/export/inventory`,
       );
     },
     exportTopSellersCSV(params) {
@@ -108,7 +101,7 @@ export function createReportsApi(transport: ApiTransport): ReportsApi {
       if (params?.limit) searchParams.set("limit", String(params.limit));
       const query = searchParams.toString();
       return exportBlobUrl(
-        `${transport.getBaseUrl()}/reports/export/top-sellers${query ? `?${query}` : ""}`,
+        `/reports/export/top-sellers${query ? `?${query}` : ""}`,
       );
     },
     exportComprehensiveReportCSV(params) {
@@ -116,7 +109,7 @@ export function createReportsApi(transport: ApiTransport): ReportsApi {
       searchParams.set("start_date", params.start_date);
       searchParams.set("end_date", params.end_date);
       return exportBlobUrl(
-        `${transport.getBaseUrl()}/reports/export/comprehensive?${searchParams.toString()}`,
+        `/reports/export/comprehensive?${searchParams.toString()}`,
       );
     },
   };

@@ -189,6 +189,71 @@ func TestSubmitRoutesDenyWhenManagePermissionIsRevoked(t *testing.T) {
 	}
 }
 
+func TestReportAuditReadRoutesDenyWhenAccessPermissionIsRevoked(t *testing.T) {
+	userID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	var checkedPermissions []string
+
+	app := fiber.New()
+	protected := app.Group("", func(c *fiber.Ctx) error {
+		c.Locals("user_id", userID)
+		c.Locals("role_name", "manager")
+		return c.Next()
+	})
+
+	deps := &serverDependencies{
+		permissionChecker: func(_ *fiber.Ctx, _ uuid.UUID, permission string) (bool, error) {
+			checkedPermissions = append(checkedPermissions, permission)
+			return false, nil
+		},
+		reportHandler: handlers.NewReportHandler(nil),
+		auditHandler:  handlers.NewAuditHandler(nil),
+	}
+
+	registerReportsRoutes(protected, deps)
+	registerAuditRoutes(protected, deps)
+
+	type routeCase struct {
+		name        string
+		path        string
+		permissions []string
+	}
+
+	tests := []routeCase{
+		{name: "daily report", path: "/reports/daily", permissions: []string{"access_reports_page"}},
+		{name: "sales report", path: "/reports/sales", permissions: []string{"access_reports_page"}},
+		{name: "top sellers report", path: "/reports/top-sellers", permissions: []string{"access_reports_page"}},
+		{name: "inventory report", path: "/reports/inventory", permissions: []string{"access_reports_page"}},
+		{name: "cash report", path: "/reports/cash", permissions: []string{"access_reports_page"}},
+		{name: "employee report", path: "/reports/by-employee", permissions: []string{"access_reports_page"}},
+		{name: "category report", path: "/reports/by-category", permissions: []string{"access_reports_page"}},
+		{name: "dashboard changes", path: "/dashboard/changes", permissions: []string{"access_changes_page"}},
+		{name: "audit logs", path: "/logs", permissions: []string{"access_audit_page"}},
+		{name: "audit actions", path: "/logs/actions", permissions: []string{"access_audit_page"}},
+		{name: "audit summary", path: "/logs/summary", permissions: []string{"access_audit_page"}},
+		{name: "audit entity history", path: "/logs/entity/product/11111111-1111-1111-1111-111111111111", permissions: []string{"access_audit_page"}},
+		{name: "audit user activity", path: "/logs/user/11111111-1111-1111-1111-111111111111", permissions: []string{"access_audit_page"}},
+		{name: "audit by id", path: "/logs/11111111-1111-1111-1111-111111111111", permissions: []string{"access_audit_page"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkedPermissions = nil
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusForbidden {
+				t.Fatalf("expected status 403, got %d", resp.StatusCode)
+			}
+			if !reflect.DeepEqual(checkedPermissions, tt.permissions) {
+				t.Fatalf("expected permission checks %v, got %v", tt.permissions, checkedPermissions)
+			}
+		})
+	}
+}
+
 func TestPublicAuthRoutesRateLimitLogin(t *testing.T) {
 	app := fiber.New()
 	deps := &serverDependencies{

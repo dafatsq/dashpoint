@@ -41,17 +41,17 @@ func (h *ReportHandler) ExportSalesCSV(c *fiber.Ctx) error {
 
 	for _, item := range items {
 		rows = append(rows, []string{
-			item.InvoiceNo,
-			item.Date,
-			item.Time,
-			item.EmployeeName,
+			csvText(item.InvoiceNo),
+			csvText(item.Date),
+			csvText(item.Time),
+			csvText(item.EmployeeName),
 			fmt.Sprintf("%d", item.ItemCount),
 			item.Subtotal.String(),
 			item.Tax.String(),
 			item.Discount.String(),
 			item.Total.String(),
-			item.PaymentMethod,
-			item.Status,
+			csvText(item.PaymentMethod),
+			csvText(item.Status),
 		})
 	}
 
@@ -61,7 +61,13 @@ func (h *ReportHandler) ExportSalesCSV(c *fiber.Ctx) error {
 	}
 
 	filename := fmt.Sprintf("sales_%s_to_%s.csv", dateRange.start.Format("20060102"), dateRange.end.Format("20060102"))
-	return sendCSV(c, filename, data)
+	if err := sendCSV(c, filename, data); err != nil {
+		return reportExportInternalError(c, err, "Failed to send sales export")
+	}
+	logReportExport(c, "sales", filename, dateRange, map[string]interface{}{
+		"row_count": len(items),
+	})
+	return nil
 }
 
 // ExportInventoryCSV handles GET /api/v1/reports/export/inventory
@@ -85,10 +91,10 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 			category = *item.CategoryName
 		}
 		rows = append(rows, []string{
-			item.ProductID,
-			item.ProductName,
-			sku,
-			category,
+			csvText(item.ProductID),
+			csvText(item.ProductName),
+			csvText(sku),
+			csvText(category),
 			item.Quantity.String(),
 			item.SellPrice.String(),
 			item.RetailValue.String(),
@@ -106,14 +112,20 @@ func (h *ReportHandler) ExportInventoryCSV(c *fiber.Ctx) error {
 	}
 
 	filename := fmt.Sprintf("inventory_%s.csv", time.Now().In(reportBusinessLocation).Format("20060102"))
-	return sendCSV(c, filename, data)
+	if err := sendCSV(c, filename, data); err != nil {
+		return reportExportInternalError(c, err, "Failed to send inventory export")
+	}
+	logReportExport(c, "inventory", filename, nil, map[string]interface{}{
+		"row_count": len(valuation.Items),
+	})
+	return nil
 }
 
 // ExportTopSellersCSV handles GET /api/v1/reports/export/top-sellers
 func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
-	limit := c.QueryInt("limit", 50)
-	if limit <= 0 || limit > 100 {
-		limit = 50
+	limit, err := parseReportLimitQuery(c, 50, 100)
+	if err != nil {
+		return err
 	}
 
 	dateRange, err := parseReportRangeResponse(c, 30, false, 0)
@@ -141,10 +153,10 @@ func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
 		}
 		rows = append(rows, []string{
 			fmt.Sprintf("%d", i+1),
-			item.ProductID,
-			item.ProductName,
-			sku,
-			category,
+			csvText(item.ProductID),
+			csvText(item.ProductName),
+			csvText(sku),
+			csvText(category),
 			item.QuantitySold.String(),
 			item.TotalRevenue.String(),
 		})
@@ -156,7 +168,14 @@ func (h *ReportHandler) ExportTopSellersCSV(c *fiber.Ctx) error {
 	}
 
 	filename := fmt.Sprintf("top_sellers_%s_to_%s.csv", dateRange.start.Format("20060102"), dateRange.end.Format("20060102"))
-	return sendCSV(c, filename, data)
+	if err := sendCSV(c, filename, data); err != nil {
+		return reportExportInternalError(c, err, "Failed to send top sellers export")
+	}
+	logReportExport(c, "top_sellers", filename, dateRange, map[string]interface{}{
+		"limit":     limit,
+		"row_count": len(items),
+	})
+	return nil
 }
 
 // ExportComprehensiveReportCSV exports all analytics and statistics in one CSV
@@ -234,9 +253,9 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 		}
 		rows = append(rows, []string{
 			fmt.Sprintf("%d", i+1),
-			item.ProductName,
-			sku,
-			category,
+			csvText(item.ProductName),
+			csvText(sku),
+			csvText(category),
 			item.QuantitySold.String(),
 			item.TotalRevenue.String(),
 		})
@@ -248,7 +267,7 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 		rows = append(rows, []string{"Employee", "Transactions", "Items Sold", "Total Sales", "Avg per Transaction"})
 		for _, emp := range employeeSales {
 			rows = append(rows, []string{
-				fmt.Sprintf("%v", emp["employee_name"]),
+				csvText(fmt.Sprintf("%v", emp["employee_name"])),
 				fmt.Sprintf("%v", emp["transaction_count"]),
 				fmt.Sprintf("%v", emp["item_count"]),
 				fmt.Sprintf("%v", emp["total_sales"]),
@@ -263,7 +282,7 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 		rows = append(rows, []string{"Category", "Items Sold (Line Items)", "Total Quantity", "Revenue"})
 		for _, cat := range categorySales {
 			rows = append(rows, []string{
-				fmt.Sprintf("%v", cat["category_name"]),
+				csvText(fmt.Sprintf("%v", cat["category_name"])),
 				fmt.Sprintf("%v", cat["items_sold"]),
 				fmt.Sprintf("%v", cat["quantity_sold"]),
 				fmt.Sprintf("%v", cat["total_revenue"]),
@@ -277,5 +296,12 @@ func (h *ReportHandler) ExportComprehensiveReportCSV(c *fiber.Ctx) error {
 	}
 
 	filename := fmt.Sprintf("comprehensive_report_%s_to_%s.csv", dateRange.start.Format("20060102"), dateRange.end.Format("20060102"))
-	return sendCSV(c, filename, data)
+	if err := sendCSV(c, filename, data); err != nil {
+		return reportExportInternalError(c, err, "Failed to send comprehensive export")
+	}
+	logReportExport(c, "comprehensive", filename, dateRange, map[string]interface{}{
+		"top_sellers_limit": 20,
+		"daily_rows":        len(dailyReports),
+	})
+	return nil
 }

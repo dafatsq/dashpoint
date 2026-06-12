@@ -5,11 +5,17 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+
+	"dashpoint/backend/internal/audit"
+	"dashpoint/backend/internal/models"
 )
 
 const reportDateLayout = "2006-01-02"
@@ -129,6 +135,42 @@ func parseReportCategoryID(c *fiber.Ctx) (*uuid.UUID, error) {
 	return &categoryID, nil
 }
 
+func parseBoundedIntQuery(c *fiber.Ctx, key string, defaultValue, maxValue int) (int, error) {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return defaultValue, nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 || (maxValue > 0 && value > maxValue) {
+		return 0, fmt.Errorf("%s", key)
+	}
+
+	return value, nil
+}
+
+func parseNonNegativeIntQuery(c *fiber.Ctx, key string, defaultValue, maxValue int) (int, error) {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return defaultValue, nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 || (maxValue > 0 && value > maxValue) {
+		return 0, fmt.Errorf("%s", key)
+	}
+
+	return value, nil
+}
+
+func parseReportLimitQuery(c *fiber.Ctx, defaultValue, maxValue int) (int, error) {
+	limit, err := parseBoundedIntQuery(c, "limit", defaultValue, maxValue)
+	if err != nil {
+		return 0, reportError(c, fiber.StatusBadRequest, "INVALID_LIMIT", "Invalid limit")
+	}
+	return limit, nil
+}
+
 func reportInternalError(c *fiber.Ctx, err error, message string) error {
 	log.Error().Err(err).Msg(message)
 	return reportError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate report")
@@ -142,6 +184,7 @@ func reportExportInternalError(c *fiber.Ctx, err error, message string) error {
 func writeCSV(rows [][]string) ([]byte, error) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
+	writer.Comma = ';'
 	for _, row := range rows {
 		if err := writer.Write(row); err != nil {
 			return nil, err
@@ -155,7 +198,46 @@ func writeCSV(rows [][]string) ([]byte, error) {
 }
 
 func sendCSV(c *fiber.Ctx, filename string, data []byte) error {
-	c.Set("Content-Type", "text/csv")
+	c.Set("Content-Type", "text/csv; charset=utf-8")
 	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	return c.Send(data)
+}
+
+func csvText(value string) string {
+	sanitized := strings.NewReplacer("\r", " ", "\n", " ", "\t", " ", "\x00", "").Replace(value)
+	trimmed := strings.TrimLeftFunc(sanitized, unicode.IsSpace)
+	if trimmed == "" {
+		return sanitized
+	}
+
+	switch trimmed[0] {
+	case '=', '+', '-', '@':
+		return "'" + sanitized
+	default:
+		return sanitized
+	}
+}
+
+func logReportExport(c *fiber.Ctx, exportType, filename string, dateRange *reportDateRange, extra map[string]interface{}) {
+	values := map[string]interface{}{
+		"export_type": exportType,
+		"filename":    filename,
+	}
+	if dateRange != nil {
+		values["start_date"] = dateRange.startStr
+		values["end_date"] = dateRange.endStr
+	}
+	for key, value := range extra {
+		values[key] = value
+	}
+
+	audit.LogWithValues(
+		c,
+		models.AuditActionReportExport,
+		models.AuditEntityReport,
+		exportType,
+		"Exported report: "+exportType,
+		nil,
+		values,
+	)
 }

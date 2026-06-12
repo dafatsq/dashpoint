@@ -106,6 +106,54 @@ describe("ApiTransport", () => {
     );
   });
 
+  test("retries blob downloads with cookie credentials", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ code: "INVALID_TOKEN" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("csv,data\n", {
+          status: 200,
+          headers: { "Content-Type": "text/csv" },
+        }),
+      );
+
+    getAccessTokenMock
+      .mockReturnValueOnce("expired-access")
+      .mockReturnValueOnce("fresh-access");
+    refreshSessionTokensMock.mockResolvedValue(true);
+
+    const transport = new ApiTransport("http://localhost:8080/api/v1");
+    const result = await transport.requestBlob("/reports/export/sales");
+
+    expect(result.data).toBeDefined();
+    expect(refreshSessionTokensMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8080/api/v1/reports/export/sales",
+      expect.objectContaining({
+        credentials: "include",
+        headers: expect.objectContaining({
+          Authorization: "Bearer expired-access",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8080/api/v1/reports/export/sales",
+      expect.objectContaining({
+        credentials: "include",
+        headers: expect.objectContaining({
+          Authorization: "Bearer fresh-access",
+        }),
+      }),
+    );
+  });
+
   test("does not log full error response payloads", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

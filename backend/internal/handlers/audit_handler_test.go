@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,6 +88,33 @@ func TestAuditListRejectsInvalidStartDate(t *testing.T) {
 	}
 }
 
+func TestAuditListRejectsInvalidFilterValues(t *testing.T) {
+	handler := NewAuditHandler(&fakeAuditStore{})
+	app := fiber.New()
+	app.Get("/logs", handler.List)
+
+	tests := []string{
+		"/logs?limit=101",
+		"/logs?offset=-1",
+		"/logs?action=bad.action",
+		"/logs?entity_type=bad",
+		"/logs?entity_id=../../etc/passwd",
+		"/logs?status=bad",
+		"/logs?search=" + strings.Repeat("x", 201),
+	}
+
+	for _, path := range tests {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("%s returned error: %v", path, err)
+		}
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("%s expected 400, got %d", path, resp.StatusCode)
+		}
+	}
+}
+
 func TestAuditListUsesJakartaExclusiveEndDate(t *testing.T) {
 	var got repository.AuditFilter
 	handler := NewAuditHandler(&fakeAuditStore{
@@ -115,6 +143,30 @@ func TestAuditListUsesJakartaExclusiveEndDate(t *testing.T) {
 	}
 	if got.EndDate == nil || !got.EndDate.Equal(expectedEnd) {
 		t.Fatalf("expected exclusive endDate %v, got %v", expectedEnd, got.EndDate)
+	}
+}
+
+func TestAuditEntityHistoryRejectsInvalidParams(t *testing.T) {
+	handler := NewAuditHandler(&fakeAuditStore{})
+	app := fiber.New()
+	app.Get("/logs/entity/:type/:id", handler.GetEntityHistory)
+
+	tests := []string{
+		"/logs/entity/bad/11111111-1111-1111-1111-111111111111",
+		"/logs/entity/product/bad$value",
+		"/logs/entity/product/11111111-1111-1111-1111-111111111111?limit=0",
+		"/logs/entity/product/11111111-1111-1111-1111-111111111111?limit=101",
+	}
+
+	for _, path := range tests {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("%s returned error: %v", path, err)
+		}
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("%s expected 400, got %d", path, resp.StatusCode)
+		}
 	}
 }
 
