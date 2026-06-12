@@ -17,6 +17,7 @@ export function createEmptyExpenseFormData(expenseDate = todayDateString()): Cre
     vendor: "",
     reference_number: "",
     notes: "",
+    expected_product_updated_at: "",
   };
 }
 
@@ -75,7 +76,15 @@ export function mapExpenseToFormData(expense: Expense): CreateExpenseRequest {
     vendor: expense.vendor || "",
     reference_number: expense.reference_number || "",
     notes: expense.notes || "",
+    expected_product_updated_at: "",
   };
+}
+
+export function productExpectedUpdatedAt(productID: string | undefined, products: Product[]): string {
+  if (!productID) {
+    return "";
+  }
+  return products.find((product) => product.id === productID)?.updated_at || "";
 }
 
 export function hasExpenseFormChanges(formData: CreateExpenseRequest, editingExpense: Expense | null): boolean {
@@ -133,5 +142,6 @@ export function buildExpenseRequest(formData: CreateExpenseRequest): CreateExpen
     vendor: formData.vendor || undefined,
     reference_number: formData.reference_number || undefined,
     notes: formData.notes || undefined,
+    expected_product_updated_at: formData.expected_product_updated_at || undefined,
   };
 }

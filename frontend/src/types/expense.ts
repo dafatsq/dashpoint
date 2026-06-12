@@ -39,6 +39,7 @@ export interface CreateExpenseRequest {
   vendor?: string;
   reference_number?: string;
   notes?: string;
+  expected_product_updated_at?: string;
 }
 
 export interface UpdateExpenseRequest {
@@ -53,6 +54,7 @@ export interface UpdateExpenseRequest {
   reference_number?: string;
   notes?: string;
   expected_updated_at?: string;
+  expected_product_updated_at?: string;
 }
 
 export interface ExpenseSummary {

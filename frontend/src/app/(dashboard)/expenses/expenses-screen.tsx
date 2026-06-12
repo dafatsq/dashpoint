@@ -20,6 +20,7 @@ import {
   hasExpenseFormChanges,
   isInventoryPurchaseCategory,
   mapExpenseToFormData,
+  productExpectedUpdatedAt,
   todayDateString,
 } from "./expenses-helpers";
 import { ExpensesFormDialog } from "./expenses-form-dialog";
@@ -150,6 +151,7 @@ export function ExpensesScreen() {
     setFormErrors({});
     setIsManualAmount(false);
     setIsManualDescription(false);
+    setProducts((prev) => prev.filter((p) => p.is_active));
   }, []);
 
   const inventoryPurchase = useMemo(
@@ -188,14 +190,37 @@ export function ExpensesScreen() {
       if (!canEditExpense) {
         return;
       }
+
+      if (
+        expense.product_id &&
+        !products.some((p) => p.id === expense.product_id)
+      ) {
+        const estimatedCost = (expense.amount && expense.quantity)
+          ? (parseFloat(expense.amount) / parseFloat(expense.quantity)).toFixed(2)
+          : "0";
+        const archivedProduct: Product = {
+          id: expense.product_id,
+          name: expense.product_name || "Archived Product",
+          cost: estimatedCost,
+          price: "0",
+          is_active: false,
+          created_at: "",
+          updated_at: "",
+        };
+        setProducts((prev) => [...prev, archivedProduct]);
+      }
+
       setEditingExpense(expense);
-      setFormData(mapExpenseToFormData(expense));
+      setFormData({
+        ...mapExpenseToFormData(expense),
+        expected_product_updated_at: productExpectedUpdatedAt(expense.product_id, products),
+      });
       setIsManualAmount(!!expense.product_id);
       setIsManualDescription(true);
       setFormErrors({});
       setDialogOpen(true);
     },
-    [canEditExpense],
+    [canEditExpense, products],
   );
 
   const hasChanges = useMemo(() => hasExpenseFormChanges(formData, editingExpense), [editingExpense, formData]);
@@ -414,7 +439,12 @@ export function ExpensesScreen() {
         isInventoryPurchase={inventoryPurchase}
         isManualAmount={isManualAmount}
         isManualDescription={isManualDescription}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            resetForm();
+          }
+        }}
         onFormDataChange={setFormData}
         onFormErrorsChange={setFormErrors}
         onManualAmountChange={setIsManualAmount}

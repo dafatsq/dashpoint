@@ -106,9 +106,16 @@ export function ExpensesFormDialog({
                       vendor: "",
                       reference_number: "",
                       notes: "",
+                      expected_product_updated_at: "",
                     });
                   } else {
-                    updateFormData({ category_id: nextCategoryId, product_id: "", quantity: "", applies_inventory: false });
+                    updateFormData({
+                      category_id: nextCategoryId,
+                      product_id: "",
+                      quantity: "",
+                      applies_inventory: false,
+                      expected_product_updated_at: "",
+                    });
                   }
                   onManualAmountChange(false);
                   onManualDescriptionChange(false);
@@ -211,7 +218,12 @@ export function ExpensesFormDialog({
                 <Select
                   value={formData.product_id || "none"}
                   onValueChange={(value) => {
-                    updateFormData({ product_id: value === "none" ? "" : value });
+                    const productID = value === "none" ? "" : value;
+                    updateFormData({
+                      product_id: productID,
+                      expected_product_updated_at:
+                        products.find((product) => product.id === productID)?.updated_at || "",
+                    });
                     onManualAmountChange(false);
                     onManualDescriptionChange(false);
                   }}
@@ -222,12 +234,23 @@ export function ExpensesFormDialog({
                   </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Select a product</SelectItem>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                        {product.name} - {formatCurrency(parseFloat(product.cost || "0"))}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
+                      {products.map((product) => {
+                        const isArchived = product.is_active === false;
+                        const isCurrentlySelected = formData.product_id === product.id;
+                        const isDisabled = isArchived && !isCurrentlySelected;
+
+                        return (
+                          <SelectItem
+                            key={product.id}
+                            value={product.id}
+                            disabled={isDisabled}
+                            className={isArchived ? "opacity-50 text-muted-foreground" : ""}
+                          >
+                            {product.name} - {formatCurrency(parseFloat(product.cost || "0"))}{isArchived ? " (Archived)" : ""}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
                 </Select>
               </>
             ) : (

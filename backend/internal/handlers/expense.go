@@ -58,30 +58,32 @@ func NewExpenseHandler(repo expenseStore, inventoryRepo expenseInventoryStore, p
 }
 
 type CreateExpenseRequest struct {
-	CategoryID       *string `json:"category_id"`
-	ProductID        *string `json:"product_id"`
-	Quantity         *string `json:"quantity"`
-	AppliesInventory bool    `json:"applies_inventory"`
-	Amount           string  `json:"amount"`
-	Description      string  `json:"description"`
-	ExpenseDate      string  `json:"expense_date"`
-	Vendor           *string `json:"vendor"`
-	ReferenceNumber  *string `json:"reference_number"`
-	Notes            *string `json:"notes"`
+	CategoryID               *string `json:"category_id"`
+	ProductID                *string `json:"product_id"`
+	Quantity                 *string `json:"quantity"`
+	AppliesInventory         bool    `json:"applies_inventory"`
+	Amount                   string  `json:"amount"`
+	Description              string  `json:"description"`
+	ExpenseDate              string  `json:"expense_date"`
+	Vendor                   *string `json:"vendor"`
+	ReferenceNumber          *string `json:"reference_number"`
+	Notes                    *string `json:"notes"`
+	ExpectedProductUpdatedAt *string `json:"expected_product_updated_at"`
 }
 
 type UpdateExpenseRequest struct {
-	CategoryID        *string `json:"category_id"`
-	ProductID         *string `json:"product_id"`
-	Quantity          *string `json:"quantity"`
-	AppliesInventory  *bool   `json:"applies_inventory"`
-	Amount            *string `json:"amount"`
-	Description       *string `json:"description"`
-	ExpenseDate       *string `json:"expense_date"`
-	Vendor            *string `json:"vendor"`
-	ReferenceNumber   *string `json:"reference_number"`
-	Notes             *string `json:"notes"`
-	ExpectedUpdatedAt *string `json:"expected_updated_at"`
+	CategoryID               *string `json:"category_id"`
+	ProductID                *string `json:"product_id"`
+	Quantity                 *string `json:"quantity"`
+	AppliesInventory         *bool   `json:"applies_inventory"`
+	Amount                   *string `json:"amount"`
+	Description              *string `json:"description"`
+	ExpenseDate              *string `json:"expense_date"`
+	Vendor                   *string `json:"vendor"`
+	ReferenceNumber          *string `json:"reference_number"`
+	Notes                    *string `json:"notes"`
+	ExpectedUpdatedAt        *string `json:"expected_updated_at"`
+	ExpectedProductUpdatedAt *string `json:"expected_product_updated_at"`
 }
 
 type ExpenseResponse struct {

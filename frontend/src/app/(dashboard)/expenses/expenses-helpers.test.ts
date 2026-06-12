@@ -11,6 +11,7 @@ import {
   hasExpenseFormChanges,
   isInventoryPurchaseCategory,
   mapExpenseToFormData,
+  productExpectedUpdatedAt,
   todayDateString,
 } from "./expenses-helpers";
 
@@ -90,6 +91,7 @@ describe("expenses helpers", () => {
       vendor: "Vendor A",
       reference_number: "REF-1",
       notes: "test",
+      expected_product_updated_at: "",
     });
   });
 
@@ -126,6 +128,28 @@ describe("expenses helpers", () => {
       amount: "21000",
       description: "Beans x 3",
       expense_date: "2026-05-14",
+    });
+  });
+
+  test("includes selected product version in inventory purchase requests", () => {
+    const expectedUpdatedAt = "2026-01-02T00:00:00Z";
+    const formData = {
+      ...createEmptyExpenseFormData("2026-05-14"),
+      category_id: "category-1",
+      product_id: "product-1",
+      quantity: "2",
+      applies_inventory: true,
+      amount: "14000",
+      description: "Beans x 2",
+      expected_product_updated_at: expectedUpdatedAt,
+    };
+
+    expect(productExpectedUpdatedAt("product-1", [buildProduct({ updated_at: expectedUpdatedAt })])).toBe(
+      expectedUpdatedAt,
+    );
+    expect(buildExpenseRequest(formData)).toMatchObject({
+      product_id: "product-1",
+      expected_product_updated_at: expectedUpdatedAt,
     });
   });
 

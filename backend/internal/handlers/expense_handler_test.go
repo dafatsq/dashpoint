@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -18,16 +19,22 @@ import (
 )
 
 type fakeExpenseStore struct {
-	getCategoryByIDFunc func(context.Context, uuid.UUID) (*models.ExpenseCategory, error)
-	deleteCategoryFunc  func(context.Context, uuid.UUID) error
-	updateCategoryFunc  func(context.Context, *models.ExpenseCategory) (*models.ExpenseCategory, error)
-	beginTxFunc         func(context.Context) (pgx.Tx, error)
-	getByIDFunc         func(context.Context, uuid.UUID) (*models.Expense, error)
-	getByIDWithTxFunc   func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error)
-	updateWithTxFunc    func(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error)
+	listCategoriesFunc          func(context.Context, string) ([]models.ExpenseCategory, error)
+	getCategoryByIDFunc         func(context.Context, uuid.UUID) (*models.ExpenseCategory, error)
+	deleteCategoryFunc          func(context.Context, uuid.UUID) error
+	permanentDeleteCategoryFunc func(context.Context, uuid.UUID) error
+	updateCategoryFunc          func(context.Context, *models.ExpenseCategory) (*models.ExpenseCategory, error)
+	beginTxFunc                 func(context.Context) (pgx.Tx, error)
+	getByIDFunc                 func(context.Context, uuid.UUID) (*models.Expense, error)
+	getByIDWithTxFunc           func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error)
+	updateWithTxFunc            func(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error)
+	deleteWithTxFunc            func(context.Context, pgx.Tx, uuid.UUID) error
 }
 
-func (f *fakeExpenseStore) ListCategories(context.Context, string) ([]models.ExpenseCategory, error) {
+func (f *fakeExpenseStore) ListCategories(ctx context.Context, status string) ([]models.ExpenseCategory, error) {
+	if f.listCategoriesFunc != nil {
+		return f.listCategoriesFunc(ctx, status)
+	}
 	return nil, nil
 }
 
@@ -56,7 +63,10 @@ func (f *fakeExpenseStore) DeleteCategory(ctx context.Context, id uuid.UUID) err
 	}
 	return nil
 }
-func (f *fakeExpenseStore) PermanentDeleteCategory(context.Context, uuid.UUID) error {
+func (f *fakeExpenseStore) PermanentDeleteCategory(ctx context.Context, id uuid.UUID) error {
+	if f.permanentDeleteCategoryFunc != nil {
+		return f.permanentDeleteCategoryFunc(ctx, id)
+	}
 	return nil
 }
 func (f *fakeExpenseStore) Create(context.Context, *models.Expense) (*models.Expense, error) {
@@ -98,7 +108,10 @@ func (f *fakeExpenseStore) UpdateWithTx(ctx context.Context, tx pgx.Tx, expense 
 func (f *fakeExpenseStore) Delete(context.Context, uuid.UUID) error {
 	return nil
 }
-func (f *fakeExpenseStore) DeleteWithTx(context.Context, pgx.Tx, uuid.UUID) error {
+func (f *fakeExpenseStore) DeleteWithTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
+	if f.deleteWithTxFunc != nil {
+		return f.deleteWithTxFunc(ctx, tx, id)
+	}
 	return nil
 }
 func (f *fakeExpenseStore) GetSummary(context.Context, time.Time, time.Time) (*models.ExpenseSummary, error) {
@@ -170,11 +183,48 @@ func TestListExpensesRejectsInvalidCategoryID(t *testing.T) {
 	}
 }
 
+func TestListExpensesRejectsInvalidPagination(t *testing.T) {
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	app := fiber.New()
+	app.Get("/expenses", handler.List)
+
+	for _, path := range []string{"/expenses?limit=101", "/expenses?offset=-1", "/expenses?limit=abc"} {
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, path, nil))
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("expected 400 for %s, got %d", path, resp.StatusCode)
+		}
+	}
+}
+
 func TestCreateExpenseRejectsInvalidCategoryID(t *testing.T) {
 	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
 	app := expenseHandlerTestApp(handler)
 
 	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","category_id":"bad-uuid"}`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateExpenseRejectsUnknownField(t *testing.T) {
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	app := expenseHandlerTestApp(handler)
+
+	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","unexpected":true}`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateExpenseRejectsOversizedVendor(t *testing.T) {
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	app := expenseHandlerTestApp(handler)
+
+	body := `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","vendor":"` + strings.Repeat("x", expenseVendorMaxLength+1) + `"}`
+	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", body)
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
@@ -214,6 +264,204 @@ func TestCreateExpenseRejectsInvalidQuantity(t *testing.T) {
 	app := expenseHandlerTestApp(handler)
 
 	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","quantity":"oops"}`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateInventoryPurchaseRequiresExpectedProductUpdatedAt(t *testing.T) {
+	categoryID := uuid.New()
+	productID := uuid.New()
+	systemKey := inventoryPurchaseCategorySystemKey
+	store := &fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey, IsActive: true}, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, &fakeExpenseProductStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = productID
+			product.UpdatedAt = time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+			return product, nil
+		},
+	})
+	app := expenseHandlerTestApp(handler)
+
+	body := `{"category_id":"` + categoryID.String() + `","product_id":"` + productID.String() + `","quantity":"2","applies_inventory":true,"amount":"10.00","description":"Restock","expense_date":"2026-05-14"}`
+	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateInventoryPurchaseRejectsStaleProduct(t *testing.T) {
+	categoryID := uuid.New()
+	productID := uuid.New()
+	oldUpdatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	newUpdatedAt := oldUpdatedAt.Add(time.Minute)
+	systemKey := inventoryPurchaseCategorySystemKey
+	store := &fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey, IsActive: true}, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, &fakeExpenseProductStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = productID
+			product.UpdatedAt = newUpdatedAt
+			return product, nil
+		},
+	})
+	app := expenseHandlerTestApp(handler)
+
+	body := `{"category_id":"` + categoryID.String() + `","product_id":"` + productID.String() + `","quantity":"2","applies_inventory":true,"amount":"10.00","description":"Restock","expense_date":"2026-05-14","expected_product_updated_at":"` + oldUpdatedAt.Format(time.RFC3339Nano) + `"}`
+	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", body)
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateInventoryPurchaseRejectsStaleProduct(t *testing.T) {
+	expenseID := uuid.New()
+	categoryID := uuid.New()
+	productID := uuid.New()
+	userID := uuid.New()
+	expenseUpdatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	oldProductUpdatedAt := time.Date(2026, 5, 14, 9, 0, 0, 0, time.UTC)
+	newProductUpdatedAt := oldProductUpdatedAt.Add(time.Minute)
+	systemKey := inventoryPurchaseCategorySystemKey
+	store := &fakeExpenseStore{
+		beginTxFunc: func(context.Context) (pgx.Tx, error) {
+			return &fakeExpenseTx{}, nil
+		},
+		getByIDWithTxFunc: func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error) {
+			return &models.Expense{
+				ID:               expenseID,
+				CategoryID:       &categoryID,
+				ProductID:        &productID,
+				Quantity:         decimalPtr("2"),
+				AppliesInventory: true,
+				Amount:           decimal.RequireFromString("10"),
+				Description:      "Old restock",
+				ExpenseDate:      time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
+				CreatedBy:        userID,
+				UpdatedAt:        expenseUpdatedAt,
+			}, nil
+		},
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey, IsActive: true}, nil
+		},
+		updateWithTxFunc: func(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error) {
+			t.Fatal("expected update not to be called with stale product")
+			return nil, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, &fakeExpenseProductStore{
+		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
+			product := testProduct()
+			product.ID = productID
+			product.UpdatedAt = newProductUpdatedAt
+			return product, nil
+		},
+	})
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", userID)
+		return c.Next()
+	})
+	app.Patch("/expenses/:id", handler.Update)
+
+	body := `{"description":"Updated restock","expected_updated_at":"` + expenseUpdatedAt.Format(time.RFC3339Nano) + `","expected_product_updated_at":"` + oldProductUpdatedAt.Format(time.RFC3339Nano) + `"}`
+	req := httptest.NewRequest(http.MethodPatch, "/expenses/"+expenseID.String(), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateExpenseRequiresExpectedUpdatedAt(t *testing.T) {
+	expenseID := uuid.New()
+	userID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	store := &fakeExpenseStore{
+		beginTxFunc: func(context.Context) (pgx.Tx, error) {
+			return &fakeExpenseTx{}, nil
+		},
+		getByIDWithTxFunc: func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error) {
+			return &models.Expense{
+				ID:          expenseID,
+				Amount:      decimal.RequireFromString("10"),
+				Description: "Old description",
+				ExpenseDate: time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
+				CreatedBy:   userID,
+				UpdatedAt:   updatedAt,
+			}, nil
+		},
+		updateWithTxFunc: func(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error) {
+			t.Fatal("expected update not to be called without expected_updated_at")
+			return nil, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", userID)
+		return c.Next()
+	})
+	app.Patch("/expenses/:id", handler.Update)
+
+	req := httptest.NewRequest(http.MethodPatch, "/expenses/"+expenseID.String(), strings.NewReader(`{"description":"New description"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteExpenseRequiresExpectedUpdatedAt(t *testing.T) {
+	expenseID := uuid.New()
+	userID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	store := &fakeExpenseStore{
+		beginTxFunc: func(context.Context) (pgx.Tx, error) {
+			return &fakeExpenseTx{}, nil
+		},
+		getByIDWithTxFunc: func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error) {
+			return &models.Expense{
+				ID:          expenseID,
+				Amount:      decimal.RequireFromString("10"),
+				Description: "Old description",
+				ExpenseDate: time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
+				CreatedBy:   userID,
+				UpdatedAt:   updatedAt,
+			}, nil
+		},
+		deleteWithTxFunc: func(context.Context, pgx.Tx, uuid.UUID) error {
+			t.Fatal("expected delete not to be called without expected_updated_at")
+			return nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", userID)
+		return c.Next()
+	})
+	app.Delete("/expenses/:id", handler.Delete)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/expenses/"+expenseID.String(), nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
@@ -334,11 +582,12 @@ func TestExpenseInventoryReason(t *testing.T) {
 
 func TestDeleteCategoryAllowsArchivingInventoryPurchaseCategory(t *testing.T) {
 	categoryID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
 	deleteCalled := false
 	store := &fakeExpenseStore{
 		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
 			systemKey := inventoryPurchaseCategorySystemKey
-			return &models.ExpenseCategory{ID: categoryID, Name: "Renamed Inventory Purchase", SystemKey: &systemKey, IsActive: true}, nil
+			return &models.ExpenseCategory{ID: categoryID, Name: "Renamed Inventory Purchase", SystemKey: &systemKey, IsActive: true, UpdatedAt: updatedAt}, nil
 		},
 		deleteCategoryFunc: func(_ context.Context, id uuid.UUID) error {
 			deleteCalled = true
@@ -359,7 +608,7 @@ func TestDeleteCategoryAllowsArchivingInventoryPurchaseCategory(t *testing.T) {
 		return handler.DeleteCategory(c)
 	})
 
-	req := httptest.NewRequest(http.MethodDelete, "/expenses/categories/"+categoryID.String(), nil)
+	req := httptest.NewRequest(http.MethodDelete, "/expenses/categories/"+categoryID.String()+"?expected_updated_at="+url.QueryEscape(updatedAt.Format(time.RFC3339Nano)), nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
@@ -369,6 +618,26 @@ func TestDeleteCategoryAllowsArchivingInventoryPurchaseCategory(t *testing.T) {
 	}
 	if !deleteCalled {
 		t.Fatalf("expected delete repository method to be called")
+	}
+}
+
+func TestListExpenseCategoriesRejectsInvalidStatus(t *testing.T) {
+	store := &fakeExpenseStore{
+		listCategoriesFunc: func(context.Context, string) ([]models.ExpenseCategory, error) {
+			t.Fatal("expected list categories not to be called for invalid status")
+			return nil, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	app := fiber.New()
+	app.Get("/expenses/categories", handler.ListCategories)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/expenses/categories?status=unknown", nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
 }
 
@@ -404,6 +673,7 @@ func TestUpdateExpenseAllowsUnchangedArchivedExpenseCategory(t *testing.T) {
 	expenseID := uuid.New()
 	categoryID := uuid.New()
 	userID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
 	tx := &fakeExpenseTx{}
 	updateCalled := false
 
@@ -419,7 +689,7 @@ func TestUpdateExpenseAllowsUnchangedArchivedExpenseCategory(t *testing.T) {
 				Description: "Old description",
 				ExpenseDate: time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
 				CreatedBy:   userID,
-				UpdatedAt:   time.Now(),
+				UpdatedAt:   updatedAt,
 			}, nil
 		},
 		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
@@ -445,7 +715,7 @@ func TestUpdateExpenseAllowsUnchangedArchivedExpenseCategory(t *testing.T) {
 	})
 	app.Patch("/expenses/:id", handler.Update)
 
-	body := `{"description":"New description","category_id":"` + categoryID.String() + `"}`
+	body := `{"description":"New description","category_id":"` + categoryID.String() + `","expected_updated_at":"` + updatedAt.Format(time.RFC3339Nano) + `"}`
 	req := httptest.NewRequest(http.MethodPatch, "/expenses/"+expenseID.String(), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -468,6 +738,7 @@ func TestUpdateExpenseRejectsChangedArchivedExpenseCategory(t *testing.T) {
 	currentCategoryID := uuid.New()
 	archivedCategoryID := uuid.New()
 	userID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
 
 	store := &fakeExpenseStore{
 		beginTxFunc: func(context.Context) (pgx.Tx, error) {
@@ -481,7 +752,7 @@ func TestUpdateExpenseRejectsChangedArchivedExpenseCategory(t *testing.T) {
 				Description: "Old description",
 				ExpenseDate: time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
 				CreatedBy:   userID,
-				UpdatedAt:   time.Now(),
+				UpdatedAt:   updatedAt,
 			}, nil
 		},
 		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
@@ -501,7 +772,7 @@ func TestUpdateExpenseRejectsChangedArchivedExpenseCategory(t *testing.T) {
 	})
 	app.Patch("/expenses/:id", handler.Update)
 
-	body := `{"description":"New description","category_id":"` + archivedCategoryID.String() + `"}`
+	body := `{"description":"New description","category_id":"` + archivedCategoryID.String() + `","expected_updated_at":"` + updatedAt.Format(time.RFC3339Nano) + `"}`
 	req := httptest.NewRequest(http.MethodPatch, "/expenses/"+expenseID.String(), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -515,9 +786,10 @@ func TestUpdateExpenseRejectsChangedArchivedExpenseCategory(t *testing.T) {
 
 func TestUpdateExpenseCategoryRejectsArchivedCategoryWithoutRestore(t *testing.T) {
 	categoryID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
 	store := &fakeExpenseStore{
 		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
-			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: false}, nil
+			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: false, UpdatedAt: updatedAt}, nil
 		},
 		updateCategoryFunc: func(context.Context, *models.ExpenseCategory) (*models.ExpenseCategory, error) {
 			t.Fatal("expected update not to be called for archived expense category")
@@ -531,7 +803,7 @@ func TestUpdateExpenseCategoryRejectsArchivedCategoryWithoutRestore(t *testing.T
 		return handler.UpdateCategory(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPatch, "/expenses/categories/"+categoryID.String(), strings.NewReader(`{"name":"Office Supplies"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/expenses/categories/"+categoryID.String(), strings.NewReader(`{"name":"Office Supplies","expected_updated_at":"`+updatedAt.Format(time.RFC3339Nano)+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -542,11 +814,39 @@ func TestUpdateExpenseCategoryRejectsArchivedCategoryWithoutRestore(t *testing.T
 	}
 }
 
-func TestDeleteExpenseCategoryRejectsAlreadyArchivedCategory(t *testing.T) {
+func TestUpdateExpenseCategoryRequiresExpectedUpdatedAt(t *testing.T) {
 	categoryID := uuid.New()
 	store := &fakeExpenseStore{
 		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
-			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: false}, nil
+			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: true, UpdatedAt: time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)}, nil
+		},
+		updateCategoryFunc: func(context.Context, *models.ExpenseCategory) (*models.ExpenseCategory, error) {
+			t.Fatal("expected update not to be called without expected_updated_at")
+			return nil, nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+
+	app := fiber.New()
+	app.Patch("/expenses/categories/:id", handler.UpdateCategory)
+
+	req := httptest.NewRequest(http.MethodPatch, "/expenses/categories/"+categoryID.String(), strings.NewReader(`{"name":"Office Supplies"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteExpenseCategoryRejectsAlreadyArchivedCategory(t *testing.T) {
+	categoryID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	store := &fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: false, UpdatedAt: updatedAt}, nil
 		},
 		deleteCategoryFunc: func(context.Context, uuid.UUID) error {
 			t.Fatal("expected delete not to be called for archived expense category")
@@ -560,7 +860,58 @@ func TestDeleteExpenseCategoryRejectsAlreadyArchivedCategory(t *testing.T) {
 		return handler.DeleteCategory(c)
 	})
 
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/expenses/categories/"+categoryID.String()+"?expected_updated_at="+url.QueryEscape(updatedAt.Format(time.RFC3339Nano)), nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteExpenseCategoryRequiresExpectedUpdatedAt(t *testing.T) {
+	categoryID := uuid.New()
+	store := &fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: true, UpdatedAt: time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)}, nil
+		},
+		deleteCategoryFunc: func(context.Context, uuid.UUID) error {
+			t.Fatal("expected delete not to be called without expected_updated_at")
+			return nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+
+	app := fiber.New()
+	app.Delete("/expenses/categories/:id", handler.DeleteCategory)
+
 	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/expenses/categories/"+categoryID.String(), nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestPermanentDeleteExpenseCategoryRejectsActiveCategory(t *testing.T) {
+	categoryID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	store := &fakeExpenseStore{
+		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+			return &models.ExpenseCategory{ID: categoryID, Name: "Supplies", IsActive: true, UpdatedAt: updatedAt}, nil
+		},
+		permanentDeleteCategoryFunc: func(context.Context, uuid.UUID) error {
+			t.Fatal("expected permanent delete not to be called for active category")
+			return nil
+		},
+	}
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+
+	app := fiber.New()
+	app.Delete("/expenses/categories/:id/permanent", handler.PermanentDeleteCategory)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/expenses/categories/"+categoryID.String()+"/permanent?expected_updated_at="+url.QueryEscape(updatedAt.Format(time.RFC3339Nano)), nil))
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
