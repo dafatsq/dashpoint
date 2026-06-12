@@ -38,13 +38,9 @@ func expenseCategoryName(category *models.ExpenseCategory) string {
 
 // ListCategories handles GET /api/v1/expenses/categories
 func (h *ExpenseHandler) ListCategories(c *fiber.Ctx) error {
-	status := c.Query("status", "")
-	if status == "" {
-		if c.Query("active_only", "true") == "true" {
-			status = "active"
-		} else {
-			status = "all"
-		}
+	status, parseErr := parseExpenseCategoryStatus(c)
+	if parseErr != nil {
+		return expenseMessage(c, fiber.StatusBadRequest, parseErr.Error())
 	}
 
 	categories, err := h.repo.ListCategories(c.Context(), status)
@@ -61,11 +57,14 @@ func (h *ExpenseHandler) CreateCategory(c *fiber.Ctx) error {
 		Name        string  `json:"name"`
 		Description *string `json:"description"`
 	}
-	if err := c.BodyParser(&req); err != nil {
-		return expenseMessage(c, fiber.StatusBadRequest, "Invalid request body")
+	if err := parseExpenseBody(c, &req); err != nil {
+		return err
 	}
-	if req.Name == "" {
-		return expenseMessage(c, fiber.StatusBadRequest, "Category name is required")
+	if err := validateExpenseCategoryName(&req.Name); err != nil {
+		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
+	}
+	if err := validateExpenseCategoryDescription(&req.Description); err != nil {
+		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
 	}
 
 	exists, repoErr := h.repo.CategoryNameExists(c.Context(), req.Name, nil)
@@ -124,8 +123,16 @@ func (h *ExpenseHandler) UpdateCategory(c *fiber.Ctx) error {
 		IsActive          *bool   `json:"is_active"`
 		ExpectedUpdatedAt *string `json:"expected_updated_at"`
 	}
-	if err := c.BodyParser(&req); err != nil {
-		return expenseMessage(c, fiber.StatusBadRequest, "Invalid request body")
+	if err := parseExpenseBody(c, &req); err != nil {
+		return err
+	}
+	if req.Name != nil {
+		if err := validateExpenseCategoryName(req.Name); err != nil {
+			return expenseMessage(c, fiber.StatusBadRequest, err.Error())
+		}
+	}
+	if err := validateExpenseCategoryDescription(&req.Description); err != nil {
+		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
 	}
 
 	category, repoErr := h.repo.GetCategoryByID(c.Context(), id)
@@ -135,12 +142,8 @@ func (h *ExpenseHandler) UpdateCategory(c *fiber.Ctx) error {
 	if category == nil {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense category not found")
 	}
-	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, category.UpdatedAt)
-	if staleErr != nil {
-		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-	}
-	if stale {
-		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
+	if ok, staleErr := requireExpenseExpectedUpdatedAt(c, req.ExpectedUpdatedAt, category.UpdatedAt); !ok {
+		return staleErr
 	}
 	if !category.IsActive && (req.IsActive == nil || !*req.IsActive) {
 		return middleware.JSONError(c, fiber.StatusConflict, "CATEGORY_INACTIVE", "Archived expense categories cannot be changed")
@@ -197,22 +200,19 @@ func (h *ExpenseHandler) DeleteCategory(c *fiber.Ctx) error {
 		return err
 	}
 
-	category, _ := h.repo.GetCategoryByID(c.Context(), id)
-	categoryName := expenseCategoryName(category)
-	if category != nil && !category.IsActive {
-		return middleware.JSONError(c, fiber.StatusConflict, "CATEGORY_INACTIVE", "Expense category is already archived")
+	category, repoErr := h.repo.GetCategoryByID(c.Context(), id)
+	if repoErr != nil {
+		return expenseInternalError(c, repoErr, "Failed to get expense category")
 	}
-	if expectedUpdatedAt := expectedUpdatedAtFromQuery(c); expectedUpdatedAt != nil {
-		if category == nil {
-			return expenseMessage(c, fiber.StatusNotFound, "Expense category not found")
-		}
-		stale, staleErr := isStaleSubmit(expectedUpdatedAt, category.UpdatedAt)
-		if staleErr != nil {
-			return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-		}
-		if stale {
-			return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
-		}
+	if category == nil {
+		return expenseMessage(c, fiber.StatusNotFound, "Expense category not found")
+	}
+	categoryName := expenseCategoryName(category)
+	if ok, staleErr := requireExpenseExpectedUpdatedAt(c, expectedUpdatedAtFromQuery(c), category.UpdatedAt); !ok {
+		return staleErr
+	}
+	if !category.IsActive {
+		return middleware.JSONError(c, fiber.StatusConflict, "CATEGORY_INACTIVE", "Expense category is already archived")
 	}
 
 	if repoErr := h.repo.DeleteCategory(c.Context(), id); repoErr != nil {
@@ -237,24 +237,24 @@ func (h *ExpenseHandler) PermanentDeleteCategory(c *fiber.Ctx) error {
 		return err
 	}
 
-	category, _ := h.repo.GetCategoryByID(c.Context(), id)
+	category, repoErr := h.repo.GetCategoryByID(c.Context(), id)
+	if repoErr != nil {
+		return expenseInternalError(c, repoErr, "Failed to get expense category")
+	}
+	if category == nil {
+		return expenseMessage(c, fiber.StatusNotFound, "Expense category not found")
+	}
 	categoryName := expenseCategoryName(category)
-	if expectedUpdatedAt := expectedUpdatedAtFromQuery(c); expectedUpdatedAt != nil {
-		if category == nil {
-			return expenseMessage(c, fiber.StatusNotFound, "Expense category not found")
-		}
-		stale, staleErr := isStaleSubmit(expectedUpdatedAt, category.UpdatedAt)
-		if staleErr != nil {
-			return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-		}
-		if stale {
-			return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
-		}
+	if ok, staleErr := requireExpenseExpectedUpdatedAt(c, expectedUpdatedAtFromQuery(c), category.UpdatedAt); !ok {
+		return staleErr
 	}
 
 	// The inventory-purchase system category cannot be deleted.
 	if isInventoryPurchaseExpenseCategory(category) {
 		return expenseMessage(c, fiber.StatusForbidden, "The 'Inventory Purchase' category is a system category and cannot be deleted")
+	}
+	if category.IsActive {
+		return middleware.JSONError(c, fiber.StatusConflict, "CATEGORY_ACTIVE", "Active expense categories cannot be permanently deleted")
 	}
 
 	if repoErr := h.repo.PermanentDeleteCategory(c.Context(), id); repoErr != nil {

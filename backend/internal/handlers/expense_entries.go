@@ -12,8 +12,10 @@ import (
 
 // List handles GET /api/v1/expenses
 func (h *ExpenseHandler) List(c *fiber.Ctx) error {
-	limit := c.QueryInt("limit", 50)
-	offset := c.QueryInt("offset", 0)
+	limit, offset, err := parseExpensePagination(c)
+	if err != nil {
+		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
+	}
 
 	categoryID, err := parseOptionalExpenseUUIDField(stringPointerFromQuery(c, "category_id"), "Invalid category ID")
 	if err != nil {
@@ -59,23 +61,22 @@ func (h *ExpenseHandler) List(c *fiber.Ctx) error {
 // Create handles POST /api/v1/expenses
 func (h *ExpenseHandler) Create(c *fiber.Ctx) error {
 	var req CreateExpenseRequest
-	if err := c.BodyParser(&req); err != nil {
-		return expenseMessage(c, fiber.StatusBadRequest, "Invalid request body")
+	if err := parseExpenseBody(c, &req); err != nil {
+		return err
 	}
-	if req.Amount == "" {
-		return expenseMessage(c, fiber.StatusBadRequest, "Amount is required")
-	}
-	if req.Description == "" {
-		return expenseMessage(c, fiber.StatusBadRequest, "Description is required")
-	}
-	if req.ExpenseDate == "" {
-		return expenseMessage(c, fiber.StatusBadRequest, "Expense date is required")
+	if err := validateCreateExpenseRequest(&req); err != nil {
+		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
 	}
 
 	userID := middleware.GetUserID(c)
 	expense, err := h.createExpenseModel(c.Context(), req, userID)
 	if err != nil {
 		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
+	}
+	if expense.ProductID != nil {
+		if ok, staleErr := h.requireExpenseProductCurrent(c, *expense.ProductID, req.ExpectedProductUpdatedAt); !ok {
+			return staleErr
+		}
 	}
 
 	created, err := h.createExpense(c.Context(), expense, userID)
@@ -129,8 +130,11 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
 	var req UpdateExpenseRequest
-	if err := c.BodyParser(&req); err != nil {
-		return expenseMessage(c, fiber.StatusBadRequest, "Invalid request body")
+	if err := parseExpenseBody(c, &req); err != nil {
+		return err
+	}
+	if err := validateUpdateExpenseRequest(&req); err != nil {
+		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
 	}
 
 	if req.CategoryID != nil && *req.CategoryID != "" {
@@ -162,12 +166,8 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	if existing == nil {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense not found")
 	}
-	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, existing.UpdatedAt)
-	if staleErr != nil {
-		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-	}
-	if stale {
-		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
+	if ok, staleErr := requireExpenseExpectedUpdatedAt(c, req.ExpectedUpdatedAt, existing.UpdatedAt); !ok {
+		return staleErr
 	}
 
 	oldValues := expenseAuditValues(existing)
@@ -221,6 +221,11 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	}
 	if !finalIsInventoryPurchase {
 		finalAppliesInventory = false
+	}
+	if finalIsInventoryPurchase && finalProductID != nil {
+		if ok, staleErr := h.requireExpenseProductCurrent(c, *finalProductID, req.ExpectedProductUpdatedAt); !ok {
+			return staleErr
+		}
 	}
 
 	if err := h.syncExpenseInventory(c.Context(), tx, id, userID, existing, finalAppliesInventory, finalProductID, finalQuantity); err != nil {
@@ -295,12 +300,8 @@ func (h *ExpenseHandler) Delete(c *fiber.Ctx) error {
 	if expense == nil {
 		return expenseMessage(c, fiber.StatusNotFound, "Expense not found")
 	}
-	stale, staleErr := isStaleSubmit(expectedUpdatedAtFromQuery(c), expense.UpdatedAt)
-	if staleErr != nil {
-		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_EXPECTED_UPDATED_AT", "Invalid expected_updated_at")
-	}
-	if stale {
-		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleSubmitMessage)
+	if ok, staleErr := requireExpenseExpectedUpdatedAt(c, expectedUpdatedAtFromQuery(c), expense.UpdatedAt); !ok {
+		return staleErr
 	}
 
 	if expense.AppliesInventory && expense.ProductID != nil && expense.Quantity != nil {
