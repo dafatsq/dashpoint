@@ -44,12 +44,17 @@ func (h *AuditHandler) Get(c *fiber.Ctx) error {
 
 // GetEntityHistory handles GET /api/v1/logs/entity/:type/:id
 func (h *AuditHandler) GetEntityHistory(c *fiber.Ctx) error {
-	entityType := c.Params("type")
-	entityID := c.Params("id")
-	limit := c.QueryInt("limit", 20)
-
-	if entityType == "" || entityID == "" {
-		return auditError(c, fiber.StatusBadRequest, "INVALID_PARAMS", "Entity type and ID are required")
+	entityType, err := parseAuditHistoryEntityType(c)
+	if err != nil {
+		return err
+	}
+	entityID, err := parseAuditHistoryEntityID(c)
+	if err != nil {
+		return err
+	}
+	limit, err := parseAuditLimitQuery(c)
+	if err != nil {
+		return err
 	}
 
 	logs, err := h.auditRepo.GetEntityHistory(c.Context(), entityType, entityID, limit)
@@ -72,7 +77,10 @@ func (h *AuditHandler) GetUserActivity(c *fiber.Ctx) error {
 		return auditError(c, fiber.StatusBadRequest, "INVALID_ID", "Invalid user ID format")
 	}
 
-	limit := c.QueryInt("limit", 20)
+	limit, err := parseAuditLimitQuery(c)
+	if err != nil {
+		return err
+	}
 	logs, err := h.auditRepo.GetUserActivity(c.Context(), userID, limit)
 	if err != nil {
 		return auditInternalError(c, err, "Failed to get user activity", "Failed to retrieve user activity")

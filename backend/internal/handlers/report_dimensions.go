@@ -6,9 +6,9 @@ import (
 
 // GetTopSellers handles GET /api/v1/reports/top-sellers
 func (h *ReportHandler) GetTopSellers(c *fiber.Ctx) error {
-	limit := c.QueryInt("limit", 10)
-	if limit <= 0 || limit > 100 {
-		limit = 10
+	limit, err := parseReportLimitQuery(c, 10, 100)
+	if err != nil {
+		return err
 	}
 
 	dateRange, err := parseReportRangeResponse(c, 30, false, 0)

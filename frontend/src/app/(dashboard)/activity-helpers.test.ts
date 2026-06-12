@@ -38,11 +38,13 @@ describe("activity helpers", () => {
     expect(getActivityActionLabel("inventory.threshold_update")).toBe("Update Threshold");
     expect(getActivityActionLabel("auth.login_failed")).toBe("Login Failed");
     expect(getActivityActionLabel("user.permission_change")).toBe("Update Permissions");
+    expect(getActivityActionLabel("report.export")).toBe("Export Report");
   });
 
   test("maps entity labels and badge colors", () => {
     expect(getActivityEntityLabel("auth")).toBe("Authentication");
     expect(getActivityEntityLabel("role")).toBe("Role");
+    expect(getActivityEntityLabel("report")).toBe("Report");
     expect(getActivityBadgeColor("category.archive")).toContain(
       "bg-orange-500",
     );
@@ -107,6 +109,18 @@ describe("activity helpers", () => {
         },
       }),
     ).toBe("Created expense: Delivery — Rp 15.000");
+
+    expect(
+      buildActivityDescription({
+        ...baseLog,
+        entity_type: "report",
+        action: "report.export",
+        new_values: {
+          export_type: "sales",
+          filename: "sales_20260601_to_20260612.csv",
+        },
+      }),
+    ).toBe("Exported report: sales");
   });
 
   test("builds filtered field changes", () => {
@@ -156,6 +170,34 @@ describe("activity helpers", () => {
         oldVal: "Disabled",
         newVal: "Enabled",
       },
+    ]);
+  });
+
+  test("builds report export metadata field entries", () => {
+    const changes = buildActivityFieldChanges({
+      ...baseLog,
+      action: "report.export",
+      entity_type: "report",
+      old_values: {},
+      new_values: {
+        export_type: "sales",
+        filename: "sales_20260601_to_20260612.csv",
+        start_date: "2026-06-01",
+        end_date: "2026-06-12",
+        row_count: 12,
+      },
+    });
+
+    expect(changes).toEqual([
+      { key: "export_type", oldVal: undefined, newVal: "sales" },
+      {
+        key: "filename",
+        oldVal: undefined,
+        newVal: "sales_20260601_to_20260612.csv",
+      },
+      { key: "start_date", oldVal: undefined, newVal: "2026-06-01" },
+      { key: "end_date", oldVal: undefined, newVal: "2026-06-12" },
+      { key: "row_count", oldVal: undefined, newVal: 12 },
     ]);
   });
 

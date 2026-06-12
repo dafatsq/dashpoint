@@ -20,6 +20,7 @@ export const DASHBOARD_ACTION_LABELS: Record<string, string> = {
   close: "Closed",
   archive: "Archived",
   restore: "Restored",
+  export: "Exported",
 };
 
 const DASHBOARD_SKIP_FIELDS = new Set([
@@ -87,6 +88,7 @@ export function getDashboardActionBadgeColor(action: string): string {
     case "adjust":
       return "bg-purple-600 text-white";
     case "count":
+    case "export":
       return "bg-blue-600 text-white";
     default:
       return "bg-gray-600 text-white";
@@ -191,6 +193,13 @@ export function getDashboardChangeDescription(log: AuditLog): string {
     if (verb === "delete") return invoice || "Deleted sale";
   }
 
+  if (log.entity_type === "report") {
+    const exportType = String(newVals.export_type || oldVals.export_type || "");
+    if (verb === "export") {
+      return exportType ? `Exported report: ${exportType}` : "Exported report";
+    }
+  }
+
   if (log.entity_type === "expense") {
     const description = String(newVals.description || newVals.affected_expense || oldVals.affected_expense || "");
     const amount = newVals.amount;
@@ -283,7 +292,7 @@ export function getDashboardFieldChanges(log: AuditLog): {
       return;
     }
 
-    if (verb === "create" || verb === "start" || verb === "adjust" || verb === "count" || verb === "void") {
+    if (verb === "create" || verb === "start" || verb === "adjust" || verb === "count" || verb === "void" || verb === "export") {
       if (newVal !== undefined && newVal !== null && newVal !== "") {
         changes.push({ key, oldVal: undefined, newVal });
       }

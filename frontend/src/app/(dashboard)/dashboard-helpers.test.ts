@@ -38,6 +38,7 @@ describe("dashboard helpers", () => {
   test("maps badge colors by action verb", () => {
     expect(getDashboardActionBadgeColor("product.create")).toBe("bg-green-600 text-white");
     expect(getDashboardActionBadgeColor("sale.void")).toBe("bg-orange-600 text-white");
+    expect(getDashboardActionBadgeColor("report.export")).toBe("bg-blue-600 text-white");
   });
 
   test("builds human-readable change descriptions", () => {
@@ -88,6 +89,20 @@ describe("dashboard helpers", () => {
         }),
       ),
     ).toBe("INV-1");
+
+    expect(
+      getDashboardChangeDescription(
+        buildAuditLog({
+          entity_type: "report",
+          action: "report.export",
+          new_values: {
+            export_type: "comprehensive",
+            filename: "comprehensive_report_20260601_to_20260612.csv",
+          },
+          old_values: {},
+        }),
+      ),
+    ).toBe("Exported report: comprehensive");
   });
 
   test("collects changed fields while skipping non-display keys", () => {
@@ -124,6 +139,31 @@ describe("dashboard helpers", () => {
         oldVal: "Disabled",
         newVal: "Enabled",
       },
+    ]);
+  });
+
+  test("collects report export metadata fields", () => {
+    const changes = getDashboardFieldChanges(
+      buildAuditLog({
+        entity_type: "report",
+        action: "report.export",
+        old_values: {},
+        new_values: {
+          export_type: "inventory",
+          filename: "inventory_20260612.csv",
+          row_count: 42,
+        },
+      }),
+    );
+
+    expect(changes).toEqual([
+      { key: "export_type", oldVal: undefined, newVal: "inventory" },
+      {
+        key: "filename",
+        oldVal: undefined,
+        newVal: "inventory_20260612.csv",
+      },
+      { key: "row_count", oldVal: undefined, newVal: 42 },
     ]);
   });
 

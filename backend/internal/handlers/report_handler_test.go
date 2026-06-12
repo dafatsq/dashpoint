@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,7 +13,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/audit"
+	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
 )
 
@@ -185,6 +190,7 @@ func TestExportComprehensiveReportIncludesGeneratedLine(t *testing.T) {
 	}
 
 	reader := csv.NewReader(resp.Body)
+	reader.Comma = ';'
 	reader.FieldsPerRecord = -1
 	rows, err := reader.ReadAll()
 	if err != nil {
@@ -195,5 +201,113 @@ func TestExportComprehensiveReportIncludesGeneratedLine(t *testing.T) {
 	}
 	if strings.TrimSpace(rows[1][1]) == "" {
 		t.Fatalf("expected generated timestamp, got %q", rows[1][1])
+	}
+}
+
+func TestExportSalesCSVSanitizesTextCellsAndLogsAudit(t *testing.T) {
+	auditRepo := &stubAuditRepository{}
+	audit.Init(auditRepo)
+	store := &fakeReportStore{
+		getSalesForExportFunc: func(context.Context, time.Time, time.Time) ([]repository.SalesReportItem, error) {
+			return []repository.SalesReportItem{{
+				InvoiceNo:     "=INV-1",
+				Date:          "2026-05-01",
+				Time:          "09:00:00",
+				EmployeeName:  "\t+Cashier\nOne",
+				ItemCount:     1,
+				Subtotal:      decimal.NewFromInt(1000),
+				Tax:           decimal.Zero,
+				Discount:      decimal.Zero,
+				Total:         decimal.NewFromInt(1000),
+				PaymentMethod: "@cash",
+				Status:        "-completed",
+			}}, nil
+		},
+		getSalesRangeSummaryFunc: func(context.Context, time.Time, time.Time) (*repository.SalesRangeSummary, error) {
+			return &repository.SalesRangeSummary{
+				TotalTransactions: 1,
+				TotalItems:        1,
+				TotalAmount:       decimal.NewFromInt(1000),
+			}, nil
+		},
+	}
+	handler := NewReportHandler(store)
+	app := fiber.New()
+	app.Get("/reports/export/sales", handler.ExportSalesCSV)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/export/sales?start_date=2026-05-01&end_date=2026-05-01", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+	if !strings.Contains(string(bodyBytes), "Invoice No;Date;Time;Employee") {
+		t.Fatalf("expected semicolon-delimited CSV, got %q", string(bodyBytes))
+	}
+
+	reader := csv.NewReader(bytes.NewReader(bodyBytes))
+	reader.Comma = ';'
+	reader.FieldsPerRecord = -1
+	rows, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("failed to read csv: %v", err)
+	}
+	itemRow := rows[len(rows)-1]
+	if itemRow[0] != "'=INV-1" {
+		t.Fatalf("expected sanitized invoice, got %q", itemRow[0])
+	}
+	if !strings.HasPrefix(itemRow[3], "'") || strings.ContainsAny(itemRow[3], "\r\n\t") {
+		t.Fatalf("expected sanitized employee name, got %q", itemRow[3])
+	}
+	if itemRow[9] != "'@cash" || itemRow[10] != "'-completed" {
+		t.Fatalf("expected sanitized payment/status, got %q and %q", itemRow[9], itemRow[10])
+	}
+
+	if auditRepo.last == nil {
+		t.Fatal("expected export audit log")
+	}
+	if auditRepo.last.Action != models.AuditActionReportExport {
+		t.Fatalf("expected action %q, got %q", models.AuditActionReportExport, auditRepo.last.Action)
+	}
+	if auditRepo.last.EntityType != models.AuditEntityReport || auditRepo.last.EntityID != "sales" {
+		t.Fatalf("expected report sales audit entity, got %q %q", auditRepo.last.EntityType, auditRepo.last.EntityID)
+	}
+	if auditRepo.last.NewValues["export_type"] != "sales" {
+		t.Fatalf("expected export_type sales, got %#v", auditRepo.last.NewValues["export_type"])
+	}
+	if _, ok := auditRepo.last.NewValues["csv"]; ok {
+		t.Fatal("audit metadata must not include CSV contents")
+	}
+}
+
+func TestTopSellersRejectsInvalidLimits(t *testing.T) {
+	handler := NewReportHandler(&fakeReportStore{})
+	app := fiber.New()
+	app.Get("/reports/top-sellers", handler.GetTopSellers)
+	app.Get("/reports/export/top-sellers", handler.ExportTopSellersCSV)
+
+	tests := []string{
+		"/reports/top-sellers?limit=abc",
+		"/reports/top-sellers?limit=101",
+		"/reports/export/top-sellers?limit=0",
+		"/reports/export/top-sellers?limit=101",
+	}
+
+	for _, path := range tests {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("%s returned error: %v", path, err)
+		}
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("%s expected 400, got %d", path, resp.StatusCode)
+		}
 	}
 }

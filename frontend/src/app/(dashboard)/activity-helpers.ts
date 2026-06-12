@@ -62,6 +62,7 @@ export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   "sale.void": "Void Sale",
   "shift.start": "Start Shift",
   "shift.close": "Close Shift",
+  "report.export": "Export Report",
 };
 
 export const ACTIVITY_ENTITY_LABELS: Record<string, string> = {
@@ -74,6 +75,7 @@ export const ACTIVITY_ENTITY_LABELS: Record<string, string> = {
   inventory: "Inventory",
   expense: "Expense",
   role: "Role",
+  report: "Report",
 };
 
 const ACTIVITY_SKIP_FIELDS = new Set([
@@ -101,6 +103,7 @@ const ACTIVITY_CREATE_LIKE_VERBS = new Set([
   "count",
   "threshold_update",
   "void",
+  "export",
 ]);
 const ACTIVITY_DELETE_LIKE_VERBS = new Set(["delete", "archive"]);
 
@@ -215,6 +218,7 @@ export function getActivityBadgeColor(action: string): string {
     case "adjust":
       return "bg-purple-600 text-white";
     case "count":
+    case "export":
       return "bg-blue-600 text-white";
     default:
       if (action.includes("login")) {
@@ -406,6 +410,13 @@ export function buildActivityDescription(log: AuditLog): string {
       return invoice ? `Voided sale: ${invoice}` : "Voided sale";
     if (verb === "delete")
       return invoice ? `Deleted sale: ${invoice}` : "Deleted sale";
+  }
+
+  if (log.entity_type === "report") {
+    const exportType = String(newVals.export_type || oldVals.export_type || "");
+    if (verb === "export") {
+      return exportType ? `Exported report: ${exportType}` : "Exported report";
+    }
   }
 
   if (log.entity_type === "expense") {
