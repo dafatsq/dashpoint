@@ -40,7 +40,7 @@ func TestLoadDefaultsCORSOriginsForDevelopment(t *testing.T) {
 }
 
 func TestLoadRequiresCorsOriginsOutsideDevelopment(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint")
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint?sslmode=require")
 	t.Setenv("JWT_SECRET", "12345678901234567890123456789012")
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("CORS_ORIGINS", "")
@@ -65,7 +65,7 @@ func TestLoadDefaultsJWTExpiryToFifteenMinutes(t *testing.T) {
 }
 
 func TestLoadRejectsWeakProductionJWTSecret(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint")
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint?sslmode=require")
 	t.Setenv("JWT_SECRET", "short-secret")
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("CORS_ORIGINS", "https://dashpoint.example.com")
@@ -77,7 +77,7 @@ func TestLoadRejectsWeakProductionJWTSecret(t *testing.T) {
 }
 
 func TestLoadRejectsLongProductionJWTExpiry(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint")
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint?sslmode=require")
 	t.Setenv("JWT_SECRET", "12345678901234567890123456789012")
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("CORS_ORIGINS", "https://dashpoint.example.com")
@@ -86,5 +86,66 @@ func TestLoadRejectsLongProductionJWTExpiry(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected Load to reject long production JWT expiry")
+	}
+}
+
+func TestLoadRejectsInvalidJWTExpiry(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint")
+	t.Setenv("JWT_SECRET", "super-secret")
+	t.Setenv("JWT_EXPIRY_MINUTES", "not-a-number")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected Load to reject invalid JWT expiry")
+	}
+}
+
+func TestLoadRejectsLongRefreshExpiry(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint")
+	t.Setenv("JWT_SECRET", "super-secret")
+	t.Setenv("REFRESH_EXPIRY_HOURS", "169")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected Load to reject refresh expiry over seven days")
+	}
+}
+
+func TestLoadRejectsWildcardCORSOutsideDevelopment(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint?sslmode=require")
+	t.Setenv("JWT_SECRET", "12345678901234567890123456789012")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ORIGINS", "*")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected Load to reject wildcard CORS outside development")
+	}
+}
+
+func TestLoadRejectsInsecureProductionDatabaseSSLMode(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint?sslmode=disable")
+	t.Setenv("JWT_SECRET", "12345678901234567890123456789012")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ORIGINS", "https://dashpoint.example.com")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected Load to reject insecure production database SSL mode")
+	}
+}
+
+func TestLoadAcceptsProductionDatabaseVerifyFullSSLMode(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dashpoint?sslmode=verify-full")
+	t.Setenv("JWT_SECRET", "12345678901234567890123456789012")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ORIGINS", "https://dashpoint.example.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.JWTExpiryMinutes != 15 {
+		t.Fatalf("expected default JWT expiry 15, got %d", cfg.JWTExpiryMinutes)
 	}
 }
