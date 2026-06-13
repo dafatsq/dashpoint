@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -173,11 +174,17 @@ type auditSeed struct {
 func main() {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		databaseURL = "postgres://dashpoint:dashpoint_dev@localhost:5432/dashpoint_dev?sslmode=disable"
+		log.Fatal("DATABASE_URL is required")
+	}
+	if strings.EqualFold(os.Getenv("ENVIRONMENT"), "production") && os.Getenv("ALLOW_PRODUCTION_SEED") != "true" {
+		log.Fatal("refusing to seed production database without ALLOW_PRODUCTION_SEED=true")
 	}
 	seedMode := os.Getenv("SEED_MODE")
 	if seedMode == "" {
 		seedMode = "full"
+	}
+	if seedMode != "core" && seedMode != "full" {
+		log.Fatal("SEED_MODE must be either core or full")
 	}
 
 	ctx := context.Background()

@@ -33,7 +33,12 @@ COPY --from=builder /app/server .
 COPY --from=builder /app/migrations ./migrations
 
 # Preserve the expected upload path in container images.
-RUN mkdir -p /app/uploads
+RUN addgroup -S dashpoint \
+    && adduser -S dashpoint -G dashpoint \
+    && mkdir -p /app/uploads \
+    && chown -R dashpoint:dashpoint /app/uploads
+
+USER dashpoint
 
 # Expose port
 EXPOSE 8080

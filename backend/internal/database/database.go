@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const defaultStatementTimeout = "30000"
+
 // DB wraps the pgxpool for database operations
 type DB struct {
 	Pool *pgxpool.Pool
@@ -16,17 +18,10 @@ type DB struct {
 
 // New creates a new database connection pool
 func New(databaseURL string) (*DB, error) {
-	config, err := pgxpool.ParseConfig(databaseURL)
+	config, err := newPoolConfig(databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse database URL: %w", err)
+		return nil, err
 	}
-
-	// Configure pool settings
-	config.MaxConns = 25
-	config.MinConns = 5
-	config.MaxConnLifetime = time.Hour
-	config.MaxConnIdleTime = 30 * time.Minute
-	config.HealthCheckPeriod = time.Minute
 
 	// Create context with timeout for initial connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -46,6 +41,28 @@ func New(databaseURL string) (*DB, error) {
 	log.Info().Msg("Database connection pool established")
 
 	return &DB{Pool: pool}, nil
+}
+
+func newPoolConfig(databaseURL string) (*pgxpool.Config, error) {
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse database URL: %w", err)
+	}
+
+	// Configure pool settings
+	config.MaxConns = 25
+	config.MinConns = 5
+	config.MaxConnLifetime = time.Hour
+	config.MaxConnIdleTime = 30 * time.Minute
+	config.HealthCheckPeriod = time.Minute
+	if config.ConnConfig.RuntimeParams == nil {
+		config.ConnConfig.RuntimeParams = map[string]string{}
+	}
+	if config.ConnConfig.RuntimeParams["statement_timeout"] == "" {
+		config.ConnConfig.RuntimeParams["statement_timeout"] = defaultStatementTimeout
+	}
+
+	return config, nil
 }
 
 // Close closes the database connection pool
