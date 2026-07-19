@@ -1,0 +1,71 @@
+'use client';
+
+import { ShieldCheck } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+
+import {
+  normalizeSettingsPreferences,
+  type SettingsPreferences,
+} from "./settings-helpers";
+
+interface SettingsAuthCardProps {
+  preferences: SettingsPreferences;
+  onPreferencesChange: (nextPreferences: SettingsPreferences) => void;
+}
+
+export function SettingsAuthCard({ preferences, onPreferencesChange }: SettingsAuthCardProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-primary" />
+          <div>
+            <CardTitle>Authentication</CardTitle>
+            <CardDescription>Manage security and sign-in preferences</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1 space-y-0.5">
+            <Label>Automatic Sign-In (Remember Me)</Label>
+            <p className="text-sm text-muted-foreground">
+              Keep this account signed in across browser restarts. Turning this off means this specific account logs out when the browser closes.
+            </p>
+          </div>
+          <Switch
+            checked={preferences.rememberMe}
+            onCheckedChange={(checked) => {
+              onPreferencesChange(normalizeSettingsPreferences({
+                rememberMe: checked,
+                quickAccess: preferences.quickAccess,
+              }));
+            }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-t pt-4">
+          <div className="flex-1 space-y-0.5">
+            <Label>Quick Access (Save Login)</Label>
+            <p className="text-sm text-muted-foreground">
+              Save this account in the browser so you can log back in instantly using only your Quick PIN.
+            </p>
+          </div>
+          <Switch
+            checked={preferences.quickAccess}
+            disabled={preferences.rememberMe}
+            onCheckedChange={(checked) => {
+              onPreferencesChange(normalizeSettingsPreferences({
+                ...preferences,
+                quickAccess: checked,
+              }));
+            }}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

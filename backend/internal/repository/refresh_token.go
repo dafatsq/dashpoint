@@ -2,19 +2,29 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"dashpoint/backend/internal/models"
 )
 
+var ErrRefreshTokenNotActive = errors.New("refresh token is not active")
+
 // RefreshTokenRepository handles refresh token database operations
 type RefreshTokenRepository struct {
 	pool *pgxpool.Pool
+}
+
+type refreshTokenTx interface {
+	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+	Commit(context.Context) error
+	Rollback(context.Context) error
 }
 
 // NewRefreshTokenRepository creates a new refresh token repository
@@ -88,6 +98,50 @@ func (r *RefreshTokenRepository) Revoke(ctx context.Context, tokenHash string, r
 	_, err := r.pool.Exec(ctx, query, now, reason, tokenHash)
 	if err != nil {
 		return fmt.Errorf("failed to revoke refresh token: %w", err)
+	}
+
+	return nil
+}
+
+// Rotate revokes the current token and stores the replacement in one transaction.
+func (r *RefreshTokenRepository) Rotate(ctx context.Context, currentTokenHash string, reason string, replacement *models.RefreshToken) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin refresh token rotation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	return rotateRefreshTokenTx(ctx, tx, currentTokenHash, reason, replacement)
+}
+
+func rotateRefreshTokenTx(ctx context.Context, tx refreshTokenTx, currentTokenHash string, reason string, replacement *models.RefreshToken) error {
+	now := time.Now()
+	if replacement.ID == uuid.Nil {
+		replacement.ID = uuid.New()
+	}
+	replacement.CreatedAt = now
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE refresh_tokens
+		SET revoked_at = $1, revoked_reason = $2
+		WHERE token_hash = $3 AND revoked_at IS NULL
+	`, now, reason, currentTokenHash)
+	if err != nil {
+		return fmt.Errorf("failed to revoke refresh token during rotation: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrRefreshTokenNotActive
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`, replacement.ID, replacement.UserID, replacement.TokenHash, replacement.ExpiresAt, replacement.CreatedAt); err != nil {
+		return fmt.Errorf("failed to store rotated refresh token: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit refresh token rotation: %w", err)
 	}
 
 	return nil

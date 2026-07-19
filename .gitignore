@@ -43,12 +43,15 @@ node_modules/
 .npm
 .cache/
 next-env.d.ts
+!frontend/next-env.d.ts
 
 # Backend (Go)
 vendor/
 backend/server
 backend/backend
 backend/bin/
+backend/uploads/*
+!backend/uploads/.gitkeep
 *.exe
 *.exe~
 *.dll
@@ -92,10 +95,11 @@ skills-lock.json
 .github/
 .opencode/
 
-# SDD
+# Documents
 SDD.md
-
-frontend2/
 deploy_clients.sh
 PROJECT_DISSECTION.md
+PROJECT_SECTIONS.md
 DEPLOY_NEW_CLIENT.md
+.kiro/*
+/CLIENTS

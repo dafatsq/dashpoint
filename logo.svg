@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="51 52 153 153" width="100%" height="100%">
+  <!-- 1. The Main Dash (Dynamic Slash) -->
+  <path d="M 65,191 L 145,111" 
+        fill="none" 
+        stroke="#2563eb" 
+        stroke-width="28" 
+        stroke-linecap="round" />
+
+  <!-- 2. The Speed/Support Dash (Accent Slash) -->
+  <path d="M 110,190 L 160,140" 
+        fill="none" 
+        stroke="#2563eb" 
+        stroke-width="18" 
+        stroke-linecap="round" />
+
+  <!-- 3. The Focal Point (Solid Dot) -->
+  <circle cx="186" cy="70" r="18" fill="#2563eb" />
+</svg>

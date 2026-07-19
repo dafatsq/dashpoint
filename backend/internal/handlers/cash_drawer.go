@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,190 +12,58 @@ import (
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
-	"dashpoint/backend/internal/repository"
 )
 
-// CashDrawerHandler handles cash drawer operation endpoints
-type CashDrawerHandler struct {
-	cashDrawerRepo *repository.CashDrawerRepository
-	shiftRepo      *repository.ShiftRepository
+type cashDrawerStore interface {
+	Create(context.Context, *models.CashDrawerOperation) error
+	ListByShift(context.Context, uuid.UUID) ([]models.CashDrawerOperation, error)
+	GetTotalsByShift(context.Context, uuid.UUID) (decimal.Decimal, decimal.Decimal, error)
 }
 
-// NewCashDrawerHandler creates a new cash drawer handler
-func NewCashDrawerHandler(cashDrawerRepo *repository.CashDrawerRepository, shiftRepo *repository.ShiftRepository) *CashDrawerHandler {
+// CashDrawerHandler handles cash drawer operation endpoints.
+type CashDrawerHandler struct {
+	cashDrawerRepo cashDrawerStore
+	shiftRepo      shiftLookupStore
+}
+
+// NewCashDrawerHandler creates a new cash drawer handler.
+func NewCashDrawerHandler(cashDrawerRepo cashDrawerStore, shiftRepo shiftLookupStore) *CashDrawerHandler {
 	return &CashDrawerHandler{
 		cashDrawerRepo: cashDrawerRepo,
 		shiftRepo:      shiftRepo,
 	}
 }
 
-// CashDrawerRequest represents the request for pay-in/pay-out
+// CashDrawerRequest represents the request for pay-in/pay-out.
 type CashDrawerRequest struct {
-	Amount string `json:"amount"`
-	Reason string `json:"reason"`
+	Amount  string  `json:"amount"`
+	Reason  string  `json:"reason"`
+	ShiftID *string `json:"shift_id"`
 }
 
-// PayIn handles POST /api/v1/shifts/pay-in
+// PayIn handles POST /api/v1/shifts/pay-in.
 func (h *CashDrawerHandler) PayIn(c *fiber.Ctx) error {
-	userID := middleware.GetUserID(c)
-
-	// Get current open shift
-	shift, err := h.shiftRepo.GetOpenShiftByEmployee(c.Context(), userID)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get open shift")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"code":    "INTERNAL_ERROR",
-			"message": "Failed to get open shift",
-		})
-	}
-
-	if shift == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"code":    "NO_OPEN_SHIFT",
-			"message": "No open shift found",
-		})
-	}
-
-	var req CashDrawerRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "INVALID_REQUEST",
-			"message": "Invalid request body",
-		})
-	}
-
-	if req.Reason == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "REASON_REQUIRED",
-			"message": "Reason is required for cash drawer operations",
-		})
-	}
-
-	amount, err := decimal.NewFromString(req.Amount)
-	if err != nil || amount.LessThanOrEqual(decimal.Zero) {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "INVALID_AMOUNT",
-			"message": "Amount must be a positive number",
-		})
-	}
-
-	op := &models.CashDrawerOperation{
-		ShiftID:     shift.ID,
-		Type:        models.CashDrawerOpPayIn,
-		Amount:      amount,
-		Reason:      req.Reason,
-		PerformedBy: userID,
-	}
-
-	if err := h.cashDrawerRepo.Create(c.Context(), op); err != nil {
-		log.Error().Err(err).Msg("Failed to create pay-in operation")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"code":    "INTERNAL_ERROR",
-			"message": "Failed to record pay-in",
-		})
-	}
-
-	// Audit log
-	audit.LogFromFiber(c, models.AuditActionCashPayIn, models.AuditEntityShift, shift.ID.String(),
-		fmt.Sprintf("Pay-in: %s - %s", amount.String(), req.Reason))
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":   "Pay-in recorded successfully",
-		"operation": op,
-	})
+	return h.recordCashDrawerOperation(c, models.CashDrawerOpPayIn, models.AuditActionCashPayIn, "Pay-in recorded successfully")
 }
 
-// PayOut handles POST /api/v1/shifts/pay-out
+// PayOut handles POST /api/v1/shifts/pay-out.
 func (h *CashDrawerHandler) PayOut(c *fiber.Ctx) error {
-	userID := middleware.GetUserID(c)
-
-	// Get current open shift
-	shift, err := h.shiftRepo.GetOpenShiftByEmployee(c.Context(), userID)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get open shift")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"code":    "INTERNAL_ERROR",
-			"message": "Failed to get open shift",
-		})
-	}
-
-	if shift == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"code":    "NO_OPEN_SHIFT",
-			"message": "No open shift found",
-		})
-	}
-
-	var req CashDrawerRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "INVALID_REQUEST",
-			"message": "Invalid request body",
-		})
-	}
-
-	if req.Reason == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "REASON_REQUIRED",
-			"message": "Reason is required for cash drawer operations",
-		})
-	}
-
-	amount, err := decimal.NewFromString(req.Amount)
-	if err != nil || amount.LessThanOrEqual(decimal.Zero) {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "INVALID_AMOUNT",
-			"message": "Amount must be a positive number",
-		})
-	}
-
-	op := &models.CashDrawerOperation{
-		ShiftID:     shift.ID,
-		Type:        models.CashDrawerOpPayOut,
-		Amount:      amount,
-		Reason:      req.Reason,
-		PerformedBy: userID,
-	}
-
-	if err := h.cashDrawerRepo.Create(c.Context(), op); err != nil {
-		log.Error().Err(err).Msg("Failed to create pay-out operation")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"code":    "INTERNAL_ERROR",
-			"message": "Failed to record pay-out",
-		})
-	}
-
-	// Audit log
-	audit.LogFromFiber(c, models.AuditActionCashPayOut, models.AuditEntityShift, shift.ID.String(),
-		fmt.Sprintf("Pay-out: %s - %s", amount.String(), req.Reason))
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":   "Pay-out recorded successfully",
-		"operation": op,
-	})
+	return h.recordCashDrawerOperation(c, models.CashDrawerOpPayOut, models.AuditActionCashPayOut, "Pay-out recorded successfully")
 }
 
-// ListOperations handles GET /api/v1/shifts/:id/operations
+// ListOperations handles GET /api/v1/shifts/:id/operations.
 func (h *CashDrawerHandler) ListOperations(c *fiber.Ctx) error {
-	idStr := c.Params("id")
-	shiftID, err := uuid.Parse(idStr)
+	shiftID, err := shiftParamUUID(c, "id", "INVALID_ID", "Invalid shift ID format")
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "INVALID_ID",
-			"message": "Invalid shift ID format",
-		})
+		return respondAPIError(c, err)
 	}
 
 	ops, err := h.cashDrawerRepo.ListByShift(c.Context(), shiftID)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list cash drawer operations")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"code":    "INTERNAL_ERROR",
-			"message": "Failed to retrieve operations",
-		})
+		return middleware.JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve operations")
 	}
 
-	// Get totals
 	payInTotal, payOutTotal, err := h.cashDrawerRepo.GetTotalsByShift(c.Context(), shiftID)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get operation totals")
@@ -205,4 +74,75 @@ func (h *CashDrawerHandler) ListOperations(c *fiber.Ctx) error {
 		"pay_in_total":  payInTotal.String(),
 		"pay_out_total": payOutTotal.String(),
 	})
+}
+
+func (h *CashDrawerHandler) recordCashDrawerOperation(c *fiber.Ctx, opType models.CashDrawerOpType, auditAction models.AuditAction, successMessage string) error {
+	userID := middleware.GetUserID(c)
+	shift, err := h.shiftRepo.GetCurrentOpenShift(c.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get open shift")
+		return middleware.JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get open shift")
+	}
+	if shift == nil {
+		return middleware.JSONError(c, fiber.StatusNotFound, "NO_OPEN_SHIFT", "No open shift found")
+	}
+
+	req, amount, err := parseCashDrawerRequest(c)
+	if err != nil {
+		return respondAPIError(c, err)
+	}
+	expectedShiftID, err := parseExpectedUUID(req.ShiftID)
+	if err != nil {
+		return middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_SHIFT_ID", "Invalid shift_id")
+	}
+	if expectedShiftID != nil && *expectedShiftID != shift.ID {
+		return middleware.JSONError(c, fiber.StatusConflict, "STALE_SUBMIT", staleShiftMessage)
+	}
+
+	op := &models.CashDrawerOperation{
+		ShiftID:     shift.ID,
+		Type:        opType,
+		Amount:      amount,
+		Reason:      req.Reason,
+		PerformedBy: userID,
+	}
+	if err := h.cashDrawerRepo.Create(c.Context(), op); err != nil {
+		log.Error().Err(err).Msg("Failed to create cash drawer operation")
+		return middleware.JSONError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "Failed to record cash drawer operation")
+	}
+
+	label := cashDrawerOperationLabel(opType)
+	newValues := map[string]interface{}{
+		"type":   label,
+		"amount": amount.String(),
+		"reason": req.Reason,
+	}
+	audit.LogWithValues(c, auditAction, models.AuditEntityShift, shift.ID.String(), fmt.Sprintf("%s: %s - %s", label, amount.String(), req.Reason), nil, newValues)
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message":   successMessage,
+		"operation": op,
+	})
+}
+
+func cashDrawerOperationLabel(opType models.CashDrawerOpType) string {
+	if opType == models.CashDrawerOpPayOut {
+		return "Pay-out"
+	}
+	return "Pay-in"
+}
+
+func parseCashDrawerRequest(c *fiber.Ctx) (*CashDrawerRequest, decimal.Decimal, error) {
+	var req CashDrawerRequest
+	if err := c.BodyParser(&req); err != nil {
+		return nil, decimal.Zero, &apiError{status: fiber.StatusBadRequest, code: "INVALID_REQUEST", message: "Invalid request body"}
+	}
+	if req.Reason == "" {
+		return nil, decimal.Zero, &apiError{status: fiber.StatusBadRequest, code: "REASON_REQUIRED", message: "Reason is required for cash drawer operations"}
+	}
+	amount, err := decimal.NewFromString(req.Amount)
+	if err != nil || amount.LessThanOrEqual(decimal.Zero) {
+		return nil, decimal.Zero, &apiError{status: fiber.StatusBadRequest, code: "INVALID_AMOUNT", message: "Amount must be a positive number"}
+	}
+	return &req, amount, nil
 }

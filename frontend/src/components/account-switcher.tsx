@@ -4,19 +4,30 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { AccountManager, SavedAccount } from '@/lib/account-manager';
+import {
+  filterSwitchableAccounts,
+  shouldRemoveSavedAccountAfterPINFailure,
+} from './account-switcher-utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { User, Shield, ShieldCheck, ShieldAlert, X, AlertCircle, Loader2, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AccountSwitcherProps {
   onAccountSelect?: () => void;
+  onAccountsChange?: () => void;
   refreshTrigger?: number;
+  excludeUserId?: string;
 }
 
-export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwitcherProps) {
+export function AccountSwitcher({
+  onAccountSelect,
+  onAccountsChange,
+  refreshTrigger,
+  excludeUserId,
+}: AccountSwitcherProps) {
   const router = useRouter();
   const { pinLogin } = useAuth();
   const [accounts, setAccounts] = useState<SavedAccount[]>(AccountManager.getSavedAccounts());
@@ -25,10 +36,15 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    // Refresh accounts when component mounts or refreshTrigger changes
+  const refreshAccounts = () => {
     setAccounts(AccountManager.getSavedAccounts());
+  };
+
+  useEffect(() => {
+    refreshAccounts();
   }, [refreshTrigger]);
+
+  const visibleAccounts = filterSwitchableAccounts(accounts, excludeUserId);
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -69,6 +85,10 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAccount) return;
+    if (!pin) {
+      setError('Enter your PIN before signing in');
+      return;
+    }
 
     setError('');
     setIsSubmitting(true);
@@ -82,7 +102,18 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
         onAccountSelect?.();
         router.push('/');
       } else {
-        setError(result.error || 'Invalid PIN');
+        const errorMessage = result.error || 'Invalid PIN';
+        if (shouldRemoveSavedAccountAfterPINFailure(errorMessage)) {
+          AccountManager.removeAccount(selectedAccount.id);
+          refreshAccounts();
+          onAccountsChange?.();
+          setError(
+            'This saved Quick Access account is no longer valid. Sign in with email and save Quick Access again.',
+          );
+          return;
+        }
+
+        setError(errorMessage);
       }
     } catch {
       setError('An unexpected error occurred');
@@ -94,10 +125,11 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
   const handleRemoveAccount = (accountId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     AccountManager.removeAccount(accountId);
-    setAccounts(AccountManager.getSavedAccounts());
+    refreshAccounts();
+    onAccountsChange?.();
   };
 
-  if (accounts.length === 0) {
+  if (visibleAccounts.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
@@ -114,17 +146,8 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
   return (
     <>
       <div className="space-y-3">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold">Saved Accounts</h3>
-            <p className="text-sm text-muted-foreground">
-              Select an account and enter your PIN
-            </p>
-          </div>
-        </div>
-
         <div className="grid gap-3">
-          {accounts.map((account) => (
+          {visibleAccounts.map((account) => (
             <Card
               key={account.id}
               className="cursor-pointer hover:bg-accent transition-colors overflow-hidden min-w-0"
@@ -202,14 +225,16 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
                 name="pin-entry"
                 placeholder="Enter your PIN"
                 value={pin}
-                onChange={(e) => setPin(e.target.value)}
+                onChange={(e) =>
+                  setPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
                 onFocus={(e) => e.target.removeAttribute('readonly')}
                 readOnly
                 required
                 disabled={isSubmitting}
                 autoFocus
                 maxLength={6}
-                pattern="\d*"
+                pattern="[0-9]*"
                 inputMode="numeric"
                 autoComplete="new-password"
                 data-form-type="other"
@@ -218,11 +243,11 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col-reverse gap-2">
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1"
+                className="w-full"
                 onClick={() => setSelectedAccount(null)}
                 disabled={isSubmitting}
               >
@@ -230,8 +255,8 @@ export function AccountSwitcher({ onAccountSelect, refreshTrigger }: AccountSwit
               </Button>
               <Button
                 type="submit"
-                className="flex-1"
-                disabled={isSubmitting || !pin}
+                className="w-full"
+                disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <>

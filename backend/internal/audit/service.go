@@ -9,16 +9,19 @@ import (
 
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
-	"dashpoint/backend/internal/repository"
 )
 
 // Service provides audit logging functionality
 type Service struct {
-	repo *repository.AuditRepository
+	repo auditRepository
+}
+
+type auditRepository interface {
+	Create(context.Context, *models.AuditLogEntry) error
 }
 
 // NewService creates a new audit service
-func NewService(repo *repository.AuditRepository) *Service {
+func NewService(repo auditRepository) *Service {
 	return &Service{repo: repo}
 }
 
@@ -26,7 +29,7 @@ func NewService(repo *repository.AuditRepository) *Service {
 var globalService *Service
 
 // Init initializes the global audit service
-func Init(repo *repository.AuditRepository) {
+func Init(repo auditRepository) {
 	globalService = NewService(repo)
 }
 
@@ -37,14 +40,16 @@ func Log(ctx context.Context, entry *models.AuditLogEntry) {
 		return
 	}
 
-	go func() {
-		if err := globalService.repo.Create(context.Background(), entry); err != nil {
-			log.Error().Err(err).
-				Str("action", string(entry.Action)).
-				Str("entity_type", string(entry.EntityType)).
-				Msg("Failed to create audit log")
-		}
-	}()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if err := globalService.repo.Create(ctx, entry); err != nil {
+		log.Error().Err(err).
+			Str("action", string(entry.Action)).
+			Str("entity_type", string(entry.EntityType)).
+			Msg("Failed to create audit log")
+	}
 }
 
 // LogSync creates an audit log entry synchronously
@@ -69,18 +74,8 @@ func LogFromFiber(c *fiber.Ctx, action models.AuditAction, entityType models.Aud
 	// Extract user info from context
 	if claims := middleware.GetClaims(c); claims != nil {
 		entry.UserID = &claims.UserID
-		entry.UserEmail = claims.Email
 		entry.UserName = claims.Name
 		entry.UserRole = claims.RoleName
-	}
-
-	// Extract request info
-	entry.IPAddress = c.IP()
-	entry.UserAgent = c.Get("User-Agent")
-	if requestID := c.Locals("requestid"); requestID != nil {
-		if rid, ok := requestID.(string); ok {
-			entry.RequestID = rid
-		}
 	}
 
 	Log(c.Context(), entry)
@@ -101,18 +96,8 @@ func LogWithValues(c *fiber.Ctx, action models.AuditAction, entityType models.Au
 	// Extract user info from context
 	if claims := middleware.GetClaims(c); claims != nil {
 		entry.UserID = &claims.UserID
-		entry.UserEmail = claims.Email
 		entry.UserName = claims.Name
 		entry.UserRole = claims.RoleName
-	}
-
-	// Extract request info
-	entry.IPAddress = c.IP()
-	entry.UserAgent = c.Get("User-Agent")
-	if requestID := c.Locals("requestid"); requestID != nil {
-		if rid, ok := requestID.(string); ok {
-			entry.RequestID = rid
-		}
 	}
 
 	Log(c.Context(), entry)
@@ -132,24 +117,14 @@ func LogFailure(c *fiber.Ctx, action models.AuditAction, entityType models.Audit
 	// Extract user info from context
 	if claims := middleware.GetClaims(c); claims != nil {
 		entry.UserID = &claims.UserID
-		entry.UserEmail = claims.Email
 		entry.UserRole = claims.RoleName
-	}
-
-	// Extract request info
-	entry.IPAddress = c.IP()
-	entry.UserAgent = c.Get("User-Agent")
-	if requestID := c.Locals("requestid"); requestID != nil {
-		if rid, ok := requestID.(string); ok {
-			entry.RequestID = rid
-		}
 	}
 
 	Log(c.Context(), entry)
 }
 
 // LogAuth creates an auth-related audit log
-func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email string, userName string, userRole string, success bool, metadata map[string]interface{}) {
+func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, userName string, userRole string, success bool, metadata map[string]interface{}) {
 	status := models.AuditStatusSuccess
 	if !success {
 		status = models.AuditStatusFailure
@@ -162,7 +137,6 @@ func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email s
 
 	entry := &models.AuditLogEntry{
 		UserID:     userID,
-		UserEmail:  email,
 		UserName:   userName,
 		UserRole:   userRole,
 		Action:     action,
@@ -170,21 +144,13 @@ func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, email s
 		EntityID:   entityID,
 		Metadata:   metadata,
 		Status:     status,
-		IPAddress:  c.IP(),
-		UserAgent:  c.Get("User-Agent"),
-	}
-
-	if requestID := c.Locals("requestid"); requestID != nil {
-		if rid, ok := requestID.(string); ok {
-			entry.RequestID = rid
-		}
 	}
 
 	Log(c.Context(), entry)
 }
 
 // GetRepo returns the audit repository for direct access
-func GetRepo() *repository.AuditRepository {
+func GetRepo() auditRepository {
 	if globalService == nil {
 		return nil
 	}

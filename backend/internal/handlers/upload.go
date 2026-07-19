@@ -1,12 +1,11 @@
 package handlers
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -17,8 +16,7 @@ type UploadHandler struct {
 
 // NewUploadHandler creates a new upload handler
 func NewUploadHandler(uploadDir string) *UploadHandler {
-	// Ensure upload directory exists
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 		log.Fatal().Err(err).Msg("Failed to create upload directory")
 	}
 
@@ -29,57 +27,29 @@ func NewUploadHandler(uploadDir string) *UploadHandler {
 
 // UploadImage handles POST /api/v1/upload/image
 func (h *UploadHandler) UploadImage(c *fiber.Ctx) error {
-	// Get the file from the request
 	file, err := c.FormFile("image")
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "NO_FILE",
-			"message": "No file provided",
-		})
+		return uploadJSONError(c, fiber.StatusBadRequest, "NO_FILE", "No file provided")
 	}
 
-	// Validate file type
-	contentType := file.Header.Get("Content-Type")
-	allowedTypes := map[string]bool{
-		"image/jpeg": true,
-		"image/jpg":  true,
-		"image/png":  true,
-		"image/gif":  true,
-		"image/webp": true,
+	detectedType, err := validateUploadImage(file)
+	if err != nil {
+		var validationErr *uploadValidationError
+		if errors.As(err, &validationErr) {
+			return uploadJSONError(c, fiber.StatusBadRequest, validationErr.code, validationErr.message)
+		}
+		return uploadJSONError(c, fiber.StatusBadRequest, "INVALID_FILE_TYPE", err.Error())
 	}
 
-	if !allowedTypes[contentType] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "INVALID_FILE_TYPE",
-			"message": "Only image files (JPEG, PNG, GIF, WebP) are allowed",
-		})
-	}
-
-	// Validate file size (max 5MB)
-	maxSize := int64(5 * 1024 * 1024)
-	if file.Size > maxSize {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code":    "FILE_TOO_LARGE",
-			"message": "File size must be less than 5MB",
-		})
-	}
-
-	// Generate unique filename
-	ext := filepath.Ext(file.Filename)
-	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
+	filename := buildUploadFilename(detectedType)
 	filePath := filepath.Join(h.uploadDir, filename)
 
-	// Save the file
 	if err := c.SaveFile(file, filePath); err != nil {
 		log.Error().Err(err).Msg("Failed to save file")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"code":    "SAVE_FAILED",
-			"message": "Failed to save file",
-		})
+		return uploadJSONError(c, fiber.StatusInternalServerError, "SAVE_FAILED", "Failed to save file")
 	}
 
-	// Return the URL
-	imageURL := fmt.Sprintf("/uploads/%s", filename)
+	imageURL := "/uploads/" + filename
 
 	return c.JSON(fiber.Map{
 		"url":      imageURL,
@@ -89,28 +59,20 @@ func (h *UploadHandler) UploadImage(c *fiber.Ctx) error {
 
 // DeleteImage handles DELETE /api/v1/upload/image/:filename
 func (h *UploadHandler) DeleteImage(c *fiber.Ctx) error {
-	filename := c.Params("filename")
-
-	// Sanitize filename to prevent directory traversal
-	filename = filepath.Base(filename)
+	filename, err := normalizeUploadFilenameParam(c.Params("filename"))
+	if err != nil {
+		return uploadJSONError(c, fiber.StatusBadRequest, "INVALID_FILENAME", "Invalid filename")
+	}
 
 	filePath := filepath.Join(h.uploadDir, filename)
 
-	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"code":    "FILE_NOT_FOUND",
-			"message": "File not found",
-		})
+		return uploadJSONError(c, fiber.StatusNotFound, "FILE_NOT_FOUND", "File not found")
 	}
 
-	// Delete the file
 	if err := os.Remove(filePath); err != nil {
 		log.Error().Err(err).Msg("Failed to delete file")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"code":    "DELETE_FAILED",
-			"message": "Failed to delete file",
-		})
+		return uploadJSONError(c, fiber.StatusInternalServerError, "DELETE_FAILED", "Failed to delete file")
 	}
 
 	return c.JSON(fiber.Map{
