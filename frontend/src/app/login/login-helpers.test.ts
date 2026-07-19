@@ -25,9 +25,8 @@ describe("login helpers", () => {
     expect(isStoredPreferenceEnabled("true")).toBe(true);
     expect(isStoredPreferenceEnabled("false")).toBe(false);
     expect(isStoredPreferenceEnabled(null)).toBe(false);
-    expect(getShowDemoAccessPreference(false, "true")).toBe(true);
-    expect(getShowDemoAccessPreference(true, null)).toBe(true);
-    expect(getShowDemoAccessPreference(false, null)).toBe(false);
+    expect(getShowDemoAccessPreference(true)).toBe(true);
+    expect(getShowDemoAccessPreference(false)).toBe(false);
   });
 
   test("derives the default tab from saved-account presence", () => {
