@@ -57,6 +57,7 @@ vi.mock("@/components/account-switcher", () => ({
 describe("LoginScreen", () => {
   let container: HTMLDivElement;
   let root: Root;
+  let originalDemoAccessEnv: string | undefined;
 
   beforeEach(() => {
     // Radix components expect these browser APIs in jsdom tests.
@@ -73,6 +74,8 @@ describe("LoginScreen", () => {
     routerPush.mockReset();
     loginMock.mockReset();
     searchParamsState.message = null;
+    originalDemoAccessEnv = process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS;
+    delete process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS;
   });
 
   afterEach(() => {
@@ -80,6 +83,11 @@ describe("LoginScreen", () => {
       root.unmount();
     });
     container.remove();
+    if (originalDemoAccessEnv === undefined) {
+      delete process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS;
+    } else {
+      process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = originalDemoAccessEnv;
+    }
   });
 
   async function renderScreen() {
@@ -96,6 +104,13 @@ describe("LoginScreen", () => {
     expect(container.textContent).toContain(
       "You have been logged out by an administrator.",
     );
+  });
+
+  test("does not render login settings controls", async () => {
+    await renderScreen();
+
+    expect(container.textContent).not.toContain("Auto Login (Quick Access)");
+    expect(container.textContent).not.toContain("Quick Demo Login");
   });
 
   test("falls back to email login immediately when the last saved account is removed", async () => {
@@ -139,7 +154,7 @@ describe("LoginScreen", () => {
 
   test("uses the trusted-device preference in the effective save-account decision", async () => {
     window.localStorage.setItem("dashpoint_device_trusted", "true");
-    window.localStorage.setItem("dashpoint_demo_access", "true");
+    process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
     loginMock.mockResolvedValue({ success: true });
 
     await renderScreen();
@@ -170,7 +185,7 @@ describe("LoginScreen", () => {
   });
 
   test("demo autofill updates credentials without submitting", async () => {
-    window.localStorage.setItem("dashpoint_demo_access", "true");
+    process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
 
     await renderScreen();
 

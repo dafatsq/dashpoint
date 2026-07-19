@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { AccountManager } from '@/lib/account-manager';
 import { AccountSwitcher } from '@/components/account-switcher';
 import { cn } from '@/lib/utils';
+import { Logo } from '@/components/ui/logo';
 import {
   Store,
   ChevronLeft,
@@ -74,7 +75,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         <div className="flex h-16 items-center justify-between border-b px-4">
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <Store className="h-6 w-6 text-primary" />
+              <Logo className="h-6 w-6 text-primary" />
               <span className="font-bold text-lg">DashPoint</span>
             </div>
           )}

@@ -6,23 +6,14 @@ import {
   Info,
   Loader2,
   Mail,
-  Settings,
-  Store,
 } from "lucide-react";
 
 import { AccountSwitcher } from "@/components/account-switcher";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Logo } from "@/components/ui/logo";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/auth-context";
 import { AccountManager } from "@/lib/account-manager";
-
 import { LoginDemoAccess } from "./login-demo-access";
 import { LoginEmailForm } from "./login-email-form";
 import {
@@ -35,7 +26,6 @@ import {
   isStoredPreferenceEnabled,
   type LoginTab,
 } from "./login-helpers";
-import { LoginSettingsPanel } from "./login-settings-panel";
 
 export function LoginScreen() {
   const router = useRouter();
@@ -50,7 +40,6 @@ export function LoginScreen() {
   const [saveLogin, setSaveLogin] = useState(false);
   const [isDeviceTrusted, setIsDeviceTrusted] = useState(false);
   const [showDemoAccess, setShowDemoAccess] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [hasSavedAccounts, setHasSavedAccounts] = useState(false);
   const [activeTab, setActiveTab] = useState<LoginTab>("saved");
@@ -76,34 +65,6 @@ export function LoginScreen() {
     });
   }, []);
 
-  const handleDeviceTrustedChange = useCallback(
-    (checked: boolean) => {
-      setIsDeviceTrusted(checked);
-      setSaveLogin(checked);
-
-      if (checked) {
-        localStorage.setItem("dashpoint_device_trusted", "true");
-        return;
-      }
-
-      localStorage.removeItem("dashpoint_device_trusted");
-      AccountManager.clearAll();
-      refreshSavedAccounts(true);
-    },
-    [refreshSavedAccounts],
-  );
-
-  const handleDemoAccessChange = useCallback((checked: boolean) => {
-    setShowDemoAccess(checked);
-
-    if (checked) {
-      localStorage.setItem("dashpoint_demo_access", "true");
-      return;
-    }
-
-    localStorage.removeItem("dashpoint_demo_access");
-  }, []);
-
   useEffect(() => {
     const nextInfoMessage = getLoginInfoMessage(searchParams.get("message"));
     if (!nextInfoMessage) {
@@ -124,7 +85,6 @@ export function LoginScreen() {
     setShowDemoAccess(
       getShowDemoAccessPreference(
         process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS === "true",
-        localStorage.getItem("dashpoint_demo_access"),
       ),
     );
     refreshSavedAccounts(true);
@@ -184,35 +144,15 @@ export function LoginScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="relative text-center">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-4 top-4 text-muted-foreground hover:text-primary"
-            onClick={() => setShowSettings((current) => !current)}
-            type="button"
-          >
-            <Settings className="h-5 w-5" />
-          </Button>
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary">
-            <Store className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <CardTitle className="text-2xl font-bold">DashPoint POS</CardTitle>
-          <CardDescription>
+      <div className="w-full max-w-md">
+        <div className="relative text-center flex flex-col space-y-1.5 p-6 pb-4">
+          <Logo className="mx-auto mb-4 h-16 w-16 text-primary" />
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">DashPoint POS</h2>
+          <p className="text-sm text-muted-foreground">
             Sign in to access your point of sale system
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6">
-          {showSettings && isClient && (
-            <LoginSettingsPanel
-              isDeviceTrusted={isDeviceTrusted}
-              showDemoAccess={showDemoAccess}
-              onDeviceTrustedChange={handleDeviceTrustedChange}
-              onDemoAccessChange={handleDemoAccessChange}
-            />
-          )}
-
+          </p>
+        </div>
+        <div className="p-4 sm:p-6">
           {infoMessage && (
             <div className="mb-4 flex items-center gap-2 rounded-md bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">
               <Info className="h-4 w-4 flex-shrink-0" />
@@ -262,8 +202,8 @@ export function LoginScreen() {
               )}
             </TabsContent>
           </Tabs>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

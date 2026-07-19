@@ -1,7 +1,8 @@
 'use client';
 
 import { useAuth } from '@/contexts/auth-context';
-import { Menu, Store } from 'lucide-react';
+import { Menu } from 'lucide-react';
+import { Logo } from '@/components/ui/logo';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -33,7 +34,7 @@ export function Header({ title }: HeaderProps) {
               </SheetDescription>
               <div className="h-full flex flex-col">
                 <div className="flex h-16 items-center border-b px-6 flex-none">
-                  <Store className="h-6 w-6 text-primary mr-2" />
+                  <Logo className="h-6 w-6 text-primary mr-2" />
                   <span className="font-bold text-lg">DashPoint</span>
                 </div>
                 <div className="flex-1 overflow-hidden">
