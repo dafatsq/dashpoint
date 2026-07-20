@@ -95,11 +95,15 @@ skills-lock.json
 .github/
 .opencode/
 
+# Client deployment templates are tracked; real client env files remain ignored.
+/CLIENTS/*
+!/CLIENTS/
+!/CLIENTS/.env.example
+!/CLIENTS/*.md
+
 # Documents
 SDD.md
 deploy_clients.sh
 PROJECT_DISSECTION.md
 PROJECT_SECTIONS.md
-DEPLOY_NEW_CLIENT.md
 .kiro/*
-/CLIENTS

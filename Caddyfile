@@ -1,13 +1,15 @@
-{$CADDY_SITE_ADDRESS:dashpoint.my.id} {
+# Single-client Caddy template. For a shared multi-client VPS, generate this
+# file from the client env files with scripts/render-caddyfile.sh.
+{$CADDY_SITE_ADDRESS} {
     handle /api/v1/* {
-           reverse_proxy dashpoint-demo-backend-prod:8080
+           reverse_proxy {$PROJECT_NAME}-backend-prod:8080
     }
 
     handle /uploads/* {
-        reverse_proxy dashpoint-demo-backend-prod:8080
+        reverse_proxy {$PROJECT_NAME}-backend-prod:8080
     }
 
     handle {
-           reverse_proxy dashpoint-demo-frontend-prod:3000
+           reverse_proxy {$PROJECT_NAME}-frontend-prod:3000
     }
 }
