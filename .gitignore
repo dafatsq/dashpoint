@@ -93,6 +93,9 @@ service-account.json
 .claude/
 skills-lock.json
 .github/
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 .opencode/
 
 # Client deployment templates are tracked; real client env files remain ignored.

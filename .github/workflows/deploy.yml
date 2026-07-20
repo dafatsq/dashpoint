@@ -1,0 +1,124 @@
+name: Test And Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      client_env:
+        description: Optional client env filename, for example .env.acme. Empty deploys all active clients.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashpoint-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+      - name: Run backend tests
+        run: go test ./cmd/server ./internal/...
+
+  frontend-tests:
+    name: Frontend tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run frontend tests
+        run: npm test -- --run
+      - name: Build frontend
+        env:
+          NEXT_PUBLIC_API_URL: /api/v1
+          NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS: 'false'
+        run: npm run build
+
+  deploy:
+    name: Deploy to VPS
+    needs:
+      - backend-tests
+      - frontend-tests
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+      VPS_CLIENT_ENV_DIR: ${{ secrets.VPS_CLIENT_ENV_DIR }}
+      VPS_CADDY_FILE: ${{ secrets.VPS_CADDY_FILE }}
+      VPS_CLIENT_ENV_FILTER: ${{ inputs.client_env }}
+    steps:
+      - name: Check out pushed source
+        uses: actions/checkout@v4
+
+      - name: Validate deployment settings
+        run: |
+          set -euo pipefail
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_KNOWN_HOSTS VPS_APP_DIR; do
+            if [[ -z "${!name}" ]]; then
+              echo "$name is not configured" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Synchronize pushed source to VPS
+        run: |
+          set -euo pipefail
+          printf -v remote_app '%q' "$VPS_APP_DIR"
+          git archive --format=tar "$GITHUB_SHA" | \
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+              "tar -xf - -C $remote_app"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            "printf '%s\\n' '$GITHUB_SHA' > $remote_app/.deploy-commit && chmod 600 $remote_app/.deploy-commit"
+
+      - name: Deploy selected client stacks
+        run: |
+          set -euo pipefail
+          printf -v remote_app '%q' "$VPS_APP_DIR"
+          printf -v remote_env_dir '%q' "${VPS_CLIENT_ENV_DIR:-CLIENTS}"
+          printf -v remote_caddy_file '%q' "$VPS_CADDY_FILE"
+          printf -v remote_filter '%q' "$VPS_CLIENT_ENV_FILTER"
+          printf -v remote_script '%q' "$VPS_APP_DIR/scripts/deploy-vps.sh"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            "APP_DIR=$remote_app CLIENT_ENV_DIR=$remote_env_dir CADDY_FILE=$remote_caddy_file CLIENT_ENV_FILTER=$remote_filter $remote_script"

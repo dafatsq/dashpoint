@@ -150,21 +150,25 @@ Normal code deployment must not replace client databases. It should fetch source
 
 Database imports, seed data, and destructive resets require a separate explicit operation.
 
-## CI/CD Plan
+## CI/CD
 
-The planned GitHub Actions workflow will use an SSH deploy key and VPS-only secrets:
+`.github/workflows/deploy.yml` runs backend tests, frontend tests, and a production build before deployment. On `main`, a successful run streams the exact pushed commit to the VPS, runs `scripts/deploy-vps.sh`, rebuilds the active client stacks, runs backend migrations during startup, and reloads Caddy after route validation.
 
-    git push
-      -> backend tests
-      -> frontend tests and build
-      -> SSH to /opt/dashpoint
-      -> checkout the pushed commit
-      -> deploy the selected client env with Docker Compose
-      -> run health checks
+The workflow transfers a Git archive over SSH instead of requiring Git credentials on the VPS. It does not overwrite ignored client env files, database directories, uploads, or backups. A manual workflow dispatch can provide `client_env=.env.acme` to rebuild one client; an empty value deploys every active top-level `CLIENTS/.env.*` file.
 
-GitHub Secrets should contain only deployment access such as VPS_HOST, VPS_USER, VPS_SSH_KEY, and VPS_APP_DIR. Client env files, JWT secrets, database passwords, and Caddy certificate data stay on the VPS.
+Configure these GitHub Actions secrets:
 
-For several clients, the workflow should deploy a selected client using its existing VPS env file and Compose project name. It must not store all client secrets in GitHub or rebuild every client for an unrelated change.
+    VPS_HOST             VPS address
+    VPS_USER             restricted deployment SSH user
+    VPS_SSH_KEY          private SSH key for that user
+    VPS_KNOWN_HOSTS      pinned known_hosts entry for the VPS
+    VPS_APP_DIR          project directory, such as /opt/dashpoint
+    VPS_CLIENT_ENV_DIR   usually CLIENTS
+    VPS_CADDY_FILE       usually /opt/dashpoint/Caddyfile
+
+Client env files, JWT secrets, database passwords, uploads, and Caddy certificate data stay on the VPS. The deployment user should have only the permissions required to update the project directory and run the approved Docker Compose deployment.
+
+For the existing demo during its migration, use `VPS_APP_DIR=/opt/dashpoint-demo` and `VPS_CADDY_FILE=/opt/caddy/Caddyfile`. A fresh deployment should use the single project-folder layout shown above.
 
 ## Go-Live Checklist
 
