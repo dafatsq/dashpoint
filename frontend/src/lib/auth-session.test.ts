@@ -111,6 +111,33 @@ describe("persistAuthPayload", () => {
     expect(saveAccountSpy).not.toHaveBeenCalled();
   });
 
+  test("shares one refresh request across concurrent callers", async () => {
+    let resolveRefresh: (response: Response) => void = () => undefined;
+    const refreshResponse = new Promise<Response>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockReturnValue(refreshResponse);
+
+    const firstRefresh = refreshSessionTokens();
+    const secondRefresh = refreshSessionTokens();
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+
+    resolveRefresh(
+      new Response(JSON.stringify({ access_token: "next-access" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(Promise.all([firstRefresh, secondRefresh])).resolves.toEqual([
+      true,
+      true,
+    ]);
+  });
+
   test("does not store refresh tokens in browser storage", () => {
     window.localStorage.setItem("refresh_token", "legacy-refresh");
     window.sessionStorage.setItem("refresh_token", "legacy-refresh");

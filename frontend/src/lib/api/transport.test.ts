@@ -78,6 +78,52 @@ describe("ApiTransport", () => {
     );
   });
 
+  test("refreshes a cookie-backed session when the access token is missing", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ code: "MISSING_TOKEN" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    getAccessTokenMock
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce("fresh-access");
+    refreshSessionTokensMock.mockResolvedValue(true);
+
+    const transport = new ApiTransport("http://localhost:8080/api/v1");
+    const result = await transport.request<{ ok: boolean }>("/me");
+
+    expect(result.data).toEqual({ ok: true });
+    expect(refreshSessionTokensMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8080/api/v1/me",
+      expect.objectContaining({
+        headers: expect.not.objectContaining({
+          Authorization: expect.any(String),
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8080/api/v1/me",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer fresh-access",
+        }),
+      }),
+    );
+  });
+
   test("supports cookie-backed auth requests without Authorization", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ access_token: "access" }), {

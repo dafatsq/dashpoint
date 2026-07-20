@@ -56,7 +56,7 @@ export class ApiTransport {
         credentials,
       });
 
-      if (response.status === 401 && accessToken) {
+      if (response.status === 401 && !skipAuth) {
         const refreshed = await this.refreshTokens();
         if (refreshed) {
           const nextToken = getAccessToken();
@@ -152,7 +152,7 @@ export class ApiTransport {
         credentials,
       });
 
-      if (response.status === 401 && accessToken) {
+      if (response.status === 401) {
         const refreshed = await this.refreshTokens();
         if (refreshed) {
           const nextToken = getAccessToken();

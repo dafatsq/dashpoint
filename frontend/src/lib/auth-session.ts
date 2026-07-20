@@ -127,7 +127,9 @@ function normalizeStoredUser(storedUser: string): User | null {
   return hydrateStoredUser(storedUser);
 }
 
-export async function refreshSessionTokens(): Promise<boolean> {
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshSessionTokensInternal(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
@@ -149,4 +151,14 @@ export async function refreshSessionTokens(): Promise<boolean> {
     clearAuthSession();
     return false;
   }
+}
+
+export function refreshSessionTokens(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = refreshSessionTokensInternal().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
 }
