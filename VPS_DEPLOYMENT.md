@@ -166,7 +166,9 @@ Configure these GitHub Actions secrets:
     VPS_CLIENT_ENV_DIR   usually CLIENTS
     VPS_CADDY_FILE       usually /opt/dashpoint/Caddyfile
 
-Client env files, JWT secrets, database passwords, uploads, and Caddy certificate data stay on the VPS. The deployment user should have only the permissions required to update the project directory and run the approved Docker Compose deployment.
+Client env files, JWT secrets, database passwords, uploads, and Caddy certificate data stay on the VPS. The deployment user should have only the permissions required to update the project directory and run the approved Docker Compose deployment. Do not recursively change ownership of a client's `DATA_DIR` to the deployment user: PostgreSQL data and TLS files must remain readable by the PostgreSQL container account, and uploads must remain writable by the backend container account.
+
+The deployment script validates the Compose configuration, rebuilds the selected client stack, reloads Caddy, and then checks `https://<client-domain>/api/v1/health` through the local Caddy listener. A deployment fails if the backend is crash-looping or the public route cannot reach a healthy database-backed backend.
 
 For the existing demo during its migration, use `VPS_APP_DIR=/opt/dashpoint-demo` and `VPS_CADDY_FILE=/opt/caddy/Caddyfile`. A fresh deployment should use the single project-folder layout shown above.
 

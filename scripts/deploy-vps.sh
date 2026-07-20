@@ -56,6 +56,8 @@ validate_project_name() {
 shopt -s nullglob
 env_files=("$client_env_dir"/.env.*)
 selected_count=0
+deployed_projects=()
+deployed_sites=()
 
 for env_file in "${env_files[@]}"; do
   [[ "$(basename "$env_file")" == ".env.example" ]] && continue
@@ -66,7 +68,13 @@ for env_file in "${env_files[@]}"; do
   fi
 
   project_name=$(read_env_value PROJECT_NAME "$env_file")
+  site_address=$(read_env_value CADDY_SITE_ADDRESS "$env_file")
   validate_project_name "$project_name"
+
+  if [[ -z "$site_address" || ! "$site_address" =~ ^[A-Za-z0-9*._-]+$ ]]; then
+    printf 'Invalid CADDY_SITE_ADDRESS in client env: %s\n' "$env_file" >&2
+    exit 1
+  fi
 
   docker compose \
     --env-file "$env_file" \
@@ -81,6 +89,8 @@ for env_file in "${env_files[@]}"; do
     up -d --build
 
   selected_count=$((selected_count + 1))
+  deployed_projects+=("$project_name")
+  deployed_sites+=("$site_address")
   printf 'Deployed client: %s\n' "$project_name"
 done
 
@@ -107,3 +117,34 @@ fi
 docker exec global-caddy caddy validate --config /etc/caddy/Caddyfile >/dev/null
 docker exec global-caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null
 printf 'Caddy routes validated and reloaded.\n'
+
+if ! command -v curl >/dev/null 2>&1; then
+  printf 'curl is required for deployment health checks.\n' >&2
+  exit 1
+fi
+
+for index in "${!deployed_projects[@]}"; do
+  project_name=${deployed_projects[$index]}
+  site_address=${deployed_sites[$index]}
+  backend_container="${project_name}-backend-prod"
+
+  if [[ "$site_address" == *'*'* ]]; then
+    backend_state=$(docker inspect -f '{{.State.Status}}' "$backend_container" 2>/dev/null || true)
+    if [[ "$backend_state" != "running" ]]; then
+      printf 'Backend health check failed for %s: container state is %s\n' "$project_name" "${backend_state:-missing}" >&2
+      docker logs --tail=80 "$backend_container" >&2 || true
+      exit 1
+    fi
+    continue
+  fi
+
+  health_url="https://${site_address}/api/v1/health"
+  if ! curl --fail --silent --show-error --max-time 20 --retry 10 --retry-delay 2 \
+    --resolve "${site_address}:443:127.0.0.1" "$health_url" >/dev/null; then
+    printf 'Backend health check failed for %s (%s).\n' "$project_name" "$health_url" >&2
+    docker logs --tail=80 "$backend_container" >&2 || true
+    exit 1
+  fi
+
+  printf 'Health check passed: %s\n' "$health_url"
+done
