@@ -1,4 +1,4 @@
-{$CADDY_SITE_ADDRESS:dashpoint-demo.pos.example.com} {
+{$CADDY_SITE_ADDRESS:dashpoint.my.id} {
     handle /api/v1/* {
            reverse_proxy dashpoint-demo-backend-prod:8080
     }
