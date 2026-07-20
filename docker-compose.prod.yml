@@ -8,12 +8,24 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+      - ./data/postgres-tls/server.crt:/var/lib/postgresql/certs/server.crt:ro
+      - ./data/postgres-tls/server.key:/var/lib/postgresql/certs/server.key:ro
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/certs/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/certs/server.key
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - internal
 
   backend:
     build:
@@ -21,18 +33,43 @@ services:
       dockerfile: Dockerfile
     container_name: ${PROJECT_NAME}-backend-prod
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required and must use sslmode=require, verify-ca, or verify-full}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=require
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRY_MINUTES: ${JWT_EXPIRY_MINUTES:-15}
       REFRESH_EXPIRY_HOURS: ${REFRESH_EXPIRY_HOURS:-168}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
       PORT: "8080"
       ENVIRONMENT: production
-    ports:
-      - "${BACKEND_PORT}:8080"
     volumes:
       - ./data/uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - internal
+      - proxy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+        NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS: ${NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS:-false}
+    container_name: ${PROJECT_NAME}-frontend-prod
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - proxy
+
+networks:
+  internal:
+    driver: bridge
+  proxy:
+    name: ${PROXY_NETWORK:-dashpoint_proxy}
+    external: true
