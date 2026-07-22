@@ -28,6 +28,7 @@ import {
 } from "./inventory-helpers";
 import { InventoryList } from "./inventory-list";
 import { InventoryLowStock } from "./inventory-low-stock";
+import { parseSortValue } from "@/lib/sorting";
 
 export function InventoryScreen() {
   const PAGE_SIZE = 24;
@@ -46,6 +47,7 @@ export function InventoryScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [sort, setSort] = useState("name_asc");
   const [activeTab, setActiveTab] = useState<"all" | "low-stock">("all");
   const [pageError, setPageError] = useState<string | null>(null);
   const { showError } = useGlobalError();
@@ -145,6 +147,7 @@ export function InventoryScreen() {
         category_id: selectedCategory !== "all" ? selectedCategory : undefined,
         page: fetchPage,
         per_page: fetchPerPage,
+        ...parseSortValue(sort),
       });
 
       if (result.error) {
@@ -170,7 +173,7 @@ export function InventoryScreen() {
         setIsFetchingMore(false);
       }
     },
-    [debouncedSearch, selectedCategory],
+    [debouncedSearch, selectedCategory, sort],
   );
 
   const resetProductPagination = useCallback(() => {
@@ -632,9 +635,11 @@ export function InventoryScreen() {
           lowStockCount={lowStockCount}
           categories={categories}
           selectedCategory={selectedCategory}
+          sort={sort}
           onSearchChange={setSearchQuery}
           onTabChange={setActiveTab}
           onCategoryChange={setSelectedCategory}
+          onSortChange={setSort}
         />
 
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -655,9 +660,10 @@ export function InventoryScreen() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : activeTab === "low-stock" ? (
-          <InventoryLowStock
-            items={lowStockItems}
-            products={products}
+            <InventoryLowStock
+              items={lowStockItems}
+              products={products}
+              sort={sort}
             canModifyStock={canModifyStock}
             canEditThreshold={canEditThreshold}
             onAdjust={(id) => void openAdjustDialogFromLowStock(id)}

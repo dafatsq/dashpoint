@@ -20,6 +20,14 @@ func parseListFilter(c *fiber.Ctx) (repository.ProductFilter, int, int, error) {
 	categoryIDStr := c.Query("category_id", "")
 	activeOnlyStr := c.Query("active_only", "true")
 	lowStock := c.Query("low_stock", "false") == "true"
+	sortBy := c.Query("sort_by", "name")
+	sortDirection := c.Query("sort_direction", "asc")
+	validSortFields := map[string]bool{
+		"name": true, "sku": true, "category": true, "price": true, "tax_rate": true, "stock": true,
+	}
+	if !validSortFields[sortBy] || (sortDirection != "asc" && sortDirection != "desc") {
+		return repository.ProductFilter{}, 0, 0, fmt.Errorf("invalid sort parameters")
+	}
 
 	if page < 1 {
 		page = 1
@@ -29,10 +37,12 @@ func parseListFilter(c *fiber.Ctx) (repository.ProductFilter, int, int, error) {
 	}
 
 	filter := repository.ProductFilter{
-		Search:   search,
-		LowStock: lowStock,
-		Limit:    perPage,
-		Offset:   (page - 1) * perPage,
+		Search:        search,
+		LowStock:      lowStock,
+		Limit:         perPage,
+		Offset:        (page - 1) * perPage,
+		SortBy:        sortBy,
+		SortDirection: sortDirection,
 	}
 
 	if categoryIDStr != "" {

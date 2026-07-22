@@ -162,6 +162,21 @@ func parseExpensePagination(c *fiber.Ctx) (int, int, error) {
 	return limit, offset, nil
 }
 
+func parseExpenseSort(c *fiber.Ctx) (string, string) {
+	sortBy := strings.TrimSpace(c.Query("sort_by", "date"))
+	sortDirection := strings.TrimSpace(c.Query("sort_direction", "desc"))
+	validSortFields := map[string]bool{
+		"date": true, "amount": true, "category": true, "description": true, "created_by": true,
+	}
+	if !validSortFields[sortBy] {
+		sortBy = "date"
+	}
+	if sortDirection != "asc" && sortDirection != "desc" {
+		sortDirection = "desc"
+	}
+	return sortBy, sortDirection
+}
+
 func parseExpenseCategoryStatus(c *fiber.Ctx) (string, error) {
 	status := c.Query("status", "")
 	if status == "" {

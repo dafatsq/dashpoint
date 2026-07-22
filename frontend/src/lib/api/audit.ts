@@ -20,6 +20,8 @@ function buildAuditQuery(params?: {
   search?: string;
   limit?: number;
   offset?: number;
+  sort_by?: string;
+  sort_direction?: "asc" | "desc";
 }) {
   const searchParams = new URLSearchParams();
   appendIfPresent(searchParams, "user_id", params?.user_id);
@@ -30,6 +32,8 @@ function buildAuditQuery(params?: {
   appendIfPresent(searchParams, "search", params?.search);
   appendIfPresent(searchParams, "limit", params?.limit);
   appendIfPresent(searchParams, "offset", params?.offset);
+  appendIfPresent(searchParams, "sort_by", params?.sort_by);
+  appendIfPresent(searchParams, "sort_direction", params?.sort_direction);
   const query = searchParams.toString();
   return query ? `?${query}` : "";
 }

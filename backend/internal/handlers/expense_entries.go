@@ -16,6 +16,7 @@ func (h *ExpenseHandler) List(c *fiber.Ctx) error {
 	if err != nil {
 		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
 	}
+	sortBy, sortDirection := parseExpenseSort(c)
 
 	categoryID, err := parseOptionalExpenseUUIDField(stringPointerFromQuery(c, "category_id"), "Invalid category ID")
 	if err != nil {
@@ -40,7 +41,7 @@ func (h *ExpenseHandler) List(c *fiber.Ctx) error {
 		endDate = &parsed
 	}
 
-	expenses, total, repoErr := h.repo.List(c.Context(), categoryID, startDate, endDate, limit, offset)
+	expenses, total, repoErr := h.repo.List(c.Context(), categoryID, startDate, endDate, limit, offset, sortBy, sortDirection)
 	if repoErr != nil {
 		return expenseInternalError(c, repoErr, "Failed to list expenses")
 	}

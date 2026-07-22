@@ -23,7 +23,7 @@ type expenseStore interface {
 	CreateWithTx(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error)
 	GetByIDWithTx(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error)
 	GetByID(context.Context, uuid.UUID) (*models.Expense, error)
-	List(context.Context, *uuid.UUID, *time.Time, *time.Time, int, int) ([]models.Expense, int, error)
+	List(context.Context, *uuid.UUID, *time.Time, *time.Time, int, int, string, string) ([]models.Expense, int, error)
 	Update(context.Context, *models.Expense) (*models.Expense, error)
 	UpdateWithTx(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error)
 	Delete(context.Context, uuid.UUID) error

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FilterCard } from "@/components/shared/filter-card";
 import { ActiveArchivedToggle } from "@/components/shared/active-archived-toggle";
+import { DataSortSelect, type DataSortOption } from "@/components/shared/data-sort-select";
 
 import type { CategoryType } from "./categories-helpers";
 
@@ -15,9 +16,12 @@ interface CategoriesControlsProps {
   searchQuery: string;
   canCreateCategories: boolean;
   viewMode: "active" | "archived";
+  sort: string;
+  sortOptions: readonly DataSortOption[];
   onActiveTabChange: (value: CategoryType) => void;
   onSearchChange: (value: string) => void;
   onViewModeChange: (value: "active" | "archived") => void;
+  onSortChange: (value: string) => void;
   onCreate: () => void;
 }
 
@@ -26,9 +30,12 @@ export function CategoriesControls({
   searchQuery,
   canCreateCategories,
   viewMode,
+  sort,
+  sortOptions,
   onActiveTabChange,
   onSearchChange,
   onViewModeChange,
+  onSortChange,
   onCreate,
 }: CategoriesControlsProps) {
   return (
@@ -52,8 +59,8 @@ export function CategoriesControls({
 
       {/* Filters (Search & Add) */}
       <FilterCard>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="relative w-full">
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <div className="relative w-full flex-1 min-w-[200px] sm:min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search categories..."
@@ -62,8 +69,9 @@ export function CategoriesControls({
               className="pl-9 w-full"
             />
           </div>
+          <DataSortSelect value={sort} options={sortOptions} onChange={onSortChange} className="w-full flex-1 min-w-[200px] sm:min-w-[220px]" />
           {canCreateCategories && viewMode === "active" && (
-            <Button onClick={onCreate} className="w-full">
+            <Button onClick={onCreate} className="w-full flex-1 min-w-[200px] sm:min-w-[220px]">
               <Plus className="h-4 w-4 mr-2" />
               Add Category
             </Button>

@@ -1,8 +1,10 @@
 'use client';
 
 import { History, Loader2, User } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import type { AuditLog } from "@/types";
+import { DataSortSelect } from "@/components/shared/data-sort-select";
 
 import {
   DASHBOARD_ACTION_LABELS,
@@ -24,6 +26,18 @@ interface DashboardChangesListProps {
 }
 
 export function DashboardChangesList({ logs, isLoading, error, onRetry }: DashboardChangesListProps) {
+  const [sort, setSort] = useState("date_desc");
+  const sortedLogs = useMemo(
+    () => [...logs].sort((left, right) => {
+      const direction = sort.endsWith("_desc") ? -1 : 1;
+      const sortBy = sort.replace(/_(asc|desc)$/, "");
+      if (sortBy === "user") return (left.user_name || "System").localeCompare(right.user_name || "System") * direction;
+      if (sortBy === "action") return left.action.localeCompare(right.action) * direction;
+      return (new Date(left.created_at).getTime() - new Date(right.created_at).getTime()) * direction;
+    }),
+    [logs, sort],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -55,7 +69,19 @@ export function DashboardChangesList({ logs, isLoading, error, onRetry }: Dashbo
 
   return (
     <div className="space-y-4">
-      {logs.map((log) => {
+      <div className="flex justify-end">
+        <DataSortSelect
+          value={sort}
+          options={[
+            { value: "date_desc", label: "Date (newest)" },
+            { value: "date_asc", label: "Date (oldest)" },
+            { value: "user_asc", label: "User (A-Z)" },
+            { value: "action_asc", label: "Action (A-Z)" },
+          ]}
+          onChange={setSort}
+        />
+      </div>
+      {sortedLogs.map((log) => {
         const fieldChanges = getDashboardFieldChanges(log);
         return (
           <div

@@ -10,9 +10,20 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Search, ShoppingCart } from "lucide-react";
 import type { Product } from "@/types";
+import { DataSortSelect } from "@/components/shared/data-sort-select";
 
 import { classifyStock, formatCurrency, getImageUrl, getProductPrice, getProductQuantity } from "./pos-helpers";
 import type { ProductGridProps } from "./pos-types";
+
+const POS_SORT_OPTIONS = [
+  { value: "name_asc", label: "Name (A-Z)" },
+  { value: "name_desc", label: "Name (Z-A)" },
+  { value: "category_asc", label: "Category (A-Z)" },
+  { value: "price_asc", label: "Price (low-high)" },
+  { value: "price_desc", label: "Price (high-low)" },
+  { value: "stock_asc", label: "Stock (low-high)" },
+  { value: "stock_desc", label: "Stock (high-low)" },
+] as const;
 
 function ProductCard({
   product,
@@ -87,36 +98,41 @@ export function PosProductGrid({
   hasMore,
   searchQuery,
   selectedCategory,
+  sort,
   onSearchChange,
   onCategoryChange,
+  onSortChange,
   onAddToCart,
   loadMoreRef,
 }: ProductGridProps) {
   return (
     <div className="flex-1 flex flex-col p-4 overflow-hidden pb-16 lg:pb-4">
-      <div className="flex gap-4 mb-4">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap items-center justify-center gap-4 mb-4">
+        <div className="relative w-full flex-1 min-w-[200px] sm:min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search products or scan barcode..."
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
-            className="pl-9"
+            className="pl-9 w-full"
           />
         </div>
-        <Select value={selectedCategory} onValueChange={onCategoryChange}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="All Categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {categories.map((category) => (
-              <SelectItem key={category.id} value={category.id}>
-                {category.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-full flex-1 min-w-[200px] sm:min-w-[220px]">
+          <Select value={selectedCategory} onValueChange={onCategoryChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <DataSortSelect value={sort} options={POS_SORT_OPTIONS} onChange={onSortChange} className="w-full flex-1 min-w-[200px] sm:min-w-[220px]" />
       </div>
 
       <div className="flex-1 overflow-y-auto">

@@ -34,7 +34,7 @@ type fakeUserRepo struct {
 func (f *fakeUserRepo) GetByID(context.Context, uuid.UUID) (*models.User, error) {
 	return f.getByIDUser, f.getByIDErr
 }
-func (f *fakeUserRepo) ListWithFilter(context.Context, int, int, *bool, string, string) ([]*models.User, int, error) {
+func (f *fakeUserRepo) ListWithFilter(context.Context, int, int, *bool, string, string, string, string) ([]*models.User, int, error) {
 	return nil, 0, nil
 }
 func (f *fakeUserRepo) Create(context.Context, *models.User) error { return nil }

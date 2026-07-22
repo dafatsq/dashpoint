@@ -141,7 +141,7 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter) ([]*
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	}
-	query += fmt.Sprintf(" ORDER BY p.name ASC LIMIT %d OFFSET %d", filter.Limit, filter.Offset)
+	query += fmt.Sprintf(" ORDER BY %s LIMIT %d OFFSET %d", productOrderBy(filter), filter.Limit, filter.Offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -167,4 +167,24 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter) ([]*
 	}
 
 	return products, total, nil
+}
+
+func productOrderBy(filter ProductFilter) string {
+	columns := map[string]string{
+		"name":     "p.name",
+		"sku":      "COALESCE(p.sku, '')",
+		"category": "COALESCE(c.name, '')",
+		"price":    "p.price",
+		"tax_rate": "p.tax_rate",
+		"stock":    "COALESCE(i.quantity, 0)",
+	}
+	column, ok := columns[filter.SortBy]
+	if !ok {
+		column = columns["name"]
+	}
+	direction := "ASC"
+	if filter.SortDirection == "desc" {
+		direction = "DESC"
+	}
+	return fmt.Sprintf("%s %s, p.id ASC", column, direction)
 }

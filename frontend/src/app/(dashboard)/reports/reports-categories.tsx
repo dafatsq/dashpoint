@@ -3,6 +3,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FolderOpen } from 'lucide-react';
 import type { CategorySales } from '@/types';
+import { DataSortSelect } from '@/components/shared/data-sort-select';
+import { useMemo, useState } from 'react';
 
 import {
   calculateCategoryRevenuePercentages,
@@ -19,6 +21,19 @@ interface ReportsCategoriesProps {
 }
 
 export function ReportsCategories({ isLoading, categorySales, dateRange }: ReportsCategoriesProps) {
+  const [sort, setSort] = useState('revenue_desc');
+  const sortedCategorySales = useMemo(
+    () => [...categorySales].sort((left, right) => {
+      const direction = sort.endsWith('_desc') ? -1 : 1;
+      const sortBy = sort.replace(/_(asc|desc)$/, '');
+      if (sortBy === 'name') return left.category_name.localeCompare(right.category_name) * direction;
+      if (sortBy === 'quantity') return (Number.parseFloat(left.quantity_sold) - Number.parseFloat(right.quantity_sold)) * direction;
+      if (sortBy === 'items') return (left.items_sold - right.items_sold) * direction;
+      return (Number.parseFloat(left.total_revenue) - Number.parseFloat(right.total_revenue)) * direction;
+    }),
+    [categorySales, sort],
+  );
+
   if (isLoading) {
     return <ReportsLoadingState />;
   }
@@ -32,7 +47,7 @@ export function ReportsCategories({ isLoading, categorySales, dateRange }: Repor
   return (
     <div className="space-y-6">
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {categorySales.map((category, index) => (
+        {sortedCategorySales.map((category, index) => (
           <Card key={category.category_id} className="hover:shadow-md transition-shadow">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -60,10 +75,15 @@ export function ReportsCategories({ isLoading, categorySales, dateRange }: Repor
 
       <Card className="hidden lg:block">
         <CardHeader>
-          <CardTitle>Category Breakdown</CardTitle>
-          <CardDescription>
-            {dateRange.start} to {dateRange.end}
-          </CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <CardTitle>Category Breakdown</CardTitle>
+              <CardDescription>
+                {dateRange.start} to {dateRange.end}
+              </CardDescription>
+            </div>
+            <DataSortSelect value={sort} options={[{ value: 'revenue_desc', label: 'Revenue (high-low)' }, { value: 'revenue_asc', label: 'Revenue (low-high)' }, { value: 'quantity_desc', label: 'Qty sold (high-low)' }, { value: 'items_desc', label: 'Line items (high-low)' }, { value: 'name_asc', label: 'Category (A-Z)' }]} onChange={setSort} />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -79,7 +99,7 @@ export function ReportsCategories({ isLoading, categorySales, dateRange }: Repor
                 </tr>
               </thead>
               <tbody>
-                {categorySales.map((category, index) => (
+                {sortedCategorySales.map((category, index) => (
                   <tr key={category.category_id} className="border-b last:border-0 hover:bg-muted/50">
                     <td className="py-3">
                       <span
@@ -108,8 +128,11 @@ export function ReportsCategories({ isLoading, categorySales, dateRange }: Repor
       </Card>
 
       <div className="lg:hidden space-y-4">
-        <h3 className="font-semibold text-lg">Category Breakdown</h3>
-        {categorySales.map((category, index) => (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h3 className="font-semibold text-lg">Category Breakdown</h3>
+          <DataSortSelect value={sort} options={[{ value: 'revenue_desc', label: 'Revenue (high-low)' }, { value: 'revenue_asc', label: 'Revenue (low-high)' }, { value: 'quantity_desc', label: 'Qty sold (high-low)' }, { value: 'items_desc', label: 'Line items (high-low)' }, { value: 'name_asc', label: 'Category (A-Z)' }]} onChange={setSort} />
+        </div>
+        {sortedCategorySales.map((category, index) => (
           <Card key={category.category_id}>
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center gap-3 border-b pb-3">

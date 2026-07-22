@@ -84,7 +84,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int, activeOnly
 }
 
 // ListWithFilter retrieves users with optional active status, search, and role filters.
-func (r *UserRepository) ListWithFilter(ctx context.Context, limit, offset int, isActive *bool, search, role string) ([]*models.User, int, error) {
+func (r *UserRepository) ListWithFilter(ctx context.Context, limit, offset int, isActive *bool, search, role, sortBy, sortDirection string) ([]*models.User, int, error) {
 	var args []interface{}
 	argNum := 1
 	whereClauses := []string{}
@@ -118,7 +118,7 @@ func (r *UserRepository) ListWithFilter(ctx context.Context, limit, offset int, 
 	}
 
 	listArgs := append(args, limit, offset)
-	query := userWithRoleSelect + where + fmt.Sprintf(` ORDER BY u.created_at DESC LIMIT $%d OFFSET $%d`, argNum, argNum+1)
+	query := userWithRoleSelect + where + fmt.Sprintf(` ORDER BY %s LIMIT $%d OFFSET $%d`, userOrderBy(sortBy, sortDirection), argNum, argNum+1)
 
 	rows, err := r.pool.Query(ctx, query, listArgs...)
 	if err != nil {
@@ -131,6 +131,24 @@ func (r *UserRepository) ListWithFilter(ctx context.Context, limit, offset int, 
 		return nil, 0, err
 	}
 	return users, total, nil
+}
+
+func userOrderBy(sortBy, sortDirection string) string {
+	columns := map[string]string{
+		"name":       "LOWER(u.name)",
+		"email":      "LOWER(COALESCE(u.email, ''))",
+		"role":       "LOWER(r.name)",
+		"created_at": "u.created_at",
+	}
+	column, ok := columns[sortBy]
+	if !ok {
+		column = columns["created_at"]
+	}
+	direction := "DESC"
+	if sortDirection == "asc" {
+		direction = "ASC"
+	}
+	return fmt.Sprintf("%s %s, u.id ASC", column, direction)
 }
 
 // NameExists checks if a user with the given name already exists (case-insensitive).

@@ -1,8 +1,10 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataSortSelect } from '@/components/shared/data-sort-select';
 import { TrendingUp } from 'lucide-react';
 import type { TopSeller } from '@/types';
+import { useMemo, useState } from 'react';
 
 import { formatCurrency, formatNumber } from './reports-helpers';
 import { ReportsEmptyState, ReportsLoadingState } from './reports-feedback';
@@ -15,6 +17,18 @@ interface ReportsTopSellersProps {
 }
 
 export function ReportsTopSellers({ isLoading, topSellers, dateRange }: ReportsTopSellersProps) {
+  const [sort, setSort] = useState('revenue_desc');
+  const sortedTopSellers = useMemo(
+    () => [...topSellers].sort((left, right) => {
+      const direction = sort.endsWith('_desc') ? -1 : 1;
+      const sortBy = sort.replace(/_(asc|desc)$/, '');
+      if (sortBy === 'name') return left.product_name.localeCompare(right.product_name) * direction;
+      if (sortBy === 'quantity') return (Number.parseFloat(left.quantity_sold) - Number.parseFloat(right.quantity_sold)) * direction;
+      return (Number.parseFloat(left.total_revenue) - Number.parseFloat(right.total_revenue)) * direction;
+    }),
+    [sort, topSellers],
+  );
+
   if (isLoading) {
     return <ReportsLoadingState />;
   }
@@ -27,7 +41,20 @@ export function ReportsTopSellers({ isLoading, topSellers, dateRange }: ReportsT
     <div className="space-y-6">
       <Card className="hidden lg:block">
         <CardHeader>
-          <CardTitle>Top Selling Products</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <CardTitle>Top Selling Products</CardTitle>
+            <DataSortSelect
+              value={sort}
+              options={[
+                { value: 'revenue_desc', label: 'Revenue (high-low)' },
+                { value: 'revenue_asc', label: 'Revenue (low-high)' },
+                { value: 'quantity_desc', label: 'Qty sold (high-low)' },
+                { value: 'quantity_asc', label: 'Qty sold (low-high)' },
+                { value: 'name_asc', label: 'Product (A-Z)' },
+              ]}
+              onChange={setSort}
+            />
+          </div>
           <CardDescription>
             {dateRange.start} to {dateRange.end}
           </CardDescription>
@@ -45,7 +72,7 @@ export function ReportsTopSellers({ isLoading, topSellers, dateRange }: ReportsT
                 </tr>
               </thead>
               <tbody>
-                {topSellers.map((item, index) => (
+                {sortedTopSellers.map((item, index) => (
                   <tr key={`${item.product_id}-${index}`} className="border-b last:border-0 hover:bg-muted/50">
                     <td className="py-3">
                       <span
@@ -76,8 +103,11 @@ export function ReportsTopSellers({ isLoading, topSellers, dateRange }: ReportsT
       </Card>
 
       <div className="lg:hidden space-y-4">
-        <h3 className="font-semibold text-lg">Top Selling Products</h3>
-        {topSellers.map((item, index) => (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h3 className="font-semibold text-lg">Top Selling Products</h3>
+          <DataSortSelect value={sort} options={[{ value: 'revenue_desc', label: 'Revenue (high-low)' }, { value: 'revenue_asc', label: 'Revenue (low-high)' }, { value: 'quantity_desc', label: 'Qty sold (high-low)' }, { value: 'quantity_asc', label: 'Qty sold (low-high)' }, { value: 'name_asc', label: 'Product (A-Z)' }]} onChange={setSort} />
+        </div>
+        {sortedTopSellers.map((item, index) => (
           <Card key={`${item.product_id}-mobile-${index}`}>
             <CardContent className="p-4 space-y-3">
               <div className="flex items-start gap-3 border-b pb-3">

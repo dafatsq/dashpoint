@@ -3,6 +3,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users } from 'lucide-react';
 import type { EmployeeSales } from '@/types';
+import { DataSortSelect } from '@/components/shared/data-sort-select';
+import { useMemo, useState } from 'react';
 
 import { formatCurrency, formatNumber } from './reports-helpers';
 import { ReportsEmptyState, ReportsLoadingState } from './reports-feedback';
@@ -15,6 +17,19 @@ interface ReportsEmployeesProps {
 }
 
 export function ReportsEmployees({ isLoading, employeeSales, dateRange }: ReportsEmployeesProps) {
+  const [sort, setSort] = useState('sales_desc');
+  const sortedEmployeeSales = useMemo(
+    () => [...employeeSales].sort((left, right) => {
+      const direction = sort.endsWith('_desc') ? -1 : 1;
+      const sortBy = sort.replace(/_(asc|desc)$/, '');
+      if (sortBy === 'name') return left.employee_name.localeCompare(right.employee_name) * direction;
+      if (sortBy === 'transactions') return (left.transaction_count - right.transaction_count) * direction;
+      if (sortBy === 'items') return (left.item_count - right.item_count) * direction;
+      return (Number.parseFloat(left.total_sales) - Number.parseFloat(right.total_sales)) * direction;
+    }),
+    [employeeSales, sort],
+  );
+
   if (isLoading) {
     return <ReportsLoadingState />;
   }
@@ -27,10 +42,15 @@ export function ReportsEmployees({ isLoading, employeeSales, dateRange }: Report
     <div className="space-y-6">
       <Card className="hidden lg:block">
         <CardHeader>
-          <CardTitle>Sales by Employee</CardTitle>
-          <CardDescription>
-            {dateRange.start} to {dateRange.end}
-          </CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <CardTitle>Sales by Employee</CardTitle>
+              <CardDescription>
+                {dateRange.start} to {dateRange.end}
+              </CardDescription>
+            </div>
+            <DataSortSelect value={sort} options={[{ value: 'sales_desc', label: 'Sales (high-low)' }, { value: 'sales_asc', label: 'Sales (low-high)' }, { value: 'transactions_desc', label: 'Transactions (high-low)' }, { value: 'items_desc', label: 'Items sold (high-low)' }, { value: 'name_asc', label: 'Employee (A-Z)' }]} onChange={setSort} />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -46,7 +66,7 @@ export function ReportsEmployees({ isLoading, employeeSales, dateRange }: Report
                 </tr>
               </thead>
               <tbody>
-                {employeeSales.map((employee, index) => (
+                {sortedEmployeeSales.map((employee, index) => (
                   <tr key={employee.employee_id} className="border-b last:border-0 hover:bg-muted/50">
                     <td className="py-3">
                       <span
@@ -71,8 +91,11 @@ export function ReportsEmployees({ isLoading, employeeSales, dateRange }: Report
       </Card>
 
       <div className="lg:hidden space-y-4">
-        <h3 className="font-semibold text-lg">Sales by Employee</h3>
-        {employeeSales.map((employee, index) => (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h3 className="font-semibold text-lg">Sales by Employee</h3>
+          <DataSortSelect value={sort} options={[{ value: 'sales_desc', label: 'Sales (high-low)' }, { value: 'sales_asc', label: 'Sales (low-high)' }, { value: 'transactions_desc', label: 'Transactions (high-low)' }, { value: 'items_desc', label: 'Items sold (high-low)' }, { value: 'name_asc', label: 'Employee (A-Z)' }]} onChange={setSort} />
+        </div>
+        {sortedEmployeeSales.map((employee, index) => (
           <Card key={employee.employee_id}>
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center gap-3 border-b pb-3">

@@ -27,6 +27,8 @@ export function createCatalogApi(transport: ApiTransport): CatalogApi {
       if (params?.per_page !== undefined) {
         searchParams.set("per_page", String(params.per_page));
       }
+      if (params?.sort_by) searchParams.set("sort_by", params.sort_by);
+      if (params?.sort_direction) searchParams.set("sort_direction", params.sort_direction);
       const query = searchParams.toString();
       const result = await transport.request<ProductsResponse>(
         `/products${query ? `?${query}` : ""}`,

@@ -24,6 +24,7 @@ export function ShiftsScreen() {
     end: "",
   });
   const [selectedUser, setSelectedUser] = useState<string>("all");
+  const [sort, setSort] = useState("date_desc");
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
 
   const resetToFirstPage = useCallback(() => {
@@ -56,6 +57,7 @@ export function ShiftsScreen() {
         limit,
         dateRange,
         selectedUser,
+        sort,
       }),
     );
 
@@ -68,7 +70,7 @@ export function ShiftsScreen() {
     }
 
     setIsLoading(false);
-  }, [dateRange, limit, page, selectedUser]);
+  }, [dateRange, limit, page, selectedUser, sort]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -88,12 +90,17 @@ export function ShiftsScreen() {
             dateRange={dateRange}
             selectedUser={selectedUser}
             users={users}
+            sort={sort}
             onDateRangeChange={(newRange) => {
               setDateRange(newRange);
               resetToFirstPage();
             }}
             onSelectedUserChange={(value) => {
               setSelectedUser(value);
+              resetToFirstPage();
+            }}
+            onSortChange={(value) => {
+              setSort(value);
               resetToFirstPage();
             }}
           />

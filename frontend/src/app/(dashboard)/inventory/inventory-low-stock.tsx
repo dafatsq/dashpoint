@@ -1,6 +1,7 @@
 'use client';
 
 import { Boxes, ImageIcon, Package, Settings2, Sliders } from "lucide-react";
+import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { getInventoryProductImageUrl } from "./inventory-helpers";
 interface InventoryLowStockProps {
   items: LowStockItem[];
   products: Product[];
+  sort: string;
   canModifyStock: boolean;
   canEditThreshold: boolean;
   onAdjust: (productId: string) => void;
@@ -20,11 +22,28 @@ interface InventoryLowStockProps {
 export function InventoryLowStock({
   items,
   products,
+  sort,
   canModifyStock,
   canEditThreshold,
   onAdjust,
   onEditThreshold,
 }: InventoryLowStockProps) {
+  const sortedItems = useMemo(
+    () =>
+      [...items].sort((left, right) => {
+        const direction = sort.endsWith("_desc") ? -1 : 1;
+        const sortBy = sort.replace(/_(asc|desc)$/, "");
+        if (sortBy === "stock") {
+          return (Number.parseFloat(left.quantity) - Number.parseFloat(right.quantity)) * direction;
+        }
+        if (sortBy === "price") {
+          return (Number.parseFloat(left.price) - Number.parseFloat(right.price)) * direction;
+        }
+        return left.name.localeCompare(right.name) * direction;
+      }),
+    [items, sort],
+  );
+
   if (items.length === 0) {
     return (
       <Card>
@@ -44,7 +63,7 @@ export function InventoryLowStock({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {items.map((item) => {
+          {sortedItems.map((item) => {
             const product = products.find((entry) => entry.id === item.id);
             return (
               <div key={item.id} className="@container flex items-center justify-between rounded-lg border p-4">

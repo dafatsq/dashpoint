@@ -19,14 +19,16 @@ func NewAuditRepository(pool *pgxpool.Pool) *AuditRepository {
 
 // AuditFilter represents filters for querying audit logs.
 type AuditFilter struct {
-	UserID     *uuid.UUID
-	Action     *string
-	EntityType *string
-	EntityID   *string
-	Status     *string
-	StartDate  *time.Time
-	EndDate    *time.Time
-	Search     *string
-	Limit      int
-	Offset     int
+	UserID        *uuid.UUID
+	Action        *string
+	EntityType    *string
+	EntityID      *string
+	Status        *string
+	StartDate     *time.Time
+	EndDate       *time.Time
+	Search        *string
+	Limit         int
+	Offset        int
+	SortBy        string
+	SortDirection string
 }

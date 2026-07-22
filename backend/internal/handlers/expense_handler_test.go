@@ -93,7 +93,7 @@ func (f *fakeExpenseStore) GetByID(ctx context.Context, id uuid.UUID) (*models.E
 	}
 	return nil, nil
 }
-func (f *fakeExpenseStore) List(context.Context, *uuid.UUID, *time.Time, *time.Time, int, int) ([]models.Expense, int, error) {
+func (f *fakeExpenseStore) List(context.Context, *uuid.UUID, *time.Time, *time.Time, int, int, string, string) ([]models.Expense, int, error) {
 	return nil, 0, nil
 }
 func (f *fakeExpenseStore) Update(context.Context, *models.Expense) (*models.Expense, error) {

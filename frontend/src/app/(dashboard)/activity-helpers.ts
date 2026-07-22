@@ -538,6 +538,7 @@ export function buildAuditLogParams(input: {
   selectedEntity: string;
   dateRange: ActivityDateRange;
   searchQuery?: string;
+  sort?: string;
 }) {
   const params: {
     action?: string;
@@ -547,6 +548,8 @@ export function buildAuditLogParams(input: {
     search?: string;
     limit: number;
     offset: number;
+    sort_by?: string;
+    sort_direction?: "asc" | "desc";
   } = {
     limit: input.limit,
     offset: (input.page - 1) * input.limit,
@@ -558,6 +561,10 @@ export function buildAuditLogParams(input: {
   if (input.dateRange.end) params.to = input.dateRange.end;
   if (input.searchQuery && input.searchQuery.trim() !== "")
     params.search = input.searchQuery.trim();
+  if (input.sort) {
+    params.sort_by = input.sort.replace(/_(asc|desc)$/, "");
+    params.sort_direction = input.sort.endsWith("_desc") ? "desc" : "asc";
+  }
 
   return params;
 }
@@ -568,6 +575,7 @@ export function buildDashboardChangeParams(input: {
   limit: number;
   dateRange: ActivityDateRange;
   selectedUser: string;
+  sort?: string;
 }) {
   const params: {
     entity_type: ActivityChangeTab;
@@ -576,6 +584,8 @@ export function buildDashboardChangeParams(input: {
     user_id?: string;
     from?: string;
     to?: string;
+    sort_by?: string;
+    sort_direction?: "asc" | "desc";
   } = {
     entity_type: input.entityType,
     limit: input.limit,
@@ -585,6 +595,10 @@ export function buildDashboardChangeParams(input: {
   if (input.dateRange.start) params.from = input.dateRange.start;
   if (input.dateRange.end) params.to = input.dateRange.end;
   if (input.selectedUser !== "all") params.user_id = input.selectedUser;
+  if (input.sort) {
+    params.sort_by = input.sort.replace(/_(asc|desc)$/, "");
+    params.sort_direction = input.sort.endsWith("_desc") ? "desc" : "asc";
+  }
 
   return params;
 }

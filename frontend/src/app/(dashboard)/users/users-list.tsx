@@ -30,6 +30,16 @@ import type { User, UserRole } from "@/types";
 import { ActiveArchivedToggle } from "@/components/shared/active-archived-toggle";
 import { DataTableContainer } from "@/components/shared/data-table-container";
 import { FilterCard } from "@/components/shared/filter-card";
+import { DataSortSelect } from "@/components/shared/data-sort-select";
+
+export const USER_SORT_OPTIONS = [
+  { value: "created_at_desc", label: "Newest added" },
+  { value: "created_at_asc", label: "Oldest added" },
+  { value: "name_asc", label: "Name (A-Z)" },
+  { value: "name_desc", label: "Name (Z-A)" },
+  { value: "email_asc", label: "Email (A-Z)" },
+  { value: "role_asc", label: "Role (A-Z)" },
+] as const;
 
 interface UsersListProps {
   pageError?: string | null;
@@ -41,6 +51,7 @@ interface UsersListProps {
   canDeleteUserAny: boolean;
   searchQuery: string;
   selectedRole: string;
+  sort: string;
   page: number;
   limit: number;
   total: number;
@@ -49,6 +60,7 @@ interface UsersListProps {
   onCreate: () => void;
   onSearchChange: (value: string) => void;
   onRoleChange: (value: string) => void;
+  onSortChange: (value: string) => void;
   onViewModeChange: (value: "active" | "archived") => void;
   onLimitChange: (value: number) => void;
   onPageChange: (value: number) => void;
@@ -98,6 +110,7 @@ export function UsersList({
   canDeleteUserAny,
   searchQuery,
   selectedRole,
+  sort,
   page,
   limit,
   total,
@@ -106,6 +119,7 @@ export function UsersList({
   onCreate,
   onSearchChange,
   onRoleChange,
+  onSortChange,
   onViewModeChange,
   onLimitChange,
   onPageChange,
@@ -125,8 +139,8 @@ export function UsersList({
             <p className="text-sm text-destructive">{pageError}</p>
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <div className="relative w-full">
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <div className="relative w-full flex-1 min-w-[200px] sm:min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search users..."
@@ -135,19 +149,22 @@ export function UsersList({
               className="pl-9 w-full"
             />
           </div>
-          <Select value={selectedRole} onValueChange={onRoleChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="All Roles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="owner">Owner</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
-              <SelectItem value="cashier">Cashier</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="w-full flex-1 min-w-[200px] sm:min-w-[220px]">
+            <Select value={selectedRole} onValueChange={onRoleChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="All Roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                <SelectItem value="owner">Owner</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="cashier">Cashier</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DataSortSelect value={sort} options={USER_SORT_OPTIONS} onChange={onSortChange} className="w-full flex-1 min-w-[200px] sm:min-w-[220px]" />
           {canCreateUser && viewMode === "active" && (
-            <Button onClick={onCreate} className="w-full">
+            <Button onClick={onCreate} className="w-full flex-1 min-w-[200px] sm:min-w-[220px]">
               <Plus className="h-4 w-4 mr-2" />
               Add User
             </Button>

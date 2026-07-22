@@ -10,10 +10,10 @@ import (
 
 // List handles GET /api/v1/users.
 func (h *UserHandler) List(c *fiber.Ctx) error {
-	page, perPage, isActive, search, role := parseUserPagination(c)
+	page, perPage, isActive, search, role, sortBy, sortDirection := parseUserPagination(c)
 	offset := (page - 1) * perPage
 
-	users, total, err := h.userRepo.ListWithFilter(c.Context(), perPage, offset, isActive, search, role)
+	users, total, err := h.userRepo.ListWithFilter(c.Context(), perPage, offset, isActive, search, role, sortBy, sortDirection)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list users")
 		return userInternalError(c, "Failed to retrieve users")
@@ -38,7 +38,7 @@ func (h *UserHandler) List(c *fiber.Ctx) error {
 func (h *UserHandler) ListBasic(c *fiber.Ctx) error {
 	// Get up to 100 active users for dropdowns
 	isActive := true
-	users, _, err := h.userRepo.ListWithFilter(c.Context(), 100, 0, &isActive, "", "")
+	users, _, err := h.userRepo.ListWithFilter(c.Context(), 100, 0, &isActive, "", "", "name", "asc")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list users")
 		return userInternalError(c, "Failed to retrieve users")

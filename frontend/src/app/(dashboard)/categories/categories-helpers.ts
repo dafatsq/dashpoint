@@ -58,9 +58,34 @@ export function filterCategories<T extends ManagedCategory>(
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
   return categories.filter((category) => {
-    const matchesSearch = normalizedSearch === "" || category.name.toLowerCase().includes(normalizedSearch);
+    const matchesSearch =
+      normalizedSearch === "" ||
+      category.name.toLowerCase().includes(normalizedSearch) ||
+      (!!category.description && category.description.toLowerCase().includes(normalizedSearch));
     const matchesStatus = viewMode === "active" ? category.is_active : !category.is_active;
     return matchesSearch && matchesStatus;
+  });
+}
+
+export function sortCategories<T extends ManagedCategory>(
+  categories: T[],
+  sort: string,
+): T[] {
+  return [...categories].sort((left, right) => {
+    const direction = sort.endsWith("_desc") ? -1 : 1;
+    const sortBy = sort.replace(/_(asc|desc)$/, "");
+
+    if (sortBy === "updated_at") {
+      return (new Date(left.updated_at).getTime() - new Date(right.updated_at).getTime()) * direction;
+    }
+
+    if (sortBy === "products") {
+      const leftCount = "product_count" in left ? left.product_count || 0 : 0;
+      const rightCount = "product_count" in right ? right.product_count || 0 : 0;
+      return (leftCount - rightCount) * direction;
+    }
+
+    return left.name.localeCompare(right.name) * direction;
   });
 }
 

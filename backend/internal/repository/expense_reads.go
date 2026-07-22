@@ -22,7 +22,7 @@ func (r *ExpenseRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 }
 
 // List retrieves expenses with optional filtering.
-func (r *ExpenseRepository) List(ctx context.Context, categoryID *uuid.UUID, startDate, endDate *time.Time, limit, offset int) ([]models.Expense, int, error) {
+func (r *ExpenseRepository) List(ctx context.Context, categoryID *uuid.UUID, startDate, endDate *time.Time, limit, offset int, sortBy, sortDirection string) ([]models.Expense, int, error) {
 	baseQuery, args, argNum := buildExpenseListBaseQuery(categoryID, startDate, endDate)
 
 	var total int
@@ -30,7 +30,7 @@ func (r *ExpenseRepository) List(ctx context.Context, categoryID *uuid.UUID, sta
 		return nil, 0, fmt.Errorf("failed to count expenses: %w", err)
 	}
 
-	query := expenseSelectColumns + baseQuery + fmt.Sprintf(" ORDER BY e.expense_date DESC, e.created_at DESC LIMIT $%d OFFSET $%d", argNum, argNum+1)
+	query := expenseSelectColumns + baseQuery + fmt.Sprintf(" ORDER BY %s LIMIT $%d OFFSET $%d", expenseOrderBy(sortBy, sortDirection), argNum, argNum+1)
 	args = append(args, limit, offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -45,6 +45,25 @@ func (r *ExpenseRepository) List(ctx context.Context, categoryID *uuid.UUID, sta
 	}
 
 	return expenses, total, nil
+}
+
+func expenseOrderBy(sortBy, sortDirection string) string {
+	columns := map[string]string{
+		"date":        "e.expense_date",
+		"amount":      "e.amount",
+		"category":    "LOWER(COALESCE(ec.name, ''))",
+		"description": "LOWER(e.description)",
+		"created_by":  "LOWER(COALESCE(u.name, ''))",
+	}
+	column, ok := columns[sortBy]
+	if !ok {
+		column = columns["date"]
+	}
+	direction := "DESC"
+	if sortDirection == "asc" {
+		direction = "ASC"
+	}
+	return fmt.Sprintf("%s %s, e.created_at DESC", column, direction)
 }
 
 // GetSummary gets expense summary for a date range.

@@ -70,4 +70,6 @@ type SaleFilter struct {
 	InvoiceSearch *string
 	Limit         int
 	Offset        int
+	SortBy        string
+	SortDirection string
 }

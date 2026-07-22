@@ -27,6 +27,7 @@ import { ExpensesFormDialog } from "./expenses-form-dialog";
 import { ExpensesList } from "./expenses-list";
 import { ExpensesSummaryCards } from "./expenses-summary";
 import { ExpensesToolbar } from "./expenses-toolbar";
+import { parseSortValue } from "@/lib/sorting";
 
 export function ExpensesScreen() {
   const { hasPermission, isLoading: isAuthLoading } = useAuth();
@@ -45,6 +46,7 @@ export function ExpensesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
+  const [sort, setSort] = useState("date_desc");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [hasMore, setHasMore] = useState(true);
@@ -90,6 +92,7 @@ export function ExpensesScreen() {
         end_date: dateRange.end,
         limit,
         offset: (page - 1) * limit,
+        ...parseSortValue(sort),
       }),
       api.getExpenseCategories(),
       api.getProducts({ active: true }),
@@ -118,7 +121,7 @@ export function ExpensesScreen() {
       setSummary(summaryResult.data);
     }
     setIsLoading(false);
-  }, [dateRange.end, dateRange.start, limit, page, selectedCategory]);
+  }, [dateRange.end, dateRange.start, limit, page, selectedCategory, sort]);
 
   const resetToFirstPage = useCallback(() => {
     setPage(1);
@@ -135,11 +138,16 @@ export function ExpensesScreen() {
   const filteredExpenses = useMemo(
     () =>
       expenses.filter((expense) => {
-        const search = searchQuery.toLowerCase();
+        const search = searchQuery.toLowerCase().trim();
+        if (!search) return true;
         return (
           expense.description.toLowerCase().includes(search) ||
-          expense.vendor?.toLowerCase().includes(search) ||
-          expense.category_name?.toLowerCase().includes(search)
+          (expense.vendor && expense.vendor.toLowerCase().includes(search)) ||
+          (expense.category_name && expense.category_name.toLowerCase().includes(search)) ||
+          (expense.product_name && expense.product_name.toLowerCase().includes(search)) ||
+          (expense.created_by_name && expense.created_by_name.toLowerCase().includes(search)) ||
+          (expense.reference_number && expense.reference_number.toLowerCase().includes(search)) ||
+          (expense.amount && expense.amount.toString().includes(search))
         );
       }),
     [expenses, searchQuery],
@@ -379,6 +387,7 @@ export function ExpensesScreen() {
           searchQuery={searchQuery}
           selectedCategory={selectedCategory}
           dateRange={dateRange}
+          sort={sort}
           canCreateExpense={canCreateExpense}
           onCreate={openCreateDialog}
           onSearchChange={(value) => {
@@ -391,6 +400,10 @@ export function ExpensesScreen() {
           }}
           onDateRangeChange={(range) => {
             setDateRange(range);
+            resetToFirstPage();
+          }}
+          onSortChange={(value) => {
+            setSort(value);
             resetToFirstPage();
           }}
         />

@@ -19,6 +19,7 @@ import {
   hasCategoryFormChanges,
   isSpecialExpenseCategory,
   mapCategoryToFormData,
+  sortCategories,
   type CategoryFormData,
   type CategoryType,
   type CategoryViewMode,
@@ -46,6 +47,7 @@ export function CategoriesScreen() {
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sort, setSort] = useState("name_asc");
   const [pageError, setPageError] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -98,9 +100,25 @@ export function CategoriesScreen() {
     void fetchData();
   }, [fetchData, resetCategoryLists, viewMode]);
 
+  const sortOptions = useMemo(
+    () => [
+      { value: "name_asc", label: "Name (A-Z)" },
+      { value: "name_desc", label: "Name (Z-A)" },
+      { value: "updated_at_desc", label: "Recently updated" },
+      { value: "updated_at_asc", label: "Oldest updated" },
+      ...(activeTab === "product"
+        ? [
+            { value: "products_desc", label: "Products (high-low)" },
+            { value: "products_asc", label: "Products (low-high)" },
+          ]
+        : []),
+    ],
+    [activeTab],
+  );
+
   const filteredCategories = useMemo(
-    () => filterCategories(currentCategories, searchQuery, viewMode),
-    [currentCategories, searchQuery, viewMode],
+    () => filterCategories(sortCategories(currentCategories, sort), searchQuery, viewMode),
+    [currentCategories, searchQuery, sort, viewMode],
   );
 
   const resetForm = useCallback(() => {
@@ -357,9 +375,15 @@ export function CategoriesScreen() {
             searchQuery={searchQuery}
             canCreateCategories={canCreateCategories}
             viewMode={viewMode}
-            onActiveTabChange={setActiveTab}
+            sort={sort}
+            sortOptions={sortOptions}
+            onActiveTabChange={(value) => {
+              setActiveTab(value);
+              setSort("name_asc");
+            }}
             onSearchChange={setSearchQuery}
             onViewModeChange={setViewMode}
+            onSortChange={setSort}
             onCreate={openCreateDialog}
           />
 

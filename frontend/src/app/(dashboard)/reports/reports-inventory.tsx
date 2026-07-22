@@ -1,8 +1,10 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataSortSelect } from '@/components/shared/data-sort-select';
 import { Package } from 'lucide-react';
 import type { InventoryValuation } from '@/types';
+import { useMemo, useState } from 'react';
 
 import { formatCurrency, formatNumber } from './reports-helpers';
 import { ReportsEmptyState, ReportsLoadingState } from './reports-feedback';
@@ -13,6 +15,18 @@ interface ReportsInventoryProps {
 }
 
 export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventoryProps) {
+  const [sort, setSort] = useState('retail_value_desc');
+  const sortedItems = useMemo(
+    () => [...(inventoryReport?.items || [])].sort((left, right) => {
+      const direction = sort.endsWith('_desc') ? -1 : 1;
+      const sortBy = sort.replace(/_(asc|desc)$/, '');
+      if (sortBy === 'name') return left.product_name.localeCompare(right.product_name) * direction;
+      if (sortBy === 'quantity') return (Number.parseFloat(left.quantity) - Number.parseFloat(right.quantity)) * direction;
+      return (Number.parseFloat(left.retail_value) - Number.parseFloat(right.retail_value)) * direction;
+    }),
+    [inventoryReport?.items, sort],
+  );
+
   if (isLoading) {
     return <ReportsLoadingState />;
   }
@@ -54,8 +68,13 @@ export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventor
         <>
           <Card className="hidden lg:block">
             <CardHeader>
-              <CardTitle>Inventory Items</CardTitle>
-              <CardDescription>Sorted by retail value</CardDescription>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <CardTitle>Inventory Items</CardTitle>
+                  <CardDescription>Current inventory valuation</CardDescription>
+                </div>
+                <DataSortSelect value={sort} options={[{ value: 'retail_value_desc', label: 'Value (high-low)' }, { value: 'retail_value_asc', label: 'Value (low-high)' }, { value: 'quantity_desc', label: 'Qty (high-low)' }, { value: 'quantity_asc', label: 'Qty (low-high)' }, { value: 'name_asc', label: 'Product (A-Z)' }]} onChange={setSort} />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -70,7 +89,7 @@ export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventor
                     </tr>
                   </thead>
                   <tbody>
-                    {inventoryReport.items.map((item) => (
+                    {sortedItems.map((item) => (
                       <tr key={item.product_id} className="border-b last:border-0 hover:bg-muted/50">
                         <td className="py-3">
                           <div>
@@ -93,8 +112,11 @@ export function ReportsInventory({ isLoading, inventoryReport }: ReportsInventor
           </Card>
 
           <div className="lg:hidden space-y-4">
-            <h3 className="font-semibold text-lg">Inventory Items</h3>
-            {inventoryReport.items.map((item) => (
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h3 className="font-semibold text-lg">Inventory Items</h3>
+              <DataSortSelect value={sort} options={[{ value: 'retail_value_desc', label: 'Value (high-low)' }, { value: 'retail_value_asc', label: 'Value (low-high)' }, { value: 'quantity_desc', label: 'Qty (high-low)' }, { value: 'quantity_asc', label: 'Qty (low-high)' }, { value: 'name_asc', label: 'Product (A-Z)' }]} onChange={setSort} />
+            </div>
+            {sortedItems.map((item) => (
               <Card key={item.product_id}>
                 <CardContent className="p-4 space-y-3">
                   <div className="border-b pb-2">

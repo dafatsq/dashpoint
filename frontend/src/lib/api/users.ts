@@ -9,6 +9,8 @@ function buildUsersPageQuery(params: {
   search?: string;
   page?: number;
   per_page?: number;
+  sort_by?: string;
+  sort_direction?: "asc" | "desc";
 }): string {
   const searchParams = new URLSearchParams();
 
@@ -21,6 +23,8 @@ function buildUsersPageQuery(params: {
   if (params.per_page !== undefined) {
     searchParams.set("per_page", String(params.per_page));
   }
+  if (params.sort_by) searchParams.set("sort_by", params.sort_by);
+  if (params.sort_direction) searchParams.set("sort_direction", params.sort_direction);
 
   const query = searchParams.toString();
   return query ? `?${query}` : "";

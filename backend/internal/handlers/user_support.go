@@ -16,7 +16,7 @@ import (
 
 type userRepository interface {
 	GetByID(context.Context, uuid.UUID) (*models.User, error)
-	ListWithFilter(context.Context, int, int, *bool, string, string) ([]*models.User, int, error)
+	ListWithFilter(context.Context, int, int, *bool, string, string, string, string) ([]*models.User, int, error)
 	Create(context.Context, *models.User) error
 	Update(context.Context, *models.User) error
 	UpdatePassword(context.Context, uuid.UUID, string) error
@@ -93,7 +93,7 @@ func parseUserIDParam(c *fiber.Ctx) (uuid.UUID, error) {
 	return id, nil
 }
 
-func parseUserPagination(c *fiber.Ctx) (int, int, *bool, string, string) {
+func parseUserPagination(c *fiber.Ctx) (int, int, *bool, string, string, string, string) {
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	perPage, _ := strconv.Atoi(c.Query("per_page", "20"))
 	if page < 1 {
@@ -113,7 +113,16 @@ func parseUserPagination(c *fiber.Ctx) (int, int, *bool, string, string) {
 		isActive = &active
 	}
 
-	return page, perPage, isActive, strings.TrimSpace(c.Query("search", "")), strings.TrimSpace(c.Query("role", ""))
+	sortBy := strings.TrimSpace(c.Query("sort_by", "created_at"))
+	sortDirection := strings.TrimSpace(c.Query("sort_direction", "desc"))
+	validSortFields := map[string]bool{"name": true, "email": true, "role": true, "created_at": true}
+	if !validSortFields[sortBy] {
+		sortBy = "created_at"
+	}
+	if sortDirection != "asc" && sortDirection != "desc" {
+		sortDirection = "desc"
+	}
+	return page, perPage, isActive, strings.TrimSpace(c.Query("search", "")), strings.TrimSpace(c.Query("role", "")), sortBy, sortDirection
 }
 
 func roleNameOfUser(user *models.User) string {

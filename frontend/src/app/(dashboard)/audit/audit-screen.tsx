@@ -24,6 +24,7 @@ export function AuditScreen() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedAction, setSelectedAction] = useState("all");
   const [selectedEntity, setSelectedEntity] = useState("all");
+  const [sort, setSort] = useState("date_desc");
   const [dateRange, setDateRange] = useState<ActivityDateRange>({
     start: "",
     end: "",
@@ -52,6 +53,7 @@ export function AuditScreen() {
         selectedEntity,
         dateRange,
         searchQuery: debouncedSearch,
+        sort,
       }),
     );
 
@@ -65,7 +67,7 @@ export function AuditScreen() {
     }
 
     setIsLoading(false);
-  }, [dateRange, debouncedSearch, limit, page, selectedAction, selectedEntity]);
+  }, [dateRange, debouncedSearch, limit, page, selectedAction, selectedEntity, sort]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -93,6 +95,7 @@ export function AuditScreen() {
           selectedAction={selectedAction}
           selectedEntity={selectedEntity}
           dateRange={dateRange}
+          sort={sort}
           onSearchChange={setSearchQuery}
           onActionChange={(value) => {
             setSelectedAction(value);
@@ -104,6 +107,10 @@ export function AuditScreen() {
           }}
           onDateRangeChange={(value) => {
             setDateRange(value);
+            resetToFirstPage();
+          }}
+          onSortChange={(value) => {
+            setSort(value);
             resetToFirstPage();
           }}
         />

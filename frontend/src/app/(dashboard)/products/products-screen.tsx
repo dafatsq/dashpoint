@@ -22,6 +22,7 @@ import {
   type ProductFormData,
 } from "./products-helpers";
 import { ProductsList } from "./products-list";
+import { parseSortValue } from "@/lib/sorting";
 
 export function ProductsScreen() {
   const PAGE_SIZE = 24;
@@ -38,6 +39,7 @@ export function ProductsScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [sort, setSort] = useState("name_asc");
   const [viewMode, setViewMode] = useState<"active" | "archived">("active");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -101,6 +103,7 @@ export function ProductsScreen() {
         search: debouncedSearch || undefined,
         page: pageToLoad,
         per_page: PAGE_SIZE,
+        ...parseSortValue(sort),
       });
 
       if (result.error) {
@@ -122,7 +125,7 @@ export function ProductsScreen() {
         setIsFetchingMore(false);
       }
     },
-    [debouncedSearch, selectedCategory, viewMode],
+    [debouncedSearch, selectedCategory, sort, viewMode],
   );
 
   const resetPagination = useCallback(() => {
@@ -345,10 +348,12 @@ export function ProductsScreen() {
           categories={categories}
           searchQuery={searchQuery}
           selectedCategory={selectedCategory}
+          sort={sort}
           viewMode={viewMode}
           onCreate={openCreateDialog}
           onSearchChange={setSearchQuery}
           onCategoryChange={setSelectedCategory}
+          onSortChange={setSort}
           onViewModeChange={setViewMode}
         />
 

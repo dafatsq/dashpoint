@@ -197,9 +197,9 @@ func (r *SaleRepository) List(ctx context.Context, filter *SaleFilter) ([]models
 		FROM sales s
 		LEFT JOIN users u ON s.employee_id = u.id
 		%s
-		ORDER BY s.created_at DESC
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, saleListSelectColumns, whereClause, argIndex, argIndex+1)
+	`, saleListSelectColumns, whereClause, saleOrderBy(filter), argIndex, argIndex+1)
 	args = append(args, filter.Limit, filter.Offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -214,6 +214,25 @@ func (r *SaleRepository) List(ctx context.Context, filter *SaleFilter) ([]models
 	}
 
 	return sales, total, nil
+}
+
+func saleOrderBy(filter *SaleFilter) string {
+	columns := map[string]string{
+		"date":       "s.created_at",
+		"invoice_no": "LOWER(s.invoice_no)",
+		"total":      "s.total_amount",
+		"employee":   "LOWER(COALESCE(u.name, ''))",
+		"status":     "LOWER(s.status)",
+	}
+	column, ok := columns[filter.SortBy]
+	if !ok {
+		column = columns["date"]
+	}
+	direction := "DESC"
+	if filter.SortDirection == "asc" {
+		direction = "ASC"
+	}
+	return fmt.Sprintf("%s %s, s.id ASC", column, direction)
 }
 
 func loadSaleItems(ctx context.Context, db interface {

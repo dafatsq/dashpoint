@@ -1,9 +1,11 @@
 'use client';
 
 import { ArrowRightLeft, CheckCircle2, CircleDot, Clock, Loader2, User } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { Shift } from "@/types";
+import { DataSortSelect } from "@/components/shared/data-sort-select";
 
 import { formatDashboardCurrency, formatDashboardDateTime, getShiftPreview } from "./dashboard-helpers";
 
@@ -15,6 +17,18 @@ interface DashboardShiftHistoryProps {
 }
 
 export function DashboardShiftHistory({ shifts, isLoading, error, onRetry }: DashboardShiftHistoryProps) {
+  const [sort, setSort] = useState("date_desc");
+  const sortedShifts = useMemo(
+    () => [...shifts].sort((left, right) => {
+      const direction = sort.endsWith("_desc") ? -1 : 1;
+      const sortBy = sort.replace(/_(asc|desc)$/, "");
+      if (sortBy === "opened_by") return (left.opened_by_name || "Unknown").localeCompare(right.opened_by_name || "Unknown") * direction;
+      if (sortBy === "sales") return (Number.parseFloat(left.total_sales || "0") - Number.parseFloat(right.total_sales || "0")) * direction;
+      return (new Date(left.started_at).getTime() - new Date(right.started_at).getTime()) * direction;
+    }),
+    [shifts, sort],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -46,7 +60,19 @@ export function DashboardShiftHistory({ shifts, isLoading, error, onRetry }: Das
 
   return (
     <div className="space-y-3">
-      {shifts.map((shift) => {
+      <div className="flex justify-end">
+        <DataSortSelect
+          value={sort}
+          options={[
+            { value: "date_desc", label: "Date (newest)" },
+            { value: "date_asc", label: "Date (oldest)" },
+            { value: "sales_desc", label: "Sales (high-low)" },
+            { value: "opened_by_asc", label: "Opened by (A-Z)" },
+          ]}
+          onChange={setSort}
+        />
+      </div>
+      {sortedShifts.map((shift) => {
         const preview = getShiftPreview(shift);
         return (
           <div

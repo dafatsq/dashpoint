@@ -17,11 +17,13 @@ type ShiftRepository struct {
 
 // ShiftFilter contains shift list filters.
 type ShiftFilter struct {
-	OpenedByID *uuid.UUID
-	StartDate  *time.Time
-	EndDate    *time.Time
-	Limit      int
-	Offset     int
+	OpenedByID    *uuid.UUID
+	StartDate     *time.Time
+	EndDate       *time.Time
+	Limit         int
+	Offset        int
+	SortBy        string
+	SortDirection string
 }
 
 // NewShiftRepository creates a new shift repository.

@@ -39,6 +39,7 @@ import { PosProductGrid } from "./pos-product-grid";
 import { PosShiftDetailsDialog } from "./pos-shift-details-dialog";
 import { PosShiftStatusBar } from "./pos-shift-status-bar";
 import { PosStartShiftDialog } from "./pos-start-shift-dialog";
+import { parseSortValue } from "@/lib/sorting";
 
 function getApiErrorMessage(error: string | undefined, fallback: string): string {
   return error || fallback;
@@ -62,6 +63,7 @@ export function POSScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [sort, setSort] = useState("name_asc");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
@@ -176,6 +178,7 @@ export function POSScreen() {
           search: debouncedSearchQuery || undefined,
           page: pageToLoad,
           per_page: 24,
+          ...parseSortValue(sort),
         });
 
         if (result.error) {
@@ -200,7 +203,7 @@ export function POSScreen() {
         }
       }
     },
-    [debouncedSearchQuery, selectedCategory, showError],
+    [debouncedSearchQuery, selectedCategory, showError, sort],
   );
 
   const refreshProducts = useCallback(
@@ -551,8 +554,13 @@ export function POSScreen() {
           hasMore={hasMore}
           searchQuery={searchQuery}
           selectedCategory={selectedCategory}
+          sort={sort}
           onSearchChange={setSearchQuery}
           onCategoryChange={setSelectedCategory}
+          onSortChange={(value) => {
+            setSort(value);
+            setPage(1);
+          }}
           onAddToCart={addToCart}
           loadMoreRef={loadMoreRef}
         />

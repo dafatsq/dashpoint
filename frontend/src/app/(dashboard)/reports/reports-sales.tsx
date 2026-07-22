@@ -3,6 +3,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3 } from 'lucide-react';
 import type { SalesRangeReport } from '@/types';
+import { DataSortSelect } from '@/components/shared/data-sort-select';
+import { useMemo, useState } from 'react';
 
 import { formatCurrency, formatNumber } from './reports-helpers';
 import { ReportsEmptyState, ReportsLoadingState } from './reports-feedback';
@@ -13,6 +15,18 @@ interface ReportsSalesProps {
 }
 
 export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps) {
+  const [sort, setSort] = useState('date_asc');
+  const sortedDailyReports = useMemo(
+    () => [...(salesRangeReport?.daily_reports || [])].sort((left, right) => {
+      const direction = sort.endsWith('_desc') ? -1 : 1;
+      const sortBy = sort.replace(/_(asc|desc)$/, '');
+      if (sortBy === 'revenue') return (Number.parseFloat(left.total_amount) - Number.parseFloat(right.total_amount)) * direction;
+      if (sortBy === 'transactions') return (left.transaction_count - right.transaction_count) * direction;
+      return left.date.localeCompare(right.date) * direction;
+    }),
+    [salesRangeReport?.daily_reports, sort],
+  );
+
   if (isLoading) {
     return <ReportsLoadingState />;
   }
@@ -98,10 +112,15 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
 
       <Card className="hidden lg:block">
         <CardHeader>
-          <CardTitle>Daily Breakdown</CardTitle>
-          <CardDescription>
-            {salesRangeReport.start_date} to {salesRangeReport.end_date}
-          </CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <CardTitle>Daily Breakdown</CardTitle>
+              <CardDescription>
+                {salesRangeReport.start_date} to {salesRangeReport.end_date}
+              </CardDescription>
+            </div>
+            <DataSortSelect value={sort} options={[{ value: 'date_asc', label: 'Date (oldest)' }, { value: 'date_desc', label: 'Date (newest)' }, { value: 'revenue_desc', label: 'Revenue (high-low)' }, { value: 'transactions_desc', label: 'Transactions (high-low)' }]} onChange={setSort} />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -117,7 +136,7 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
                 </tr>
               </thead>
               <tbody>
-                {salesRangeReport.daily_reports.map((day) => (
+                {sortedDailyReports.map((day) => (
                   <tr key={day.date} className="border-b last:border-0 hover:bg-muted/50">
                     <td className="py-3 font-medium">{day.date}</td>
                     <td className="py-3 text-right">{day.transaction_count}</td>
@@ -134,8 +153,11 @@ export function ReportsSales({ isLoading, salesRangeReport }: ReportsSalesProps)
       </Card>
 
       <div className="lg:hidden space-y-4">
-        <h3 className="font-semibold text-lg">Daily Breakdown</h3>
-        {salesRangeReport.daily_reports.map((day) => (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h3 className="font-semibold text-lg">Daily Breakdown</h3>
+          <DataSortSelect value={sort} options={[{ value: 'date_asc', label: 'Date (oldest)' }, { value: 'date_desc', label: 'Date (newest)' }, { value: 'revenue_desc', label: 'Revenue (high-low)' }, { value: 'transactions_desc', label: 'Transactions (high-low)' }]} onChange={setSort} />
+        </div>
+        {sortedDailyReports.map((day) => (
           <Card key={day.date}>
             <CardContent className="p-4 space-y-3">
               <div className="flex justify-between items-center border-b pb-2">

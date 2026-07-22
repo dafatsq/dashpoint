@@ -1,4 +1,5 @@
 import type { CashDrawerOperation, Shift } from "@/types";
+import { parseSortValue } from "@/lib/sorting";
 
 export interface ShiftQueryParams {
   limit: number;
@@ -6,6 +7,8 @@ export interface ShiftQueryParams {
   from?: string;
   to?: string;
   opened_by_id?: string;
+  sort_by?: string;
+  sort_direction?: "asc" | "desc";
 }
 
 export function buildShiftQueryParams(input: {
@@ -13,11 +16,15 @@ export function buildShiftQueryParams(input: {
   limit: number;
   dateRange: { start: string; end: string };
   selectedUser: string;
+  sort?: string;
 }): ShiftQueryParams {
   const params: ShiftQueryParams = {
     limit: input.limit,
     offset: (input.page - 1) * input.limit,
   };
+  if (input.sort) {
+    Object.assign(params, parseSortValue(input.sort));
+  }
 
   if (input.dateRange.start) params.from = input.dateRange.start;
   if (input.dateRange.end) params.to = input.dateRange.end;

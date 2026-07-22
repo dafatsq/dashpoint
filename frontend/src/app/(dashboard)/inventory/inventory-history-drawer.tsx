@@ -1,9 +1,11 @@
 'use client';
 
 import { Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DataSortSelect } from "@/components/shared/data-sort-select";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
   Select,
@@ -65,7 +67,25 @@ export function InventoryHistoryDrawer({
   onPrevious,
   onNext,
 }: InventoryHistoryDrawerProps) {
-  const adjustments = inventoryDetails?.recent_adjustments || [];
+  const adjustments = useMemo(
+    () => inventoryDetails?.recent_adjustments || [],
+    [inventoryDetails?.recent_adjustments],
+  );
+  const [sort, setSort] = useState("date_desc");
+  const sortedAdjustments = useMemo(
+    () => [...adjustments].sort((left, right) => {
+      const direction = sort.endsWith("_desc") ? -1 : 1;
+      const sortBy = sort.replace(/_(asc|desc)$/, "");
+      if (sortBy === "type") {
+        return getInventoryAdjustmentTypeLabel(left.adjustment_type).localeCompare(getInventoryAdjustmentTypeLabel(right.adjustment_type)) * direction;
+      }
+      if (sortBy === "quantity") {
+        return (Number.parseFloat(left.quantity_change) - Number.parseFloat(right.quantity_change)) * direction;
+      }
+      return (new Date(left.created_at).getTime() - new Date(right.created_at).getTime()) * direction;
+    }),
+    [adjustments, sort],
+  );
   const totalAdjustments = inventoryDetails?.total_adjustments || 0;
   const currentStock = product ? getInventoryProductQuantity(product) : 0;
   const minStock = product ? getInventoryProductMinQuantity(product) : 0;
@@ -142,6 +162,17 @@ export function InventoryHistoryDrawer({
                       className="w-full"
                     />
                   </div>
+                  <DataSortSelect
+                    value={sort}
+                    options={[
+                      { value: "date_desc", label: "Date (newest)" },
+                      { value: "date_asc", label: "Date (oldest)" },
+                      { value: "quantity_desc", label: "Change (high-low)" },
+                      { value: "quantity_asc", label: "Change (low-high)" },
+                      { value: "type_asc", label: "Type (A-Z)" },
+                    ]}
+                    onChange={setSort}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -157,7 +188,7 @@ export function InventoryHistoryDrawer({
               </div>
             ) : (
               <div className="space-y-3">
-                {adjustments.map((adjustment) => (
+                {sortedAdjustments.map((adjustment) => (
                   <Card key={adjustment.id}>
                     <CardContent className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">

@@ -62,6 +62,8 @@ export function createExpensesApi(transport: ApiTransport): ExpensesApi {
       if (params?.end_date) searchParams.set("end_date", params.end_date);
       if (params?.limit) searchParams.set("limit", String(params.limit));
       if (params?.offset) searchParams.set("offset", String(params.offset));
+      if (params?.sort_by) searchParams.set("sort_by", params.sort_by);
+      if (params?.sort_direction) searchParams.set("sort_direction", params.sort_direction);
       const query = searchParams.toString();
       const result = await transport.request<{ data: Expense[]; total: number }>(
         `/expenses${query ? `?${query}` : ""}`,

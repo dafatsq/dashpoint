@@ -46,8 +46,10 @@ export interface ProductGridProps {
   hasMore: boolean;
   searchQuery: string;
   selectedCategory: string;
+  sort: string;
   onSearchChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
+  onSortChange: (value: string) => void;
   onAddToCart: (product: Product) => void;
   loadMoreRef: RefObject<HTMLDivElement | null>;
 }

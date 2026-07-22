@@ -69,6 +69,7 @@ describe("categories helpers", () => {
     ];
 
     expect(filterCategories(categories, "cof", "active")).toHaveLength(1);
+    expect(filterCategories(categories, "items", "active")).toHaveLength(1);
     expect(filterCategories(categories, "", "archived")).toHaveLength(1);
   });
 

@@ -39,6 +39,7 @@ export function ChangesScreen() {
   });
   const [selectedUser, setSelectedUser] = useState("all");
   const [activeTab, setActiveTab] = useState<ActivityChangeTab>("product");
+  const [sort, setSort] = useState("date_desc");
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
 
   const loadUsers = useCallback(async () => {
@@ -67,8 +68,10 @@ export function ChangesScreen() {
             dateRange={dateRange}
             selectedUser={selectedUser}
             users={users}
+            sort={sort}
             onDateRangeChange={setDateRange}
             onSelectedUserChange={setSelectedUser}
+            onSortChange={setSort}
           />
 
           <Card className="flex flex-col border-0 bg-transparent shadow-none md:border md:bg-card md:shadow">
@@ -100,10 +103,11 @@ export function ChangesScreen() {
                         entityType: tab.value,
                         dateRange,
                         selectedUser,
-                      })}
+                      }) + `|${sort}`}
                       entityType={tab.value}
                       dateRange={dateRange}
                       selectedUser={selectedUser}
+                      sort={sort}
                     />
                   </TabsContent>
                 ))}

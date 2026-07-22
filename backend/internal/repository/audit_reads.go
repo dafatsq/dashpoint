@@ -34,7 +34,7 @@ func (r *AuditRepository) List(ctx context.Context, filter AuditFilter) ([]model
 		return nil, 0, err
 	}
 
-	query := fmt.Sprintf("%s %s ORDER BY audit_logs.created_at DESC LIMIT $%d OFFSET $%d", auditSelectColumns, whereClause, argIndex, argIndex+1)
+	query := fmt.Sprintf("%s %s ORDER BY %s LIMIT $%d OFFSET $%d", auditSelectColumns, whereClause, auditOrderBy(filter), argIndex, argIndex+1)
 	args = append(args, filter.Limit, filter.Offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -49,6 +49,24 @@ func (r *AuditRepository) List(ctx context.Context, filter AuditFilter) ([]model
 	}
 
 	return logs, total, nil
+}
+
+func auditOrderBy(filter AuditFilter) string {
+	columns := map[string]string{
+		"date":   "audit_logs.created_at",
+		"user":   "LOWER(COALESCE(u.name, audit_logs.user_name, ''))",
+		"action": "LOWER(audit_logs.action)",
+		"entity": "LOWER(audit_logs.entity_type)",
+	}
+	column, ok := columns[filter.SortBy]
+	if !ok {
+		column = columns["date"]
+	}
+	direction := "DESC"
+	if filter.SortDirection == "asc" {
+		direction = "ASC"
+	}
+	return fmt.Sprintf("%s %s, audit_logs.id ASC", column, direction)
 }
 
 // GetByID retrieves a single audit log by ID.

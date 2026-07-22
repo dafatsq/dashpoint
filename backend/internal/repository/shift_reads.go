@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -82,7 +83,7 @@ func (r *ShiftRepository) List(ctx context.Context, filter *ShiftFilter) ([]mode
 		WHERE ($1::uuid IS NULL OR s.opened_by = $1)
 		AND ($2::timestamp IS NULL OR s.started_at >= $2)
 		AND ($3::timestamp IS NULL OR s.started_at < $3)
-		ORDER BY s.started_at DESC
+		ORDER BY ` + shiftOrderBy(filter) + `
 		LIMIT $4 OFFSET $5
 	`
 	rows, err := r.pool.Query(ctx, query, filter.OpenedByID, filter.StartDate, filter.EndDate, filter.Limit, filter.Offset)
@@ -100,6 +101,24 @@ func (r *ShiftRepository) List(ctx context.Context, filter *ShiftFilter) ([]mode
 		shifts = append(shifts, *shift)
 	}
 	return shifts, total, nil
+}
+
+func shiftOrderBy(filter *ShiftFilter) string {
+	columns := map[string]string{
+		"date":        "s.started_at",
+		"opened_by":   "LOWER(COALESCE(u.name, ''))",
+		"status":      "LOWER(s.status)",
+		"total_sales": "s.total_sales",
+	}
+	column, ok := columns[filter.SortBy]
+	if !ok {
+		column = columns["date"]
+	}
+	direction := "DESC"
+	if filter.SortDirection == "asc" {
+		direction = "ASC"
+	}
+	return fmt.Sprintf("%s %s, s.id ASC", column, direction)
 }
 
 type shiftRowScanner interface {

@@ -52,6 +52,7 @@ export default function UsersScreen() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("all");
+  const [sort, setSort] = useState("created_at_desc");
   const [viewMode, setViewMode] = useState<"active" | "archived">("active");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -93,6 +94,8 @@ export default function UsersScreen() {
           role: selectedRole !== "all" ? selectedRole : undefined,
           page,
           per_page: limit,
+          sort_by: sort.replace(/_(asc|desc)$/, ""),
+          sort_direction: sort.endsWith("_desc") ? "desc" : "asc",
         });
 
         if (result.error) {
@@ -120,7 +123,7 @@ export default function UsersScreen() {
     };
 
     fetchUsers();
-  }, [viewMode, page, limit, searchQuery, selectedRole]);
+  }, [viewMode, page, limit, searchQuery, selectedRole, sort]);
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -456,6 +459,7 @@ export default function UsersScreen() {
             canDeleteUserAny={canDeleteUserAny}
             searchQuery={searchQuery}
             selectedRole={selectedRole}
+            sort={sort}
             page={page}
             limit={limit}
             total={total}
@@ -464,6 +468,10 @@ export default function UsersScreen() {
             onCreate={openCreateDialog}
             onSearchChange={handleSearchChange}
             onRoleChange={handleRoleChange}
+            onSortChange={(value) => {
+              setSort(value);
+              resetToFirstPage();
+            }}
             onViewModeChange={handleViewModeChange}
             onLimitChange={handleLimitChange}
             onPageChange={setPage}

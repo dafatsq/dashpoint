@@ -25,9 +25,10 @@ interface ChangesListProps {
   entityType: ActivityChangeTab;
   dateRange: ActivityDateRange;
   selectedUser: string;
+  sort: string;
 }
 
-export function ChangesList({ entityType, dateRange, selectedUser }: ChangesListProps) {
+export function ChangesList({ entityType, dateRange, selectedUser, sort }: ChangesListProps) {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export function ChangesList({ entityType, dateRange, selectedUser }: ChangesList
           limit,
           dateRange,
           selectedUser,
+          sort,
         }),
       );
 
@@ -64,7 +66,7 @@ export function ChangesList({ entityType, dateRange, selectedUser }: ChangesList
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [dateRange, entityType, limit, page, refreshKey, selectedUser]);
+  }, [dateRange, entityType, limit, page, refreshKey, selectedUser, sort]);
 
   if (isLoading) {
     return (

@@ -15,6 +15,7 @@ import { SalesDetailDialog } from "./sales-detail-dialog";
 import { SalesFilters } from "./sales-filters";
 import { SalesList } from "./sales-list";
 import { SalesVoidDialog } from "./sales-void-dialog";
+import { parseSortValue } from "@/lib/sorting";
 
 const PAYMENT_ICONS: Record<PaymentMethod, React.ReactNode> = {
   cash: <Banknote className="h-4 w-4" />,
@@ -34,6 +35,7 @@ export function SalesScreen() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
+  const [sort, setSort] = useState("date_desc");
   const [employees, setEmployees] = useState<
     { id: string; name: string; role_name?: string }[]
   >([]);
@@ -73,9 +75,12 @@ export function SalesScreen() {
       invoice_no?: string;
       limit?: number;
       offset?: number;
+      sort_by?: string;
+      sort_direction?: "asc" | "desc";
     } = {
       limit,
       offset: (page - 1) * limit,
+      ...parseSortValue(sort),
     };
 
     if (dateRange.start) params.from = dateRange.start;
@@ -103,6 +108,7 @@ export function SalesScreen() {
     limit,
     page,
     statusFilter,
+    sort,
   ]);
 
   // Debounce search input — reset to page 1 and wait 300ms before fetching
@@ -195,6 +201,7 @@ export function SalesScreen() {
           employeeFilter={employeeFilter}
           dateRange={dateRange}
           employees={employees}
+          sort={sort}
           onSearchChange={(value) => {
             setSearchQuery(value);
             resetToFirstPage();
@@ -209,6 +216,10 @@ export function SalesScreen() {
           }}
           onDateRangeChange={(range) => {
             setDateRange(range);
+            resetToFirstPage();
+          }}
+          onSortChange={(value) => {
+            setSort(value);
             resetToFirstPage();
           }}
         />

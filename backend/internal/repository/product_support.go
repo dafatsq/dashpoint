@@ -23,12 +23,14 @@ func NewProductRepository(pool *pgxpool.Pool) *ProductRepository {
 
 // ProductFilter represents filters for product queries
 type ProductFilter struct {
-	Search     string
-	CategoryID *uuid.UUID
-	IsActive   *bool
-	LowStock   bool
-	Limit      int
-	Offset     int
+	Search        string
+	CategoryID    *uuid.UUID
+	IsActive      *bool
+	LowStock      bool
+	Limit         int
+	Offset        int
+	SortBy        string
+	SortDirection string
 }
 
 func hydrateProductRelations(product *models.Product, catID, catName, catDesc *string, invQty, invThreshold *decimal.Decimal) {

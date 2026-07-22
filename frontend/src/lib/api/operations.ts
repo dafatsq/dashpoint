@@ -54,6 +54,8 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
         to: params?.to,
         limit: params?.limit,
         offset: params?.offset,
+        sort_by: params?.sort_by,
+        sort_direction: params?.sort_direction,
       })}`);
       if (result.error) return { error: result.error };
       return { data: result.data?.shifts || [], total: result.data?.total || 0 };
@@ -110,6 +112,8 @@ export function createOperationsApi(transport: ApiTransport): OperationsApi {
         invoice_no: params?.invoice_no,
         limit: params?.limit,
         offset: params?.offset,
+        sort_by: params?.sort_by,
+        sort_direction: params?.sort_direction,
       })}`);
       if (result.error) return { error: result.error };
       return {

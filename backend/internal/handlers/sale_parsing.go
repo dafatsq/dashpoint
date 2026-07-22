@@ -183,6 +183,14 @@ func parseSaleFilter(c *fiber.Ctx) (*repository.SaleFilter, error) {
 	}
 
 	filter := &repository.SaleFilter{Limit: limit, Offset: offset}
+	filter.SortBy = c.Query("sort_by", "date")
+	filter.SortDirection = c.Query("sort_direction", "desc")
+	validSortFields := map[string]bool{
+		"date": true, "invoice_no": true, "total": true, "employee": true, "status": true,
+	}
+	if !validSortFields[filter.SortBy] || (filter.SortDirection != "asc" && filter.SortDirection != "desc") {
+		return nil, saleValidationAPIError("INVALID_SORT", "Invalid sort parameters")
+	}
 
 	if employeeID := c.Query("employee_id"); employeeID != "" {
 		id, err := uuid.Parse(employeeID)

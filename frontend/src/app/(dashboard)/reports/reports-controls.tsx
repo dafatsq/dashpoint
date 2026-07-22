@@ -44,26 +44,28 @@ export function ReportsControls({
 }: ReportsControlsProps) {
   return (
     <FilterCard>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="flex flex-wrap items-center justify-center gap-4">
         {showDateRange && (
           <>
-            <Select value={datePreset} onValueChange={(value) => onPresetChange(value as DatePresetKey)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(DATE_PRESETS).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-full flex-1 min-w-[200px] sm:min-w-[220px]">
+              <Select value={datePreset} onValueChange={(value) => onPresetChange(value as DatePresetKey)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(DATE_PRESETS).map(([key, { label }]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <DateRangePicker
               value={dateRange}
               onChange={onDateRangeChange}
               placeholder="Select date range"
-              className="w-full"
+              className="w-full flex-1 min-w-[200px] sm:min-w-[220px]"
             />
           </>
         )}
@@ -72,7 +74,7 @@ export function ReportsControls({
             variant="outline"
             onClick={onRefresh}
             disabled={isLoading}
-            className="w-full"
+            className="w-full flex-1 min-w-[200px] sm:min-w-[220px]"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             {refreshLabel}
@@ -82,7 +84,7 @@ export function ReportsControls({
           <Button
             variant="outline"
             onClick={onExport}
-            className="w-full"
+            className="w-full flex-1 min-w-[200px] sm:min-w-[220px]"
           >
             <Download className="h-4 w-4 mr-2" />
             {exportLabel}

@@ -57,6 +57,11 @@ export interface OffsetPaginationParams {
   offset?: number;
 }
 
+export interface SortParams {
+  sort_by?: string;
+  sort_direction?: "asc" | "desc";
+}
+
 export interface DateRangeFilterParams {
   from?: string;
   to?: string;
@@ -145,7 +150,7 @@ export interface UserApi {
     search?: string;
     page?: number;
     per_page?: number;
-  }): Promise<ApiResponse<User[]>>;
+  } & SortParams): Promise<ApiResponse<User[]>>;
   getUsers(params?: {
     role?: string;
     active?: boolean;
@@ -171,7 +176,7 @@ export interface CatalogApi {
     search?: string;
     page?: number;
     per_page?: number;
-  }): Promise<ApiResponse<Product[]>>;
+  } & SortParams): Promise<ApiResponse<Product[]>>;
   getProducts(params?: {
     category_id?: string;
     active?: boolean;
@@ -240,7 +245,8 @@ export interface OperationsApi {
   getShifts(
     params?: UserScopedFilterParams &
       DateRangeFilterParams &
-      OffsetPaginationParams,
+      OffsetPaginationParams &
+      SortParams,
   ): Promise<ApiResponse<Shift[]>>;
   payIn(
     amount: string,
@@ -265,7 +271,7 @@ export interface OperationsApi {
       OffsetPaginationParams & {
         status?: string;
         invoice_no?: string;
-      },
+      } & SortParams,
   ): Promise<ApiResponse<Sale[]>>;
   getSales(
     params?: DateRangeFilterParams &
@@ -332,14 +338,14 @@ export interface AuditApi {
         action?: string;
         entity_type?: string;
         search?: string;
-      },
+      } & SortParams,
   ): Promise<ApiResponse<AuditLog[]>>;
   getDashboardChanges(
     params?: UserScopedFilterParams &
       DateRangeFilterParams &
       OffsetPaginationParams & {
         entity_type?: string;
-      },
+      } & SortParams,
   ): Promise<ApiResponse<AuditLog[]>>;
 }
 
@@ -373,7 +379,7 @@ export interface ExpensesApi {
       category_id?: string;
       start_date?: string;
       end_date?: string;
-    },
+    } & SortParams,
   ): Promise<ApiResponse<{ expenses: Expense[]; total: number }>>;
   getExpense(id: string): Promise<ApiResponse<Expense>>;
   createExpense(expense: CreateExpenseRequest): Promise<ApiResponse<Expense>>;

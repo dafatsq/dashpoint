@@ -105,6 +105,12 @@ func parseAuditFilter(c *fiber.Ctx) (repository.AuditFilter, error) {
 		Limit:  limit,
 		Offset: offset,
 	}
+	filter.SortBy = strings.TrimSpace(c.Query("sort_by", "date"))
+	filter.SortDirection = strings.TrimSpace(c.Query("sort_direction", "desc"))
+	validSortFields := map[string]bool{"date": true, "user": true, "action": true, "entity": true}
+	if !validSortFields[filter.SortBy] || (filter.SortDirection != "asc" && filter.SortDirection != "desc") {
+		return repository.AuditFilter{}, auditError(c, fiber.StatusBadRequest, "INVALID_SORT", "Invalid sort parameters")
+	}
 
 	if userIDStr := strings.TrimSpace(c.Query("user_id")); userIDStr != "" {
 		userID, parseErr := uuid.Parse(userIDStr)

@@ -40,6 +40,14 @@ func parseShiftListFilter(c *fiber.Ctx) (*repository.ShiftFilter, error) {
 	}
 
 	filter := &repository.ShiftFilter{Limit: limit, Offset: offset}
+	filter.SortBy = c.Query("sort_by", "date")
+	filter.SortDirection = c.Query("sort_direction", "desc")
+	validSortFields := map[string]bool{
+		"date": true, "opened_by": true, "status": true, "total_sales": true,
+	}
+	if !validSortFields[filter.SortBy] || (filter.SortDirection != "asc" && filter.SortDirection != "desc") {
+		return nil, &apiError{status: fiber.StatusBadRequest, code: "INVALID_SORT", message: "Invalid sort parameters"}
+	}
 
 	openedByStr := c.Query("opened_by_id")
 	if openedByStr == "" {
