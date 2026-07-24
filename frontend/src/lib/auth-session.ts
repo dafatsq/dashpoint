@@ -80,13 +80,28 @@ export function persistAuthUser(
     options.saveAccount,
   );
 
-  persistUserSession(user);
-  syncRememberMePreference(user.id);
-
   if (shouldSaveAccount) {
     syncSavedAccount(user);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("dashpoint_device_trusted", "true");
+      const prefKey = getRememberMeKey(user.id);
+      if (window.localStorage.getItem(prefKey) !== "false") {
+        window.localStorage.setItem(prefKey, "true");
+      }
+    }
+    persistUserSession(user);
+    syncRememberMePreference(user.id);
   } else {
     AccountManager.removeAccount(user.id);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("dashpoint_device_trusted");
+      if (options.saveAccount === false) {
+        const prefKey = getRememberMeKey(user.id);
+        window.localStorage.setItem(prefKey, "false");
+      }
+    }
+    persistUserSession(user);
+    syncRememberMePreference(user.id);
   }
 
   return user;
@@ -96,13 +111,14 @@ export function persistAuthPayload(
   payload: AuthPayload,
   options: { saveAccount?: boolean } = {},
 ): User | null {
-  setAuthTokens(payload.access_token);
-
   if (!payload.user) {
+    setAuthTokens(payload.access_token);
     return null;
   }
 
-  return persistAuthUser(payload.user, options);
+  const user = persistAuthUser(payload.user, options);
+  setAuthTokens(payload.access_token);
+  return user;
 }
 
 export function clearAuthSession(): void {

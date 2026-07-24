@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 import {
-  normalizeSettingsPreferences,
+  updateQuickAccessPreference,
+  updateRememberMePreference,
   type SettingsPreferences,
 } from "./settings-helpers";
 
@@ -33,16 +34,13 @@ export function SettingsAuthCard({ preferences, onPreferencesChange }: SettingsA
           <div className="flex-1 space-y-0.5">
             <Label>Automatic Sign-In (Remember Me)</Label>
             <p className="text-sm text-muted-foreground">
-              Keep this account signed in across browser restarts. Turning this off means this specific account logs out when the browser closes.
+              Keep this account signed in across browser restarts. Enabling this automatically enables Quick Access.
             </p>
           </div>
           <Switch
             checked={preferences.rememberMe}
             onCheckedChange={(checked) => {
-              onPreferencesChange(normalizeSettingsPreferences({
-                rememberMe: checked,
-                quickAccess: preferences.quickAccess,
-              }));
+              onPreferencesChange(updateRememberMePreference(preferences, checked));
             }}
           />
         </div>
@@ -51,17 +49,13 @@ export function SettingsAuthCard({ preferences, onPreferencesChange }: SettingsA
           <div className="flex-1 space-y-0.5">
             <Label>Quick Access (Save Login)</Label>
             <p className="text-sm text-muted-foreground">
-              Save this account in the browser so you can log back in instantly using only your Quick PIN.
+              Save this account in the browser so you can log back in instantly using only your Quick PIN. Disabling this also disables Automatic Sign-In.
             </p>
           </div>
           <Switch
             checked={preferences.quickAccess}
-            disabled={preferences.rememberMe}
             onCheckedChange={(checked) => {
-              onPreferencesChange(normalizeSettingsPreferences({
-                ...preferences,
-                quickAccess: checked,
-              }));
+              onPreferencesChange(updateQuickAccessPreference(preferences, checked));
             }}
           />
         </div>

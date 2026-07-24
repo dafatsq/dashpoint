@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AccountManager } from "@/lib/account-manager";
 
-import { persistAuthPayload, refreshSessionTokens } from "./auth-session";
+import { loadStoredUser, persistAuthPayload, refreshSessionTokens } from "./auth-session";
 
 describe("persistAuthPayload", () => {
   beforeEach(() => {
@@ -11,7 +11,7 @@ describe("persistAuthPayload", () => {
     vi.restoreAllMocks();
   });
 
-  test("does not save the account when saveAccount is false", () => {
+  test("does not save the account and stores tokens in sessionStorage when saveAccount is false", () => {
     const saveAccountSpy = vi.spyOn(AccountManager, "saveAccount");
 
     persistAuthPayload(
@@ -30,6 +30,14 @@ describe("persistAuthPayload", () => {
     );
 
     expect(saveAccountSpy).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("access_token")).toBeNull();
+    expect(window.localStorage.getItem("user")).toBeNull();
+    expect(window.sessionStorage.getItem("access_token")).toBe("access");
+    expect(window.sessionStorage.getItem("user")).toContain("cashier@example.com");
+
+    // Simulate browser restart by clearing sessionStorage
+    window.sessionStorage.clear();
+    expect(loadStoredUser()).toBeNull();
   });
 
   test("saves the account when saveAccount is true", () => {

@@ -8,6 +8,8 @@ import {
   hasSettingsPreferenceChanges,
   normalizeSettingsPreferences,
   profileHasChanges,
+  updateQuickAccessPreference,
+  updateRememberMePreference,
 } from "./settings-helpers";
 
 const user: User = {
@@ -33,17 +35,22 @@ describe("settings helpers", () => {
       rememberMe: false,
       quickAccess: false,
     });
+
+    expect(buildSettingsPreferences("true", false)).toEqual({
+      rememberMe: false,
+      quickAccess: false,
+    });
   });
 
-  test("normalizes quick access on when remember me is enabled", () => {
+  test("normalizes dependent remember me and quick access preferences", () => {
     expect(
       normalizeSettingsPreferences({
         rememberMe: true,
         quickAccess: false,
       }),
     ).toEqual({
-      rememberMe: true,
-      quickAccess: true,
+      rememberMe: false,
+      quickAccess: false,
     });
 
     expect(
@@ -51,6 +58,60 @@ describe("settings helpers", () => {
         rememberMe: false,
         quickAccess: true,
       }),
+    ).toEqual({
+      rememberMe: false,
+      quickAccess: true,
+    });
+
+    expect(
+      normalizeSettingsPreferences({
+        rememberMe: true,
+        quickAccess: true,
+      }),
+    ).toEqual({
+      rememberMe: true,
+      quickAccess: true,
+    });
+  });
+
+  test("enabling remember me automatically enables quick access", () => {
+    expect(
+      updateRememberMePreference(
+        { rememberMe: false, quickAccess: false },
+        true,
+      ),
+    ).toEqual({
+      rememberMe: true,
+      quickAccess: true,
+    });
+
+    expect(
+      updateRememberMePreference(
+        { rememberMe: true, quickAccess: true },
+        false,
+      ),
+    ).toEqual({
+      rememberMe: false,
+      quickAccess: true,
+    });
+  });
+
+  test("disabling quick access automatically disables remember me", () => {
+    expect(
+      updateQuickAccessPreference(
+        { rememberMe: true, quickAccess: true },
+        false,
+      ),
+    ).toEqual({
+      rememberMe: false,
+      quickAccess: false,
+    });
+
+    expect(
+      updateQuickAccessPreference(
+        { rememberMe: false, quickAccess: false },
+        true,
+      ),
     ).toEqual({
       rememberMe: false,
       quickAccess: true,
