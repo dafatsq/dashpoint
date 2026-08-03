@@ -25,9 +25,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
@@ -35,6 +32,7 @@ import api from "@/lib/api";
 import type { AuditLog, LowStockItem, Shift } from "@/types";
 
 import { DashboardChangesList } from "./dashboard-changes-list";
+import { DashboardSectionHeader } from "./dashboard-section-header";
 import {
   buildDashboardStats,
   type DashboardStats as DashboardStatsData,
@@ -60,6 +58,20 @@ const CHANGE_TABS: { value: ChangeTab; label: string; icon: ReactNode }[] = [
   { value: "expense", label: "Expenses", icon: <Wallet className="h-4 w-4" /> },
 ];
 
+const SHIFT_SORT_OPTIONS = [
+  { value: "date_desc", label: "Date (newest)" },
+  { value: "date_asc", label: "Date (oldest)" },
+  { value: "sales_desc", label: "Sales (high-low)" },
+  { value: "opened_by_asc", label: "Opened by (A-Z)" },
+] as const;
+
+const CHANGE_SORT_OPTIONS = [
+  { value: "date_desc", label: "Date (newest)" },
+  { value: "date_asc", label: "Date (oldest)" },
+  { value: "user_asc", label: "User (A-Z)" },
+  { value: "action_asc", label: "Action (A-Z)" },
+] as const;
+
 export function DashboardScreen() {
   const { user, hasPermission } = useAuth();
   const canViewSales = hasPermission(PERMISSIONS.SALES_VIEW);
@@ -73,6 +85,8 @@ export function DashboardScreen() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [isShiftsLoading, setIsShiftsLoading] = useState(true);
   const [shiftsError, setShiftsError] = useState<string | null>(null);
+  const [shiftSort, setShiftSort] = useState("date_desc");
+  const [changeSort, setChangeSort] = useState("date_desc");
   const [activeChangeTab, setActiveChangeTab] = useState<ChangeTab>("product");
   const [changeLogs, setChangeLogs] = useState<Record<ChangeTab, AuditLog[]>>({
     product: [],
@@ -260,20 +274,20 @@ export function DashboardScreen() {
 
         {canViewShifts ? (
         <Card className="mb-6 flex flex-col border-0 shadow-none bg-transparent md:border md:shadow md:bg-card">
-          <CardHeader className="px-0 pt-0 pb-4 md:p-6">
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" />
-              <CardTitle>Shift History</CardTitle>
-            </div>
-            <CardDescription>
-              Recent and active shared store shifts
-            </CardDescription>
-          </CardHeader>
+          <DashboardSectionHeader
+            icon={<Clock className="h-5 w-5 text-primary" />}
+            title="Shift History"
+            description="Recent and active shared store shifts"
+            sort={shiftSort}
+            sortOptions={SHIFT_SORT_OPTIONS}
+            onSortChange={setShiftSort}
+          />
           <CardContent className="flex-1 px-0 pb-4 md:px-6 md:pb-6 md:pt-0">
             <DashboardShiftHistory
               shifts={shifts}
               isLoading={isShiftsLoading}
               error={shiftsError}
+              sort={shiftSort}
               onRetry={() => void fetchShiftPreview()}
             />
           </CardContent>
@@ -291,15 +305,14 @@ export function DashboardScreen() {
 
         {canViewChanges ? (
         <Card className="flex flex-col border-0 shadow-none bg-transparent md:border md:shadow md:bg-card">
-          <CardHeader className="px-0 pt-0 pb-4 md:p-6">
-            <div className="flex items-center gap-2">
-              <History className="h-5 w-5 text-primary" />
-              <CardTitle>Recent Changes</CardTitle>
-            </div>
-            <CardDescription>
-              Activity log across all areas of your store
-            </CardDescription>
-          </CardHeader>
+          <DashboardSectionHeader
+            icon={<History className="h-5 w-5 text-primary" />}
+            title="Recent Changes"
+            description="Activity log across all areas of your store"
+            sort={changeSort}
+            sortOptions={CHANGE_SORT_OPTIONS}
+            onSortChange={setChangeSort}
+          />
           <CardContent className="flex-1 px-0 pb-4 md:px-6 md:pb-6 md:pt-0">
             <Tabs
               defaultValue="product"
@@ -329,6 +342,7 @@ export function DashboardScreen() {
                     }
                     isLoading={changeLoading[tab.value]}
                     error={changeErrors[tab.value]}
+                    sort={changeSort}
                     onRetry={() => void fetchChangeLogs(tab.value)}
                   />
                 </TabsContent>
