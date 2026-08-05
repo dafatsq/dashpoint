@@ -60,10 +60,10 @@ jobs:
       - name: Install Wails Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Test root Wails module
-        run: go test ./...
+        run: go test -tags webkit2_41 ./...
 
       - name: Test backend packages
         working-directory: backend
