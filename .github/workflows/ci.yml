@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
   workflow_call:
 
@@ -9,7 +12,7 @@ permissions:
 
 jobs:
   quality:
-    name: Frontend, backend, desktop, and config checks
+    name: Frontend, backend, and desktop checks
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -68,24 +71,6 @@ jobs:
       - name: Test backend packages
         working-directory: backend
         run: go test ./...
-
-      - name: Validate production Compose configuration
-        run: |
-          docker compose \
-            --env-file ci/fixtures/compose.env \
-            -f docker-compose.prod.yml \
-            config --quiet
-
-      - name: Render and validate Caddy configuration
-        run: |
-          caddy_dir="$(mktemp -d)"
-          trap 'rm -rf "$caddy_dir"' EXIT
-          cp ci/fixtures/compose.env "$caddy_dir/.env.ci"
-          scripts/render-caddyfile.sh "$caddy_dir" "$caddy_dir/Caddyfile"
-          docker run --rm \
-            --mount "type=bind,src=$caddy_dir/Caddyfile,dst=/etc/caddy/Caddyfile,readonly" \
-            caddy:2-alpine \
-            caddy validate --config /etc/caddy/Caddyfile
 
       - name: Scan source for common secret material
         run: |

@@ -1,22 +1,11 @@
 name: Test And Deploy
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'docker-compose*.yml'
-      - '**/Dockerfile*'
-      - 'Caddyfile'
-      - 'CLIENTS/**'
-      - 'scripts/deploy-vps.sh'
-      - 'scripts/render-caddyfile.sh'
-      - 'scripts/*.env*'
-      - '.env.example'
-      - '.github/workflows/deploy.yml'
-      - '.github/workflows/ci.yml'
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       client_env:
@@ -32,12 +21,94 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  scope:
+    name: Select deployment source
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.scope.outputs.should_deploy }}
+      source_sha: ${{ steps.scope.outputs.source_sha }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Determine whether a VPS deployment is required
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SOURCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          printf 'source_sha=%s\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            echo 'should_deploy=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$SOURCE_SHA^1" "$SOURCE_SHA")"
+          if printf '%s\n' "$changed_files" | grep -Eq '^(backend/|frontend/|docker-compose[^/]*\.yml$|[^/]*Dockerfile[^/]*$|Caddyfile$|CLIENTS/|scripts/deploy-vps\.sh$|scripts/render-caddyfile\.sh$|scripts/[^/]*\.env[^/]*$|\.env\.example$)'; then
+            echo 'should_deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'should_deploy=false' >> "$GITHUB_OUTPUT"
+          fi
+
   quality:
+    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/ci.yml
+
+  deployment_validation:
+    name: Validate deployment configuration
+    needs: [scope, quality]
+    if: >-
+      always() &&
+      needs.scope.result == 'success' &&
+      needs.scope.outputs.should_deploy == 'true' &&
+      (github.event_name == 'workflow_run' || needs.quality.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.scope.outputs.source_sha }}
+
+      - name: Validate production Compose configuration
+        run: |
+          docker compose \
+            --env-file ci/fixtures/compose.env \
+            -f docker-compose.prod.yml \
+            config --quiet
+
+      - name: Render and validate Caddy configuration
+        run: |
+          caddy_dir="$(mktemp -d)"
+          trap 'rm -rf "$caddy_dir"' EXIT
+          cp ci/fixtures/compose.env "$caddy_dir/.env.ci"
+          scripts/render-caddyfile.sh "$caddy_dir" "$caddy_dir/Caddyfile"
+          docker run --rm \
+            --mount "type=bind,src=$caddy_dir/Caddyfile,dst=/etc/caddy/Caddyfile,readonly" \
+            caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile
 
   deploy:
     name: Deploy to VPS
-    needs: quality
+    needs: [scope, quality, deployment_validation]
+    if: >-
+      always() &&
+      needs.scope.result == 'success' &&
+      needs.scope.outputs.should_deploy == 'true' &&
+      needs.deployment_validation.result == 'success' &&
+      (github.event_name == 'workflow_run' || needs.quality.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -49,9 +120,13 @@ jobs:
       VPS_CLIENT_ENV_DIR: ${{ secrets.VPS_CLIENT_ENV_DIR }}
       VPS_CADDY_FILE: ${{ secrets.VPS_CADDY_FILE }}
       VPS_CLIENT_ENV_FILTER: ${{ inputs.client_env }}
+      SOURCE_SHA: ${{ needs.scope.outputs.source_sha }}
     steps:
       - name: Check out pushed source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.scope.outputs.source_sha }}
+          fetch-depth: 0
 
       - name: Validate deployment settings
         run: |
@@ -75,11 +150,11 @@ jobs:
         run: |
           set -euo pipefail
           printf -v remote_app '%q' "$VPS_APP_DIR"
-          git archive --format=tar "$GITHUB_SHA" | \
+          git archive --format=tar "$SOURCE_SHA" | \
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
               "tar -xf - -C $remote_app"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            "printf '%s\\n' '$GITHUB_SHA' > $remote_app/.deploy-commit && chmod 600 $remote_app/.deploy-commit"
+            "printf '%s\\n' '$SOURCE_SHA' > $remote_app/.deploy-commit && chmod 600 $remote_app/.deploy-commit"
 
       - name: Deploy selected client stacks
         run: |
