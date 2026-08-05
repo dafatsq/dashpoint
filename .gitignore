@@ -67,12 +67,6 @@ backend/uploads/*
 debug
 bin/
 
-# Track intentional Wails platform assets while ignoring generated binaries.
-!build/
-!build/windows/
-!build/darwin/
-build/bin/
-
 # Test coverage
 coverage/
 *.cover

@@ -13,7 +13,6 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'wails.json'
-      - 'build/**'
       - '.github/workflows/desktop.yml'
       - '.github/workflows/ci.yml'
   workflow_dispatch:

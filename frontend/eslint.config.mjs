@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "dist/**",
     "out/**",
     "build/**",
+    "wailsjs/**",
     "next-env.d.ts",
   ]),
 ]);

@@ -67,7 +67,7 @@ jobs:
 
       - name: Test backend packages
         working-directory: backend
-        run: go test ./cmd/server ./internal/...
+        run: go test ./...
 
       - name: Validate production Compose configuration
         run: |
