@@ -4,6 +4,19 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose*.yml'
+      - '**/Dockerfile*'
+      - 'Caddyfile'
+      - 'CLIENTS/**'
+      - 'scripts/deploy-vps.sh'
+      - 'scripts/render-caddyfile.sh'
+      - 'scripts/*.env*'
+      - '.env.example'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
     inputs:
       client_env:
@@ -19,57 +32,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  backend-tests:
-    name: Backend tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
-          cache: true
-          cache-dependency-path: backend/go.sum
-      - name: Run backend tests
-        run: go test ./cmd/server ./internal/...
-
-  frontend-tests:
-    name: Frontend tests and build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: Run frontend tests
-        run: npm test -- --run
-      - name: Build frontend
-        env:
-          NEXT_PUBLIC_API_URL: /api/v1
-          NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS: 'false'
-        run: npm run build
+  quality:
+    uses: ./.github/workflows/ci.yml
 
   deploy:
     name: Deploy to VPS
-    needs:
-      - backend-tests
-      - frontend-tests
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

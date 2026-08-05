@@ -206,6 +206,96 @@ func TestAuthHandlerLoginSuccess(t *testing.T) {
 	}
 	if cookie := findCookie(resp.Cookies(), refreshTokenCookie); cookie == nil || cookie.Value == "" || !cookie.HttpOnly {
 		t.Fatalf("expected HttpOnly refresh token cookie")
+	} else if cookie.SameSite != http.SameSiteStrictMode {
+		t.Fatalf("expected website cookie SameSite=Strict, got %v", cookie.SameSite)
+	}
+}
+
+func TestAuthHandlerLoginUsesWailsCompatibleRefreshCookie(t *testing.T) {
+	roleID := uuid.New()
+	userID := uuid.New()
+	passwordHash, err := authpkg.HashPassword("secret123")
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+
+	email := "owner@example.com"
+	user := &models.User{
+		ID:           userID,
+		Email:        &email,
+		Name:         "Owner",
+		PasswordHash: &passwordHash,
+		RoleID:       roleID,
+		IsActive:     true,
+		CreatedAt:    time.Unix(100, 0),
+		UpdatedAt:    time.Unix(250, 0),
+		Role:         &models.Role{ID: roleID, Name: "owner"},
+	}
+	userRepo := &fakeAuthUserRepo{userByEmail: user, userByID: user}
+	tokenStore := &fakeRefreshTokenStore{}
+	jwtManager := &fakeJWTManager{
+		tokenPair: &authpkg.TokenPair{
+			AccessToken:           "access-token",
+			RefreshToken:          "refresh-token",
+			AccessTokenExpiresAt:  time.Unix(300, 0),
+			RefreshTokenExpiresAt: time.Unix(400, 0),
+		},
+	}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+
+	app := fiber.New()
+	app.Post("/login", handler.Login)
+
+	req := httptest.NewRequest("POST", "/login", bytes.NewBufferString(`{"email":"owner@example.com","password":"secret123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://wails.localhost")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	cookie := findCookie(resp.Cookies(), refreshTokenCookie)
+	if cookie == nil {
+		t.Fatalf("expected refresh token cookie")
+	}
+	if cookie.SameSite != http.SameSiteNoneMode {
+		t.Fatalf("expected Wails cookie SameSite=None, got %v", cookie.SameSite)
+	}
+	if !cookie.Secure {
+		t.Fatalf("expected Wails refresh cookie to be Secure")
+	}
+}
+
+func TestRefreshCookieSameSiteSupportsWailsCustomScheme(t *testing.T) {
+	app := fiber.New()
+	app.Get("/cookie", func(c *fiber.Ctx) error {
+		setRefreshTokenCookie(c, "refresh-token", time.Unix(400, 0))
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/cookie", nil)
+	req.Header.Set("Origin", "wails://wails")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+
+	cookie := findCookie(resp.Cookies(), refreshTokenCookie)
+	if cookie == nil {
+		t.Fatalf("expected refresh token cookie")
+	}
+	if cookie.SameSite != http.SameSiteNoneMode {
+		t.Fatalf("expected custom-scheme Wails cookie SameSite=None, got %v", cookie.SameSite)
 	}
 }
 

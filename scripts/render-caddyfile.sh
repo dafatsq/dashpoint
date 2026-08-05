@@ -52,9 +52,12 @@ for env_file in "${env_files[@]}"; do
 
   project_name=$(read_env_value PROJECT_NAME "$env_file")
   site_address=$(read_env_value CADDY_SITE_ADDRESS "$env_file")
+  api_only=$(read_env_value CADDY_API_ONLY "$env_file")
+  api_only=${api_only:-false}
 
   validate_value "PROJECT_NAME" "$project_name" '^[a-z0-9][a-z0-9_-]*$'
   validate_value "CADDY_SITE_ADDRESS" "$site_address" '^[A-Za-z0-9*._-]+$'
+  validate_value "CADDY_API_ONLY" "$api_only" '^(true|false)$'
 
   cat >> "$temporary_file" <<EOF
 # Generated from $env_file. Do not edit this block manually.
@@ -67,12 +70,23 @@ $site_address {
         reverse_proxy ${project_name}-backend-prod:8080
     }
 
+EOF
+
+  if [[ "$api_only" == "true" ]]; then
+    cat >> "$temporary_file" <<EOF
+    respond 404
+}
+
+EOF
+  else
+    cat >> "$temporary_file" <<EOF
     handle {
         reverse_proxy ${project_name}-frontend-prod:3000
     }
 }
 
 EOF
+  fi
 done
 
 mv "$temporary_file" "$output_file"

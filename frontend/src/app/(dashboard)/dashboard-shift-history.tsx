@@ -1,11 +1,10 @@
 'use client';
 
 import { ArrowRightLeft, CheckCircle2, CircleDot, Clock, Loader2, User } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { Shift } from "@/types";
-import { DataSortSelect } from "@/components/shared/data-sort-select";
 
 import { formatDashboardCurrency, formatDashboardDateTime, getShiftPreview } from "./dashboard-helpers";
 
@@ -13,11 +12,11 @@ interface DashboardShiftHistoryProps {
   shifts: Shift[];
   isLoading: boolean;
   error: string | null;
+  sort: string;
   onRetry: () => void;
 }
 
-export function DashboardShiftHistory({ shifts, isLoading, error, onRetry }: DashboardShiftHistoryProps) {
-  const [sort, setSort] = useState("date_desc");
+export function DashboardShiftHistory({ shifts, isLoading, error, sort, onRetry }: DashboardShiftHistoryProps) {
   const sortedShifts = useMemo(
     () => [...shifts].sort((left, right) => {
       const direction = sort.endsWith("_desc") ? -1 : 1;
@@ -60,18 +59,6 @@ export function DashboardShiftHistory({ shifts, isLoading, error, onRetry }: Das
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <DataSortSelect
-          value={sort}
-          options={[
-            { value: "date_desc", label: "Date (newest)" },
-            { value: "date_asc", label: "Date (oldest)" },
-            { value: "sales_desc", label: "Sales (high-low)" },
-            { value: "opened_by_asc", label: "Opened by (A-Z)" },
-          ]}
-          onChange={setSort}
-        />
-      </div>
       {sortedShifts.map((shift) => {
         const preview = getShiftPreview(shift);
         return (

@@ -19,6 +19,7 @@ Thumbs.db
 *.env
 !*.env.example
 .env.*
+!ci/fixtures/compose.env
 
 # Logs
 *.log
@@ -38,6 +39,9 @@ target/
 # Frontend (Next.js/Node)
 node_modules/
 .next/
+frontend/dist/
+frontend/package.json.md5
+frontend/wailsjs/
 .turbo/
 .vercel/
 .npm
@@ -62,6 +66,12 @@ backend/uploads/*
 *.out
 debug
 bin/
+
+# Track intentional Wails platform assets while ignoring generated binaries.
+!build/
+!build/windows/
+!build/darwin/
+build/bin/
 
 # Test coverage
 coverage/

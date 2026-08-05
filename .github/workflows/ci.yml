@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Frontend, backend, desktop, and config checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test -- --run
+
+      - name: Build web frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: /api/v1
+          NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS: 'false'
+        run: npm run build
+
+      - name: Build desktop frontend assets
+        working-directory: frontend
+        run: npm run build:desktop
+
+      - name: Verify desktop frontend assets
+        run: test -f frontend/dist/index.html
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            backend/go.sum
+
+      - name: Download Wails module dependencies
+        run: go mod download
+
+      - name: Install Wails Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+      - name: Test root Wails module
+        run: go test ./...
+
+      - name: Test backend packages
+        working-directory: backend
+        run: go test ./cmd/server ./internal/...
+
+      - name: Validate production Compose configuration
+        run: |
+          docker compose \
+            --env-file ci/fixtures/compose.env \
+            -f docker-compose.prod.yml \
+            config --quiet
+
+      - name: Render and validate Caddy configuration
+        run: |
+          caddy_dir="$(mktemp -d)"
+          trap 'rm -rf "$caddy_dir"' EXIT
+          cp ci/fixtures/compose.env "$caddy_dir/.env.ci"
+          scripts/render-caddyfile.sh "$caddy_dir" "$caddy_dir/Caddyfile"
+          docker run --rm \
+            --mount "type=bind,src=$caddy_dir/Caddyfile,dst=/etc/caddy/Caddyfile,readonly" \
+            caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Scan source for common secret material
+        run: |
+          if rg -n --hidden \
+            -g '!.git/**' \
+            -g '!frontend/node_modules/**' \
+            -g '!frontend/.next/**' \
+            -g '!frontend/dist/**' \
+            -g '!build/**' \
+            -g '!ci/fixtures/compose.env' \
+            '(-----BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY-----|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})' .; then
+            echo 'Potential secret material found in the repository.' >&2
+            exit 1
+          fi

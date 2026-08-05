@@ -60,6 +60,16 @@ Set unique values for:
     NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=false
     PROXY_NETWORK=dashpoint_proxy
 
+### Desktop API host
+
+For a desktop-only client deployment, use an API hostname instead of a website hostname:
+
+    CADDY_SITE_ADDRESS=api.example.com
+    CADDY_API_ONLY=true
+    CORS_ORIGINS=wails://wails,http://wails.localhost
+
+This generates HTTPS routes for `/api/v1/*` and `/uploads/*` while returning 404 for the site root. DNS for the API hostname must point to the VPS so Caddy can issue its certificate. The desktop executable still calls the same backend container and PostgreSQL database; it does not create a separate service. Keep HTTPS enabled because the Wails refresh cookie requires `Secure` and `SameSite=None`.
+
 DATA_DIR must be a unique absolute path for every client. It holds that client's PostgreSQL files, PostgreSQL TLS files, and backend uploads.
 
 The root .env remains suitable for local development. For a standalone deployment, a client template can be copied to .env. For a shared VPS, use CLIENTS/.env.<client> so several clients can coexist.

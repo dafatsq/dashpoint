@@ -53,6 +53,32 @@ func TestCORSAllowsConfiguredOrigin(t *testing.T) {
 	}
 }
 
+func TestCORSAllowsWailsOriginWhenConfigured(t *testing.T) {
+	app := fiber.New()
+	app.Use(CORS([]string{"wails://wails", "http://wails.localhost"}))
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	for _, origin := range []string{"wails://wails", "http://wails.localhost"} {
+		t.Run(origin, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set("Origin", origin)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+
+			if got := resp.Header.Get("Access-Control-Allow-Origin"); got != origin {
+				t.Fatalf("expected Wails allow origin header, got %q", got)
+			}
+			if got := resp.Header.Get("Access-Control-Allow-Credentials"); got != "true" {
+				t.Fatalf("expected credentials header, got %q", got)
+			}
+		})
+	}
+}
+
 func TestCORSPreflightAllowsSSEHeaders(t *testing.T) {
 	app := fiber.New()
 	app.Use(CORS([]string{"http://localhost:3000"}))

@@ -77,6 +77,10 @@ Open your favorite web browser and navigate to:
 
 You should now see the DashPoint frontend, successfully communicating with your local backend and database!
 
+## Desktop app
+
+To build the experimental Windows Wails client that uses the existing VPS backend and database, see [desktop/README.md](desktop/README.md).
+
 ---
 
 ## Troubleshooting

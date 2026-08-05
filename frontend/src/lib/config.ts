@@ -1,7 +1,26 @@
 const DEFAULT_API_BASE_URL = "http://localhost:8080/api/v1";
+const DEFAULT_DESKTOP_API_BASE_URL = "https://dashpoint.my.id/api/v1";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_BASE_URL;
+export interface ApiEnvironment {
+  apiUrl?: string;
+  desktopBuild?: boolean;
+}
+
+export function resolveApiBaseUrl(environment: ApiEnvironment = {}): string {
+  const explicitApiUrl = environment.apiUrl?.trim();
+  if (explicitApiUrl) {
+    return explicitApiUrl;
+  }
+
+  return environment.desktopBuild
+    ? DEFAULT_DESKTOP_API_BASE_URL
+    : DEFAULT_API_BASE_URL;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl({
+  apiUrl: process.env.NEXT_PUBLIC_API_URL,
+  desktopBuild: process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true",
+});
 
 export const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
 

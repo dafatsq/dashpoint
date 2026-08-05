@@ -1,0 +1,133 @@
+name: Desktop Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths:
+      - 'desktop/**'
+      - 'frontend/**'
+      - 'main.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'wails.json'
+      - 'build/**'
+      - '.github/workflows/desktop.yml'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: Optional HTTPS API URL. Empty uses the production API.
+        required: false
+        default: ''
+        type: string
+      enable_quick_demo_access:
+        description: Enable demo credentials in this deliberate desktop build.
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: Optional existing or new version tag to publish as a release.
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Windows Wails build
+    needs: quality
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      DESKTOP_API_BASE_URL: ${{ inputs.api_base_url }}
+      DESKTOP_ENABLE_DEMO_ACCESS: ${{ inputs.enable_quick_demo_access || 'false' }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build Windows executable
+        shell: pwsh
+        run: |
+          $buildArguments = @{
+              EnableQuickDemoAccess = [System.Convert]::ToBoolean($env:DESKTOP_ENABLE_DEMO_ACCESS)
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:DESKTOP_API_BASE_URL)) {
+              $buildArguments.ApiBaseUrl = $env:DESKTOP_API_BASE_URL
+          }
+
+          & .\desktop\scripts\build-windows.ps1 @buildArguments
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Verify Windows executable
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath "build\bin\DashPoint.exe" -PathType Leaf)) {
+              throw "build\bin\DashPoint.exe was not produced"
+          }
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashPoint-windows
+          path: build/bin/DashPoint.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish tagged desktop release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: DashPoint-windows
+          path: release
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          release_tag="$RELEASE_TAG_INPUT"
+          if [ -z "$release_tag" ]; then
+            release_tag="$REF_NAME"
+          fi
+
+          case "$release_tag" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "Release tag must use vMAJOR.MINOR.PATCH format: $release_tag" >&2; exit 1 ;;
+          esac
+
+          gh release create "$release_tag" release/DashPoint.exe --generate-notes

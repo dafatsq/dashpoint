@@ -246,6 +246,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
         },
+        credentials: "include",
         signal: controller.signal,
       });
 
@@ -270,6 +271,7 @@ export function useUserEvents(options: UseUserEventsOptions = {}) {
             Accept: "text/event-stream",
             "Cache-Control": "no-cache",
           },
+          credentials: "include",
           signal: controller.signal,
         });
 

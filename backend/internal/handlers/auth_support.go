@@ -41,6 +41,8 @@ const (
 	authMaxJSONBodyBytes = 4096
 	refreshTokenCookie   = "refresh_token"
 	refreshTokenPath     = "/api/v1/auth"
+	wailsCustomOrigin    = "wails://wails"
+	wailsWindowsOrigin   = "http://wails.localhost"
 )
 
 var errEmptyAuthBody = errors.New("empty auth request body")
@@ -130,6 +132,15 @@ func refreshTokenFromCookie(c *fiber.Ctx) string {
 	return strings.TrimSpace(c.Cookies(refreshTokenCookie))
 }
 
+func refreshCookieSameSite(c *fiber.Ctx) string {
+	origin := strings.TrimSpace(c.Get("Origin"))
+	if strings.EqualFold(origin, wailsCustomOrigin) || strings.EqualFold(origin, wailsWindowsOrigin) {
+		return fiber.CookieSameSiteNoneMode
+	}
+
+	return fiber.CookieSameSiteStrictMode
+}
+
 func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time) {
 	c.Cookie(&fiber.Cookie{
 		Name:     refreshTokenCookie,
@@ -138,7 +149,7 @@ func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time) {
 		Expires:  expiresAt,
 		HTTPOnly: true,
 		Secure:   isSecureRequest(c),
-		SameSite: fiber.CookieSameSiteStrictMode,
+		SameSite: refreshCookieSameSite(c),
 	})
 }
 
@@ -151,7 +162,7 @@ func clearRefreshTokenCookie(c *fiber.Ctx) {
 		MaxAge:   -1,
 		HTTPOnly: true,
 		Secure:   isSecureRequest(c),
-		SameSite: fiber.CookieSameSiteStrictMode,
+		SameSite: refreshCookieSameSite(c),
 	})
 }
 
