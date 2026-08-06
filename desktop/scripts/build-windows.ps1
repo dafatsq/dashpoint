@@ -1,5 +1,6 @@
 param(
     [string]$ApiBaseUrl = "",
+    [string]$ClientSlug = "dashpoint-demo",
     [bool]$EnableQuickDemoAccess = $false,
     [switch]$AllowLocalApi
 )
@@ -8,6 +9,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $defaultApiBaseUrl = "https://dashpoint.my.id/api/v1"
+$defaultClientSlug = "dashpoint-demo"
+$clientSlugPattern = '^[a-z0-9]+(?:-[a-z0-9]+)*$'
 $requiredWailsVersion = "v2.13.0"
 $wailsPackage = "github.com/wailsapp/wails/v2/cmd/wails@$requiredWailsVersion"
 $forbiddenPatterns = @(
@@ -87,11 +90,35 @@ function Get-GoBinPath {
     return Join-Path (($goPath -split ";")[0]) "bin"
 }
 
+function Resolve-ClientSlug {
+    param(
+        [string]$RequestedSlug
+    )
+
+    $resolvedSlug = if ([string]::IsNullOrWhiteSpace($RequestedSlug)) {
+        $defaultClientSlug
+    } else {
+        $RequestedSlug.Trim()
+    }
+
+    if ($resolvedSlug -notmatch $clientSlugPattern) {
+        throw "Invalid desktop client slug: $resolvedSlug. Use lowercase letters, numbers, and single hyphens."
+    }
+
+    return $resolvedSlug
+}
+
 function Resolve-ApiBaseUrl {
     param(
         [string]$RequestedUrl,
+        [string]$ClientSlug,
         [switch]$AllowLocal
     )
+
+    $hasExplicitUrl = -not [string]::IsNullOrWhiteSpace($RequestedUrl)
+    if (-not $hasExplicitUrl -and $ClientSlug -ne $defaultClientSlug) {
+        throw "An explicit API URL is required for client '$ClientSlug'."
+    }
 
     $resolvedUrl = if ([string]::IsNullOrWhiteSpace($RequestedUrl)) {
         $defaultApiBaseUrl
@@ -193,11 +220,13 @@ try {
         }
     }
 
-    $resolvedApiUrl = Resolve-ApiBaseUrl $ApiBaseUrl -AllowLocal:$AllowLocalApi
+    $resolvedClientSlug = Resolve-ClientSlug $ClientSlug
+    $resolvedApiUrl = Resolve-ApiBaseUrl $ApiBaseUrl -ClientSlug $resolvedClientSlug -AllowLocal:$AllowLocalApi
     $env:NEXT_PUBLIC_API_URL = $resolvedApiUrl
+    $env:NEXT_PUBLIC_CLIENT_SLUG = $resolvedClientSlug
     $env:NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = $EnableQuickDemoAccess.ToString().ToLower()
 
-    Write-Host "Building desktop app with API $resolvedApiUrl"
+    Write-Host "Building desktop app for client $resolvedClientSlug with API $resolvedApiUrl"
     Invoke-Checked "go" @("mod", "download")
     Invoke-Checked $wailsCommand @("build", "-clean", "-f")
 
@@ -209,7 +238,12 @@ try {
     }
     Assert-FileDoesNotContainPrivateConfig $outputPath "Generated executable"
 
+    $clientOutputPath = Join-Path $repoRoot "build\bin\DashPoint-$resolvedClientSlug.exe"
+    Copy-Item -LiteralPath $outputPath -Destination $clientOutputPath -Force
+    Assert-FileDoesNotContainPrivateConfig $clientOutputPath "Generated client executable"
+
     Write-Host "Built $outputPath"
+    Write-Host "Built client executable $clientOutputPath"
 }
 finally {
     Pop-Location

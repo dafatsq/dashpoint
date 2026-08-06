@@ -32,15 +32,30 @@ The result is:
 
 ```text
 build\bin\DashPoint.exe
+build\bin\DashPoint-dashpoint-demo.exe
 ```
 
-## API endpoint and demo overrides
+The executable embeds the current shared frontend from this repository. The desktop build does not copy the backend or database into the executable; it calls the configured client's API.
 
-Use an explicit HTTPS endpoint for staging or another client:
+## Build a client executable
+
+Use a lowercase client slug and that client's HTTPS API endpoint:
 
 ```powershell
-.\desktop\scripts\build-windows.ps1 -ApiBaseUrl "https://client.example.com/api/v1"
+.\desktop\scripts\build-windows.ps1 `
+  -ClientSlug "acme-store" `
+  -ApiBaseUrl "https://client.example.com/api/v1"
 ```
+
+This produces:
+
+```text
+build\bin\DashPoint-acme-store.exe
+```
+
+Each client build contains only public configuration: the client slug and API URL. Database credentials, JWT secrets, SSH keys, VPS secrets, and production `.env` files are never included. A non-demo client must provide an explicit HTTPS API URL.
+
+## API endpoint and demo overrides
 
 Local API access requires an explicit development flag:
 
@@ -56,7 +71,9 @@ Demo access is disabled by default. Enable it only for a deliberate demo build:
 .\desktop\scripts\build-windows.ps1 -EnableQuickDemoAccess:$true
 ```
 
-The executable never connects directly to PostgreSQL. It only calls the configured HTTPS API.
+The default `dashpoint-demo` build uses `https://dashpoint.my.id/api/v1`. The executable never connects directly to PostgreSQL. It only calls the configured HTTPS API.
+
+The GitHub Actions desktop workflow builds the default demo artifact automatically when shared desktop/frontend changes are merged. Client artifacts and releases are created manually with an explicit client slug and API URL.
 
 ## Mac development
 
