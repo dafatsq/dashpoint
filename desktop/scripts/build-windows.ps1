@@ -184,6 +184,9 @@ function Assert-DesktopAssetsSafe {
 
 Push-Location $repoRoot
 try {
+    $resolvedClientSlug = Resolve-ClientSlug $ClientSlug
+    $resolvedApiUrl = Resolve-ApiBaseUrl $ApiBaseUrl -ClientSlug $resolvedClientSlug -AllowLocal:$AllowLocalApi
+
     Assert-Command "go" "Install Go 1.25 or newer."
     Assert-Command "node" "Install Node.js 22 or newer."
     Assert-Command "npm" "Install npm compatible with your Node.js version."
@@ -220,8 +223,6 @@ try {
         }
     }
 
-    $resolvedClientSlug = Resolve-ClientSlug $ClientSlug
-    $resolvedApiUrl = Resolve-ApiBaseUrl $ApiBaseUrl -ClientSlug $resolvedClientSlug -AllowLocal:$AllowLocalApi
     $env:NEXT_PUBLIC_API_URL = $resolvedApiUrl
     $env:NEXT_PUBLIC_CLIENT_SLUG = $resolvedClientSlug
     $env:NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = $EnableQuickDemoAccess.ToString().ToLower()
