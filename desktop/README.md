@@ -1,10 +1,10 @@
 # DashPoint desktop build
 
-DashPoint's desktop client is a Wails v2 application that embeds the existing Next.js frontend. It uses the same HTTPS backend and PostgreSQL database as the VPS deployment; it does not start a local backend, create a local database, or require Node.js after the executable is built.
+DashPoint's desktop client is a Wails v2 application that embeds the shared Next.js frontend from this repository. It uses the selected client's HTTPS API; it does not start a local backend, create a local database, or connect directly to PostgreSQL.
 
 ## One-time Windows setup
 
-Install these tools on the Windows laptop:
+Install these tools on the Windows build machine:
 
 - Git
 - Go 1.25 or newer
@@ -13,49 +13,31 @@ Install these tools on the Windows laptop:
 
 The build script installs the pinned Wails CLI v2.13.0 when the required version is not available.
 
-## Build the Windows executable
+## Build a client executable privately
 
-Run from the repository root:
+Run from the repository root. The default target is the DashPoint demo API:
 
 ```powershell
 git pull
 .\desktop\scripts\build-windows.ps1
 ```
 
-The default endpoint is:
-
-```text
-https://dashpoint.my.id/api/v1
-```
-
-The result is:
-
-```text
-build\bin\DashPoint.exe
-build\bin\DashPoint-dashpoint-demo.exe
-```
-
-The executable embeds the current shared frontend from this repository. The desktop build does not copy the backend or database into the executable; it calls the configured client's API.
-
-## Build a client executable
-
-Use a lowercase client slug and that client's HTTPS API endpoint:
+To build the executable for a client's VPS, pass that client's public HTTPS API URL:
 
 ```powershell
 .\desktop\scripts\build-windows.ps1 `
-  -ClientSlug "acme-store" `
   -ApiBaseUrl "https://client.example.com/api/v1"
 ```
 
-This produces:
+The output is always:
 
 ```text
-build\bin\DashPoint-acme-store.exe
+build\bin\DashPoint.exe
 ```
 
-Each client build contains only public configuration: the client slug and API URL. Database credentials, JWT secrets, SSH keys, VPS secrets, and production `.env` files are never included. A non-demo client must provide an explicit HTTPS API URL.
+The `build` directory and executable are ignored by Git. Transfer the executable to the client through the private distribution channel chosen for that client; do not commit or publish it in a GitHub release.
 
-## API endpoint and demo overrides
+## Local API and demo overrides
 
 Local API access requires an explicit development flag:
 
@@ -71,9 +53,7 @@ Demo access is disabled by default. Enable it only for a deliberate demo build:
 .\desktop\scripts\build-windows.ps1 -EnableQuickDemoAccess:$true
 ```
 
-The default `dashpoint-demo` build uses `https://dashpoint.my.id/api/v1`. The executable never connects directly to PostgreSQL. It only calls the configured HTTPS API.
-
-The GitHub Actions desktop workflow builds the default demo artifact automatically when shared desktop/frontend changes are merged. Client artifacts and releases are created manually with an explicit client slug and API URL.
+Production API URLs must use HTTPS. The executable contains only the public API URL and shared frontend assets. It never contains database credentials, JWT secrets, SSH keys, VPS secrets, or production `.env` files.
 
 ## Mac development
 
@@ -105,4 +85,4 @@ http://wails.localhost
 
 The website origin must remain included as well. The backend adapts the refresh cookie for Wails origins while retaining strict cookies for normal website requests. HTTPS is required for secure refresh-cookie behavior.
 
-Generated frontend output, Wails binaries, Go caches, Node dependencies, and local environment files are ignored by Git. Only source files and dependency manifests should be pushed.
+GitHub Actions validates the desktop frontend assets and root Wails module, but it does not build, upload, or release a Windows executable.
