@@ -11,8 +11,13 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      client_slug:
+        description: Lowercase client identifier for the desktop build.
+        required: false
+        default: dashpoint-demo
+        type: string
       api_base_url:
-        description: Optional HTTPS API URL. Empty uses the production API.
+        description: HTTPS API URL for the client. Empty is allowed only for dashpoint-demo.
         required: false
         default: ''
         type: string
@@ -22,7 +27,7 @@ on:
         default: false
         type: boolean
       release_tag:
-        description: Optional existing or new version tag to publish as a release.
+        description: Release tag; use v1.0.0 for demo or <client-slug>-v1.0.0 for a client.
         required: false
         default: ''
         type: string
@@ -82,6 +87,7 @@ jobs:
     permissions:
       contents: read
     env:
+      DESKTOP_CLIENT_SLUG: ${{ inputs.client_slug || 'dashpoint-demo' }}
       DESKTOP_API_BASE_URL: ${{ inputs.api_base_url }}
       DESKTOP_ENABLE_DEMO_ACCESS: ${{ inputs.enable_quick_demo_access || 'false' }}
     steps:
@@ -107,7 +113,12 @@ jobs:
       - name: Build Windows executable
         shell: pwsh
         run: |
+          if ($env:DESKTOP_CLIENT_SLUG -ne "dashpoint-demo" -and [string]::IsNullOrWhiteSpace($env:DESKTOP_API_BASE_URL)) {
+              throw "A client-specific build requires api_base_url."
+          }
+
           $buildArguments = @{
+              ClientSlug = $env:DESKTOP_CLIENT_SLUG
               EnableQuickDemoAccess = [System.Convert]::ToBoolean($env:DESKTOP_ENABLE_DEMO_ACCESS)
           }
 
@@ -126,12 +137,16 @@ jobs:
           if (-not (Test-Path -LiteralPath "build\bin\DashPoint.exe" -PathType Leaf)) {
               throw "build\bin\DashPoint.exe was not produced"
           }
+          $clientOutputPath = "build\bin\DashPoint-$env:DESKTOP_CLIENT_SLUG.exe"
+          if (-not (Test-Path -LiteralPath $clientOutputPath -PathType Leaf)) {
+              throw "$clientOutputPath was not produced"
+          }
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DashPoint-windows
-          path: build/bin/DashPoint.exe
+          name: DashPoint-${{ env.DESKTOP_CLIENT_SLUG }}-windows
+          path: build/bin/DashPoint-${{ env.DESKTOP_CLIENT_SLUG }}.exe
           if-no-files-found: error
 
   release:
@@ -149,11 +164,12 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: DashPoint-windows
+          name: DashPoint-${{ inputs.client_slug || 'dashpoint-demo' }}-windows
           path: release
 
       - name: Publish GitHub Release
         env:
+          CLIENT_SLUG: ${{ inputs.client_slug || 'dashpoint-demo' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
           REF_NAME: ${{ github.ref_name }}
@@ -165,13 +181,20 @@ jobs:
             release_tag="$REF_NAME"
           fi
 
-          case "$release_tag" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "Release tag must use vMAJOR.MINOR.PATCH format: $release_tag" >&2; exit 1 ;;
-          esac
+          if [ "$CLIENT_SLUG" = "dashpoint-demo" ]; then
+            case "$release_tag" in
+              v[0-9]*.[0-9]*.[0-9]*) ;;
+              *) echo "Demo release tag must use vMAJOR.MINOR.PATCH format: $release_tag" >&2; exit 1 ;;
+            esac
+          else
+            case "$release_tag" in
+              "$CLIENT_SLUG"-v[0-9]*.[0-9]*.[0-9]*) ;;
+              *) echo "Client release tag must use ${CLIENT_SLUG}-vMAJOR.MINOR.PATCH format: $release_tag" >&2; exit 1 ;;
+            esac
+          fi
 
           if gh release view "$release_tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$release_tag" release/DashPoint.exe --repo "$REPOSITORY" --clobber
+            gh release upload "$release_tag" "release/DashPoint-$CLIENT_SLUG.exe" --repo "$REPOSITORY" --clobber
           else
-            gh release create "$release_tag" release/DashPoint.exe --repo "$REPOSITORY" --target "$SOURCE_SHA" --generate-notes
+            gh release create "$release_tag" "release/DashPoint-$CLIENT_SLUG.exe" --repo "$REPOSITORY" --target "$SOURCE_SHA" --generate-notes
           fi
