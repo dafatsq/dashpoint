@@ -23,6 +23,8 @@ Each client gets one private env file, one Compose project name, one database an
 
 Real client env files and production secrets stay on the VPS and are ignored by Git.
 
+For the complete new-client installation procedure, see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). This document describes the shared VPS architecture and operational rules; the client guide covers first-time provisioning, CI/CD targeting, and desktop distribution.
+
 ## One-Time VPS Setup
 
 Install Docker and the Compose plugin, configure the firewall for only SSH, HTTP, and HTTPS, then clone the repository once:
@@ -34,9 +36,10 @@ Install Docker and the Compose plugin, configure the firewall for only SSH, HTTP
 
 If the network already exists, keep using it. Do not expose ports 3000, 8080, or 5432 publicly.
 
-After the first client env file exists and routes have been generated, start the shared Caddy service from the project folder:
+After the first client env file exists, generate its routes and start the shared Caddy service from the project folder:
 
     cd /opt/dashpoint
+    ./scripts/render-caddyfile.sh CLIENTS Caddyfile
     docker compose -f docker-compose.caddy.yml up -d
 
 ## Client Configuration
@@ -50,7 +53,7 @@ Set unique values for:
 
     PROJECT_NAME=acme
     CADDY_SITE_ADDRESS=acme.example.com
-    CORS_ORIGINS=https://acme.example.com
+    CORS_ORIGINS=https://acme.example.com,wails://wails,http://wails.localhost
     DATA_DIR=/opt/dashpoint/clients/acme/data
     POSTGRES_USER=acme_db_user
     POSTGRES_PASSWORD=<long-random-password>
@@ -72,7 +75,7 @@ This generates HTTPS routes for `/api/v1/*` and `/uploads/*` while returning 404
 
 DATA_DIR must be a unique absolute path for every client. It holds that client's PostgreSQL files, PostgreSQL TLS files, and backend uploads.
 
-The root .env remains suitable for local development. For a standalone deployment, a client template can be copied to .env. For a shared VPS, use CLIENTS/.env.<client> so several clients can coexist.
+The root `.env`, `backend/.env`, and `frontend/.env.local` support local or legacy standalone development. Do not configure them for a new multi-client VPS. Use `CLIENTS/.env.<client>` as the production client configuration.
 
 ## Client Database TLS Files
 
@@ -156,7 +159,7 @@ Keep multiple restore points and test restoring them before relying on them. Dat
 
 ## Deployment Boundary
 
-Normal code deployment must not replace client databases. It should fetch source code, validate the selected client env file, run backend migrations, rebuild the selected frontend/backend services, run health checks, and reload Caddy only when routes changed.
+Normal code deployment must not replace client databases. It should fetch source code, validate the selected client env file, run backend migrations, rebuild the selected frontend/backend services, run health checks, and reload Caddy after route validation.
 
 Database imports, seed data, and destructive resets require a separate explicit operation.
 
@@ -175,6 +178,8 @@ Configure these GitHub Actions secrets:
     VPS_APP_DIR          project directory, such as /opt/dashpoint
     VPS_CLIENT_ENV_DIR   usually CLIENTS
     VPS_CADDY_FILE       usually /opt/dashpoint/Caddyfile
+
+The workflow currently has one VPS target per run. A new client on the same VPS only needs another private `CLIENTS/.env.<client>` file. For a client on a separate VPS, use the manual deployment command unless you first extend `.github/workflows/deploy.yml` with a deployment matrix. Do not overwrite the existing target secrets.
 
 Client env files, JWT secrets, database passwords, uploads, and Caddy certificate data stay on the VPS. The deployment user should have only the permissions required to update the project directory and run the approved Docker Compose deployment. Do not recursively change ownership of a client's `DATA_DIR` to the deployment user: PostgreSQL data and TLS files must remain readable by the PostgreSQL container account, and uploads must remain writable by the backend container account.
 

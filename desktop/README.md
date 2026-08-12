@@ -37,6 +37,8 @@ build\bin\DashPoint.exe
 
 The `build` directory and executable are ignored by Git. Transfer the executable to the client through the private distribution channel chosen for that client; do not commit or publish it in a GitHub release.
 
+For the full client provisioning flow—including the VPS environment file, DNS, Caddy, CI/CD target, and desktop API URL—see [CLIENTS/DEPLOY_NEW_CLIENT.md](../CLIENTS/DEPLOY_NEW_CLIENT.md).
+
 ## Local API and demo overrides
 
 Local API access requires an explicit development flag:
