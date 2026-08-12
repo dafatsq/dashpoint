@@ -128,7 +128,6 @@ skills-lock.json
 /CLIENTS/*
 !/CLIENTS/
 !/CLIENTS/.env.example
-!/CLIENTS/*.md
 
 # Documents
 SDD.md
@@ -136,3 +135,7 @@ deploy_clients.sh
 PROJECT_DISSECTION.md
 PROJECT_SECTIONS.md
 .kiro/*
+
+# Documentation (keep only the repository README tracked)
+*.md
+!/README.md
