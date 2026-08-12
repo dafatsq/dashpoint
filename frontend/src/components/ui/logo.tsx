@@ -13,7 +13,7 @@ export function Logo({ className }: LogoProps) {
       aria-hidden="true"
     >
       <path
-        d="M 65,191 L 145,111"
+        d="M 65,191 L 157,99"
         fill="none"
         stroke="currentColor"
         strokeWidth={28}
