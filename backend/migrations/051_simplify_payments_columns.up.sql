@@ -1,0 +1,8 @@
+ALTER TABLE payments
+	DROP COLUMN IF EXISTS card_type,
+	DROP COLUMN IF EXISTS card_last_four,
+	DROP COLUMN IF EXISTS bank_name,
+	DROP COLUMN IF EXISTS account_no,
+	DROP COLUMN IF EXISTS voucher_code,
+	DROP COLUMN IF EXISTS notes,
+	DROP COLUMN IF EXISTS processed_by;
