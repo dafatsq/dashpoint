@@ -17,8 +17,8 @@ Thumbs.db
 .env.test.local
 .env.production.local
 *.env
-!*.env.example
 .env.*
+!*.env.example
 !ci/fixtures/compose.env
 
 # Logs
@@ -36,6 +36,26 @@ build/
 out/
 target/
 
+# Local development metadata and environments
+.venv/
+*.tsbuildinfo
+.eslintcache
+.deploy-commit
+
+# Local application data
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+
+# Generated archives and release bundles
+*.tar
+*.tar.gz
+*.zip
+
 # Frontend (Next.js/Node)
 node_modules/
 .next/
@@ -46,8 +66,7 @@ frontend/wailsjs/
 .vercel/
 .npm
 .cache/
-next-env.d.ts
-!frontend/next-env.d.ts
+frontend/next-env.d.ts
 
 # Backend (Go)
 vendor/
@@ -80,8 +99,11 @@ temp/
 *.tmp
 *.bak
 *.pid
-*.sql
 *.dump
+*.sql
+!backend/migrations/
+!backend/migrations/*.sql
+!backend/migrations/**/*.sql
 local_db_dump.sql
 
 # Secrets (never commit these)
