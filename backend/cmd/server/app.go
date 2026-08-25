@@ -116,7 +116,7 @@ func newPermissionChecker(userRepo *repository.UserRepository) middleware.Permis
 }
 
 func newServerApp(cfg *config.Config, deps *serverDependencies) *fiber.App {
-	app := fiber.New(serverFiberConfig())
+	app := fiber.New(serverFiberConfig(cfg.TrustedProxies))
 
 	app.Use(middleware.Recover())
 	app.Use(middleware.Logger())
@@ -138,7 +138,7 @@ func newServerApp(cfg *config.Config, deps *serverDependencies) *fiber.App {
 	return app
 }
 
-func serverFiberConfig() fiber.Config {
+func serverFiberConfig(trustedProxies []string) fiber.Config {
 	return fiber.Config{
 		AppName:        "DashPoint POS API",
 		ErrorHandler:   errorHandler,
@@ -146,6 +146,12 @@ func serverFiberConfig() fiber.Config {
 		WriteTimeout:   0,
 		IdleTimeout:    120 * time.Second,
 		ReadBufferSize: apiReadBufferSize,
+		// Only honor X-Forwarded-For / X-Forwarded-Proto from proxies on this
+		// allowlist. Empty by default: direct deployments ignore spoofed
+		// forwarding headers entirely, and c.IP() is the real socket address.
+		EnableTrustedProxyCheck: true,
+		TrustedProxies:          trustedProxies,
+		ProxyHeader:             "X-Forwarded-For",
 	}
 }
 

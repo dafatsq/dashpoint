@@ -167,7 +167,7 @@ func clearRefreshTokenCookie(c *fiber.Ctx) {
 }
 
 func isSecureRequest(c *fiber.Ctx) bool {
-	return c.Protocol() == "https" || strings.EqualFold(c.Get("X-Forwarded-Proto"), "https")
+	return c.Protocol() == "https"
 }
 
 func normalizeLoginEmail(email string) string {

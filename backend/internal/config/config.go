@@ -21,9 +21,10 @@ const (
 // Config holds all configuration for the application
 type Config struct {
 	// Server
-	Port        string
-	Environment string
-	CORSOrigins []string
+	Port           string
+	Environment    string
+	CORSOrigins    []string
+	TrustedProxies []string
 
 	// Database
 	DatabaseURL string
@@ -40,11 +41,12 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		Port:        getEnv("PORT", "8080"),
-		Environment: getEnv("ENVIRONMENT", "development"),
-		CORSOrigins: getEnvList("CORS_ORIGINS", []string{"http://localhost:3000"}),
-		DatabaseURL: getEnv("DATABASE_URL", ""),
-		JWTSecret:   getEnv("JWT_SECRET", ""),
+		Port:           getEnv("PORT", "8080"),
+		Environment:    getEnv("ENVIRONMENT", "development"),
+		CORSOrigins:    getEnvList("CORS_ORIGINS", []string{"http://localhost:3000"}),
+		TrustedProxies: getEnvList("TRUSTED_PROXIES", nil),
+		DatabaseURL:    getEnv("DATABASE_URL", ""),
+		JWTSecret:      getEnv("JWT_SECRET", ""),
 	}
 
 	jwtExpiry, err := getPositiveIntEnv("JWT_EXPIRY_MINUTES", defaultJWTExpiryMinutes)
