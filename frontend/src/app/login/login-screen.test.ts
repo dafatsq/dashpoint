@@ -158,10 +158,17 @@ describe("LoginScreen", () => {
     loginMock.mockResolvedValue({ success: true });
 
     await renderScreen();
-
-    const demoButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("owner@dashpoint.local"),
-    );
+    // Demo credentials load via a build-flag-gated dynamic import; wait for
+    // the button they render instead of relying on import timing.
+    const demoButton = await vi.waitFor(() => {
+      const button = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent?.includes("owner@dashpoint.local"),
+      );
+      if (!button) {
+        throw new Error("demo access button not rendered yet");
+      }
+      return button;
+    });
     const form = container.querySelector("form");
 
     await act(async () => {
@@ -188,10 +195,17 @@ describe("LoginScreen", () => {
     process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
 
     await renderScreen();
-
-    const demoButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("owner@dashpoint.local"),
-    );
+    // Demo credentials load via a build-flag-gated dynamic import; wait for
+    // the button they render instead of relying on import timing.
+    const demoButton = await vi.waitFor(() => {
+      const button = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent?.includes("owner@dashpoint.local"),
+      );
+      if (!button) {
+        throw new Error("demo access button not rendered yet");
+      }
+      return button;
+    });
 
     await act(async () => {
       demoButton?.dispatchEvent(
