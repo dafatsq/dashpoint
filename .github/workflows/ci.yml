@@ -30,6 +30,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Audit frontend production dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Run frontend tests
         working-directory: frontend
         run: npm test -- --run
