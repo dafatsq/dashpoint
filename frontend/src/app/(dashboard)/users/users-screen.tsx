@@ -23,7 +23,7 @@ import {
   hasUserFormChanges,
 } from "./users-helpers";
 import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
-import { UsersFormDialog } from "./users-form-dialog";
+import { UsersFormDialog, type UsersFormValues } from "./users-form-dialog";
 import { UsersList } from "./users-list";
 import { UsersRolePermissionsDialog } from "./users-role-permissions-dialog";
 import { normalizeRolePermissionKeys } from "./users-role-permissions";
@@ -71,7 +71,7 @@ export default function UsersScreen() {
   const [isSubmittingRolePermissions, setIsSubmittingRolePermissions] = useState(false);
   const { showError } = useGlobalError();
 
-  const [formData, setFormData] = useState<CreateUserRequest>({
+  const [formData, setFormData] = useState<UsersFormValues>({
     email: "",
     password: "",
     name: "",
@@ -258,6 +258,21 @@ export default function UsersScreen() {
         };
         if (formData.password) updateData.password = formData.password;
         if (formData.pin) updateData.pin = formData.pin;
+        if (
+          editingUser.id === currentUser?.id &&
+          (updateData.password || updateData.pin)
+        ) {
+          // The server requires proof of the current credential for
+          // self-service changes; collect it here instead of failing later.
+          if (!formData.current_password) {
+            showError(
+              "Verification Required",
+              "Enter your current password to change your own credentials.",
+            );
+            return;
+          }
+          updateData.current_password = formData.current_password;
+        }
 
         const result = await api.updateUser(editingUser.id, updateData);
         if (result.error) {

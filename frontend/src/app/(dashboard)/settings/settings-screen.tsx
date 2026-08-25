@@ -180,10 +180,16 @@ export function SettingsScreen() {
     setIsUpdatingProfile(true);
 
     try {
+      const payload = buildProfileUpdatePayload(user, editForm);
+      // The server requires proof of the current credential when a user
+      // changes their own password/PIN; reuse the password that was just
+      // verified to open this dialog.
+      const updatesCredentials = Boolean(payload.password || payload.pin);
       const result = await api.updateUser(
         user.id,
         {
-          ...buildProfileUpdatePayload(user, editForm),
+          ...payload,
+          ...(updatesCredentials ? { current_password: passwordEntry } : {}),
           expected_updated_at: user.updated_at,
         },
       );

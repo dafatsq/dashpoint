@@ -408,12 +408,13 @@ func TestUserHandlerUpdatePasswordRevokesRefreshTokens(t *testing.T) {
 	roleID := uuid.New()
 	repo := &fakeUserRepo{
 		getByIDUser: &models.User{
-			ID:        targetUserID,
-			Name:      "Cashier",
-			RoleID:    roleID,
-			IsActive:  true,
-			UpdatedAt: userPolicyUpdatedAt,
-			Role:      &models.Role{ID: roleID, Name: "cashier"},
+			ID:           targetUserID,
+			Name:         "Cashier",
+			RoleID:       roleID,
+			IsActive:     true,
+			UpdatedAt:    userPolicyUpdatedAt,
+			Role:         &models.Role{ID: roleID, Name: "cashier"},
+			PasswordHash: &selfProofPasswordHash,
 		},
 		permissions: []string{},
 	}
@@ -427,7 +428,7 @@ func TestUserHandlerUpdatePasswordRevokesRefreshTokens(t *testing.T) {
 		return handler.UpdatePassword(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/password", strings.NewReader(`{"password":"new-secret","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/password", strings.NewReader(`{"password":"new-secret","current_password":"current-password","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -449,12 +450,13 @@ func TestUserHandlerUpdatePINAllowsSelfWithoutManageUsers(t *testing.T) {
 	roleID := uuid.New()
 	repo := &fakeUserRepo{
 		getByIDUser: &models.User{
-			ID:        targetUserID,
-			Name:      "Cashier",
-			RoleID:    roleID,
-			IsActive:  true,
-			UpdatedAt: userPolicyUpdatedAt,
-			Role:      &models.Role{ID: roleID, Name: "cashier"},
+			ID:           targetUserID,
+			Name:         "Cashier",
+			RoleID:       roleID,
+			IsActive:     true,
+			UpdatedAt:    userPolicyUpdatedAt,
+			Role:         &models.Role{ID: roleID, Name: "cashier"},
+			PasswordHash: &selfProofPasswordHash,
 		},
 		permissions: []string{},
 	}
@@ -467,7 +469,7 @@ func TestUserHandlerUpdatePINAllowsSelfWithoutManageUsers(t *testing.T) {
 		return handler.UpdatePIN(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/pin", strings.NewReader(`{"pin":"1234","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/pin", strings.NewReader(`{"pin":"1234","current_password":"current-password","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -486,12 +488,13 @@ func TestUserHandlerUpdatePINRevokesRefreshTokens(t *testing.T) {
 	roleID := uuid.New()
 	repo := &fakeUserRepo{
 		getByIDUser: &models.User{
-			ID:        targetUserID,
-			Name:      "Cashier",
-			RoleID:    roleID,
-			IsActive:  true,
-			UpdatedAt: userPolicyUpdatedAt,
-			Role:      &models.Role{ID: roleID, Name: "cashier"},
+			ID:           targetUserID,
+			Name:         "Cashier",
+			RoleID:       roleID,
+			IsActive:     true,
+			UpdatedAt:    userPolicyUpdatedAt,
+			Role:         &models.Role{ID: roleID, Name: "cashier"},
+			PasswordHash: &selfProofPasswordHash,
 		},
 		permissions: []string{},
 	}
@@ -505,7 +508,7 @@ func TestUserHandlerUpdatePINRevokesRefreshTokens(t *testing.T) {
 		return handler.UpdatePIN(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/pin", strings.NewReader(`{"pin":"1234","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/users/"+targetUserID.String()+"/pin", strings.NewReader(`{"pin":"1234","current_password":"current-password","expected_updated_at":"`+userPolicyUpdatedAtString+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
