@@ -49,6 +49,7 @@ trap cleanup EXIT
 
 for env_file in "${env_files[@]}"; do
   [[ "$env_file" == "$clients_dir/.env.example" ]] && continue
+  [[ "$env_file" == *.bak* ]] && continue
 
   project_name=$(read_env_value PROJECT_NAME "$env_file")
   site_address=$(read_env_value CADDY_SITE_ADDRESS "$env_file")
@@ -62,6 +63,16 @@ for env_file in "${env_files[@]}"; do
   cat >> "$temporary_file" <<EOF
 # Generated from $env_file. Do not edit this block manually.
 $site_address {
+    header {
+        defer
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+        -Server
+    }
+
     handle /api/v1/* {
         reverse_proxy ${project_name}-backend-prod:8080
     }
@@ -89,5 +100,5 @@ EOF
   fi
 done
 
-mv "$temporary_file" "$output_file"
+cat "$temporary_file" > "$output_file"
 trap - EXIT
