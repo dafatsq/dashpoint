@@ -24,6 +24,10 @@ import {
 } from "./settings-helpers";
 import { SettingsProfileCard } from "./settings-profile-card";
 import { SettingsVerifyPasswordDialog } from "./settings-verify-password-dialog";
+import {
+  captureDeviceSessionState,
+  restoreDeviceSessionState,
+} from "./verify-session-guard";
 
 function preferencesAreEqual(
   left: SettingsPreferences,
@@ -145,8 +149,14 @@ export function SettingsScreen() {
     setIsVerifyingPassword(true);
 
     try {
+      // login(..., saveAccount=false) wipes the remembered-device state as a
+      // side effect (quick-access account, remember-me preference, trusted
+      // flag, and token storage placement). This dialog is only an identity
+      // check, so restore exactly what was there before it ran.
+      const deviceSessionState = captureDeviceSessionState(user.id);
       const result = await login(user.email || "", passwordEntry, false);
       if (result.success) {
+        restoreDeviceSessionState(deviceSessionState, user.id);
         setVerifyPasswordOpen(false);
         setEditForm({
           name: user.name,
