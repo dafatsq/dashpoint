@@ -27,6 +27,7 @@ type serverDependencies struct {
 	permissionChecker middleware.PermissionChecker
 	healthHandler     *handlers.HealthHandler
 	authHandler       *handlers.AuthHandler
+	setupHandler      *handlers.SetupHandler
 	eventsHandler     *handlers.EventsHandler
 	userHandler       *handlers.UserHandler
 	roleHandler       *handlers.RoleHandler
@@ -66,6 +67,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 
 	healthHandler := handlers.NewHealthHandler(db)
 	authHandler := handlers.NewAuthHandler(userRepo, refreshTokenRepo, jwtManager)
+	setupHandler := handlers.NewSetupHandler(userRepo, roleRepo)
 	eventsHandler := handlers.NewEventsHandler(jwtManager, userRepo, cfg.CORSOrigins)
 	userHandler := handlers.NewUserHandler(userRepo, roleRepo)
 	userHandler.SetEventsHandler(eventsHandler)
@@ -79,6 +81,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 		permissionChecker: newPermissionChecker(userRepo),
 		healthHandler:     healthHandler,
 		authHandler:       authHandler,
+		setupHandler:      setupHandler,
 		eventsHandler:     eventsHandler,
 		userHandler:       userHandler,
 		roleHandler:       roleHandler,
