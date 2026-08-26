@@ -38,13 +38,13 @@ describe("settings helpers", () => {
     });
   });
 
-  test("keeps automatic sign-in and quick access independent", () => {
+  test("normalizes so auto sign-in always implies quick access", () => {
     expect(
       normalizeSettingsPreferences({
         rememberMe: true,
         quickAccess: false,
       }),
-    ).toEqual({ rememberMe: true, quickAccess: false });
+    ).toEqual({ rememberMe: false, quickAccess: false });
 
     expect(
       normalizeSettingsPreferences({
@@ -61,13 +61,13 @@ describe("settings helpers", () => {
     ).toEqual({ rememberMe: true, quickAccess: true });
   });
 
-  test("remember-me updates leave quick access untouched", () => {
+  test("enabling auto sign-in force-enables quick access", () => {
     expect(
       updateRememberMePreference(
         { rememberMe: false, quickAccess: false },
         true,
       ),
-    ).toEqual({ rememberMe: true, quickAccess: false });
+    ).toEqual({ rememberMe: true, quickAccess: true });
 
     expect(
       updateRememberMePreference(
@@ -77,13 +77,13 @@ describe("settings helpers", () => {
     ).toEqual({ rememberMe: false, quickAccess: true });
   });
 
-  test("quick-access updates leave automatic sign-in untouched", () => {
+  test("disabling quick access force-disables auto sign-in", () => {
     expect(
       updateQuickAccessPreference(
         { rememberMe: true, quickAccess: true },
         false,
       ),
-    ).toEqual({ rememberMe: true, quickAccess: false });
+    ).toEqual({ rememberMe: false, quickAccess: false });
 
     expect(
       updateQuickAccessPreference(

@@ -12,11 +12,14 @@ export interface SettingsProfileForm {
   pin: string;
 }
 
-// Quick Access (saved account + PIN fast login) and Automatic Sign-In
-// (persistent refresh cookie) are independent toggles.
+// Dependency: Automatic Sign-In requires Quick Access. Toggling auto on
+// force-enables Quick Access; disabling Quick Access force-disables auto.
 export function normalizeSettingsPreferences(
   preferences: SettingsPreferences,
 ): SettingsPreferences {
+  if (!preferences.quickAccess) {
+    return { rememberMe: false, quickAccess: false };
+  }
   return preferences;
 }
 
@@ -24,14 +27,20 @@ export function updateRememberMePreference(
   current: SettingsPreferences,
   rememberMe: boolean,
 ): SettingsPreferences {
-  return { ...current, rememberMe };
+  if (rememberMe) {
+    return { rememberMe: true, quickAccess: true };
+  }
+  return { ...current, rememberMe: false };
 }
 
 export function updateQuickAccessPreference(
   current: SettingsPreferences,
   quickAccess: boolean,
 ): SettingsPreferences {
-  return { ...current, quickAccess };
+  if (!quickAccess) {
+    return { rememberMe: false, quickAccess: false };
+  }
+  return { ...current, quickAccess: true };
 }
 
 export function buildSettingsPreferences(rememberScopeEnabled: boolean, hasSavedAccount: boolean): SettingsPreferences {
