@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 
 import { IS_DESKTOP_BUILD } from "@/lib/config";
-import { reissueSessionCookie } from "@/lib/auth-session";
+import { reissueSessionCookie, writeRememberScope } from "@/lib/auth-session";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { getRememberMeKey } from "@/lib/session";
@@ -112,11 +112,14 @@ export function SettingsScreen() {
       preferenceKey,
       nextPreferences.rememberMe ? "true" : "false",
     );
+    // Keep the device-scope key in sync — silent refreshes read it on every
+    // future boot, so rotated cookies inherit this choice.
+    writeRememberScope(nextPreferences.rememberMe);
 
     // Web builds store no tokens locally, so remember-me is enforced by the
-    // refresh cookie — re-mint it immediately when the toggle moved, so the
-    // scope change applies to THIS browser session instead of the next login.
-    if (!IS_DESKTOP_BUILD && preferences.rememberMe !== nextPreferences.rememberMe) {
+    // refresh cookie — re-mint it unconditionally on save so the scope change
+    // applies to THIS browser session instead of the next login.
+    if (!IS_DESKTOP_BUILD) {
       try {
         await reissueSessionCookie(nextPreferences.rememberMe);
       } catch {
