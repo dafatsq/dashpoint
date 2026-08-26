@@ -28,7 +28,7 @@ func newAuthWorkflow(userRepo authUserReader, tokenStore authRefreshTokenStore, 
 	}
 }
 
-func (w *authWorkflow) issueAuthResponse(c *fiber.Ctx, user *models.User, isRefresh bool) error {
+func (w *authWorkflow) issueAuthResponse(c *fiber.Ctx, user *models.User, isRefresh bool, rememberMe *bool) error {
 	tokenPair, err := w.jwtManager.GenerateTokenPair(
 		user.ID,
 		func() string {
@@ -57,7 +57,7 @@ func (w *authWorkflow) issueAuthResponse(c *fiber.Ctx, user *models.User, isRefr
 		return authInternalError(c, "An error occurred during login")
 	}
 
-	return w.finishAuthResponse(c, user, tokenPair, isRefresh)
+	return w.finishAuthResponse(c, user, tokenPair, isRefresh, rememberMe)
 }
 
 func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user *models.User) error {
@@ -92,10 +92,10 @@ func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user
 		return authInternalError(c, "An error occurred during token refresh")
 	}
 
-	return w.finishAuthResponse(c, user, tokenPair, true)
+	return w.finishAuthResponse(c, user, tokenPair, true, nil)
 }
 
-func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, tokenPair *auth.TokenPair, isRefresh bool) error {
+func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, tokenPair *auth.TokenPair, isRefresh bool, rememberMe *bool) error {
 	responseUser := user
 	if !isRefresh {
 		if err := w.userRepo.UpdateLastLogin(c.Context(), user.ID); err != nil {
@@ -119,7 +119,8 @@ func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, token
 		return authInternalError(c, "Failed to retrieve user permissions")
 	}
 
-	setRefreshTokenCookie(c, tokenPair.RefreshToken, tokenPair.RefreshTokenExpiresAt)
+	sessionScoped := rememberMe != nil && !*rememberMe
+	setRefreshTokenCookie(c, tokenPair.RefreshToken, tokenPair.RefreshTokenExpiresAt, sessionScoped)
 
 	return c.JSON(AuthResponse{
 		AccessToken: tokenPair.AccessToken,

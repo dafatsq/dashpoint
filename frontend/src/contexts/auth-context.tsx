@@ -24,7 +24,9 @@ import {
   loadStoredUser,
   persistAuthPayload,
   persistAuthUser,
+  refreshSessionUser,
 } from "@/lib/auth-session";
+import { IS_DESKTOP_BUILD } from "@/lib/config";
 import type { AuthPayload } from "@/lib/auth-user";
 import type { User } from "@/types";
 
@@ -175,14 +177,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
   });
 
   useEffect(() => {
-    const storedUser = loadStoredUser();
-    setUser(storedUser);
-    setIsLoading(false);
+    let cancelled = false;
 
-    if (storedUser && !hasBootstrappedRefreshRef.current) {
-      hasBootstrappedRefreshRef.current = true;
-      requestUserRefresh();
+    if (IS_DESKTOP_BUILD) {
+      // Desktop (Wails) keeps the legacy storage-backed session.
+      const storedUser = loadStoredUser();
+      setUser(storedUser);
+      setIsLoading(false);
+      if (storedUser && !hasBootstrappedRefreshRef.current) {
+        hasBootstrappedRefreshRef.current = true;
+        requestUserRefresh();
+      }
+      return;
     }
+
+    // Web: the access token only exists in memory, so every page load starts
+    // empty and the httpOnly refresh cookie decides whether a session
+    // survived the reload.
+    void (async () => {
+      const refreshedUser = await refreshSessionUser();
+      if (cancelled) return;
+      setUser(refreshedUser);
+      setIsLoading(false);
+      if (refreshedUser && !hasBootstrappedRefreshRef.current) {
+        hasBootstrappedRefreshRef.current = true;
+        requestUserRefresh();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [requestUserRefresh]);
 
   useEffect(() => {
@@ -208,8 +233,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [requestUserRefresh, user]);
 
   const login = useCallback(
-    async (email: string, password: string, saveAccount = true) => {
-      const result = await api.login(email, password);
+    async (email: string, password: string, saveAccount?: boolean) => {
+      const result = await api.login(email, password, saveAccount);
       if (result.error || !result.data) {
         return { success: false, error: result.error ?? "Login failed" };
       }

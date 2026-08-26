@@ -17,9 +17,11 @@ export function resolveApiBaseUrl(environment: ApiEnvironment = {}): string {
     : DEFAULT_API_BASE_URL;
 }
 
+export const IS_DESKTOP_BUILD = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
+
 export const API_BASE_URL = resolveApiBaseUrl({
   apiUrl: process.env.NEXT_PUBLIC_API_URL,
-  desktopBuild: process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true",
+  desktopBuild: IS_DESKTOP_BUILD,
 });
 
 export const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, "");

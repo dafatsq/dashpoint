@@ -88,7 +88,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
 	}
 
-	return h.workflow.issueAuthResponse(c, user, false)
+	return h.workflow.issueAuthResponse(c, user, false, req.RememberMe)
 }
 
 // PINLogin handles POST /api/v1/auth/pin-login.
@@ -162,7 +162,7 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid PIN")
 	}
 
-	return h.workflow.issueAuthResponse(c, user, false)
+	return h.workflow.issueAuthResponse(c, user, false, nil)
 }
 
 // Refresh handles POST /api/v1/auth/refresh.

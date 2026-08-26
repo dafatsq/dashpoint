@@ -278,7 +278,7 @@ func TestAuthHandlerLoginUsesWailsCompatibleRefreshCookie(t *testing.T) {
 func TestRefreshCookieSameSiteSupportsWailsCustomScheme(t *testing.T) {
 	app := fiber.New()
 	app.Get("/cookie", func(c *fiber.Ctx) error {
-		setRefreshTokenCookie(c, "refresh-token", time.Unix(400, 0))
+		setRefreshTokenCookie(c, "refresh-token", time.Unix(400, 0), false)
 		return c.SendStatus(fiber.StatusOK)
 	})
 
@@ -524,4 +524,86 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func newRememberMeLoginApp(t *testing.T) *fiber.App {
+	t.Helper()
+	roleID := uuid.New()
+	userID := uuid.New()
+	passwordHash, err := authpkg.HashPassword("secret123")
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	email := "remember@example.com"
+	user := &models.User{
+		ID:           userID,
+		Email:        &email,
+		Name:         "Owner",
+		PasswordHash: &passwordHash,
+		RoleID:       roleID,
+		IsActive:     true,
+		Role:         &models.Role{ID: roleID, Name: "owner"},
+	}
+	userRepo := &fakeAuthUserRepo{userByEmail: user, userByID: user}
+	tokenStore := &fakeRefreshTokenStore{}
+	jwtManager := &fakeJWTManager{tokenPair: &authpkg.TokenPair{
+		AccessToken:           "access-token",
+		RefreshToken:          "refresh-token",
+		AccessTokenExpiresAt:  time.Unix(300, 0),
+		RefreshTokenExpiresAt: time.Unix(400, 0),
+	}}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+	app := fiber.New()
+	app.Post("/login", handler.Login)
+	return app
+}
+
+func loginWithRememberMe(t *testing.T, app *fiber.App, body string) *http.Cookie {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/login", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	cookie := findCookie(resp.Cookies(), refreshTokenCookie)
+	if cookie == nil {
+		t.Fatalf("expected refresh cookie in response")
+	}
+	return cookie
+}
+
+func TestLoginRememberMeFalseIssuesSessionScopedCookie(t *testing.T) {
+	app := newRememberMeLoginApp(t)
+	cookie := loginWithRememberMe(t, app, `{"email":"remember@example.com","password":"secret123","remember_me":false}`)
+	if !cookie.Expires.IsZero() {
+		t.Fatalf("session-scoped cookie must not carry Expires, got %v", cookie.Expires)
+	}
+	if cookie.MaxAge != 0 {
+		t.Fatalf("session-scoped cookie must not carry MaxAge, got %d", cookie.MaxAge)
+	}
+}
+
+func TestLoginRememberMeTrueKeepsPersistentCookie(t *testing.T) {
+	app := newRememberMeLoginApp(t)
+	cookie := loginWithRememberMe(t, app, `{"email":"remember@example.com","password":"secret123","remember_me":true}`)
+	if cookie.Expires.IsZero() || cookie.Expires.Unix() != 400 {
+		t.Fatalf("persistent cookie should keep configured expiry, got %v", cookie.Expires)
+	}
+}
+
+func TestLoginRememberMeAbsentKeepsPersistentDefault(t *testing.T) {
+	app := newRememberMeLoginApp(t)
+	cookie := loginWithRememberMe(t, app, `{"email":"remember@example.com","password":"secret123"}`)
+	if cookie.Expires.IsZero() || cookie.Expires.Unix() != 400 {
+		t.Fatalf("absent remember_me should keep legacy persistent cookie, got %v", cookie.Expires)
+	}
 }

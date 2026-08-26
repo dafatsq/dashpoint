@@ -5,7 +5,7 @@ import { Loader2, Save } from "lucide-react";
 
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { getRememberMeKey, migrateSession } from "@/lib/session";
+import { getRememberMeKey } from "@/lib/session";
 import { useAuth } from "@/contexts/auth-context";
 import { useGlobalError } from "@/contexts/error-context";
 import { AccountManager } from "@/lib/account-manager";
@@ -110,7 +110,8 @@ export function SettingsScreen() {
       preferenceKey,
       nextPreferences.rememberMe ? "true" : "false",
     );
-    migrateSession(nextPreferences.rememberMe);
+    // Remember-me now takes effect on the refresh cookie issued at the next
+    // login; there are no stored tokens to migrate between web storages.
 
     if (nextPreferences.quickAccess) {
       AccountManager.saveAccount({
@@ -149,12 +150,10 @@ export function SettingsScreen() {
     setIsVerifyingPassword(true);
 
     try {
-      // login(..., saveAccount=false) wipes the remembered-device state as a
-      // side effect (quick-access account, remember-me preference, trusted
-      // flag, and token storage placement). This dialog is only an identity
-      // check, so restore exactly what was there before it ran.
+      // This login is only an identity check: omitting saveAccount keeps the
+      // refresh cookie and remembered-device state exactly as they were.
       const deviceSessionState = captureDeviceSessionState(user.id);
-      const result = await login(user.email || "", passwordEntry, false);
+      const result = await login(user.email || "", passwordEntry);
       if (result.success) {
         restoreDeviceSessionState(deviceSessionState, user.id);
         setVerifyPasswordOpen(false);

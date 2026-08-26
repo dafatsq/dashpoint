@@ -51,6 +51,11 @@ var errEmptyAuthBody = errors.New("empty auth request body")
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// RememberMe opts the browser session into a persistent refresh cookie.
+	// When explicitly false the cookie is session-scoped and disappears when
+	// the browser closes. Absent keeps the historical persistent default so
+	// existing clients (desktop, older web bundles) are unaffected.
+	RememberMe *bool `json:"remember_me"`
 }
 
 // PINLoginRequest represents the PIN login request body.
@@ -141,8 +146,8 @@ func refreshCookieSameSite(c *fiber.Ctx) string {
 	return fiber.CookieSameSiteStrictMode
 }
 
-func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time) {
-	c.Cookie(&fiber.Cookie{
+func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time, sessionScoped bool) {
+	cookie := &fiber.Cookie{
 		Name:     refreshTokenCookie,
 		Value:    token,
 		Path:     refreshTokenPath,
@@ -150,7 +155,13 @@ func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time) {
 		HTTPOnly: true,
 		Secure:   isSecureRequest(c),
 		SameSite: refreshCookieSameSite(c),
-	})
+	}
+	if sessionScoped {
+		// No Expires/MaxAge attributes: the browser drops the cookie when the
+		// session ends — "remember me off" semantics for memory-only tokens.
+		cookie.Expires = time.Time{}
+	}
+	c.Cookie(cookie)
 }
 
 func clearRefreshTokenCookie(c *fiber.Ctx) {

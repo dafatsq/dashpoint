@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AccountManager } from "@/lib/account-manager";
 
-import { loadStoredUser, persistAuthPayload, refreshSessionTokens } from "./auth-session";
+import { getAccessToken, loadStoredUser, persistAuthPayload, refreshSessionTokens } from "./auth-session";
 
 describe("persistAuthPayload", () => {
   beforeEach(() => {
@@ -11,7 +11,7 @@ describe("persistAuthPayload", () => {
     vi.restoreAllMocks();
   });
 
-  test("does not save the account and stores tokens in sessionStorage when saveAccount is false", () => {
+  test("keeps the access token out of web storage and in memory when saveAccount is false", () => {
     const saveAccountSpy = vi.spyOn(AccountManager, "saveAccount");
 
     persistAuthPayload(
@@ -31,13 +31,12 @@ describe("persistAuthPayload", () => {
 
     expect(saveAccountSpy).not.toHaveBeenCalled();
     expect(window.localStorage.getItem("access_token")).toBeNull();
+    expect(window.sessionStorage.getItem("access_token")).toBeNull();
     expect(window.localStorage.getItem("user")).toBeNull();
-    expect(window.sessionStorage.getItem("access_token")).toBe("access");
-    expect(window.sessionStorage.getItem("user")).toContain("cashier@example.com");
+    expect(getAccessToken()).toBe("access");
 
-    // Simulate browser restart by clearing sessionStorage
-    window.sessionStorage.clear();
-    expect(loadStoredUser()).toBeNull();
+    // Storage stays empty across page loads; only the in-memory copy and the
+    // httpOnly refresh cookie carry the session forward.
   });
 
   test("saves the account when saveAccount is true", () => {
@@ -162,8 +161,11 @@ describe("persistAuthPayload", () => {
       },
     });
 
-    expect(window.localStorage.getItem("access_token")).toBe("access");
     expect(window.localStorage.getItem("refresh_token")).toBeNull();
     expect(window.sessionStorage.getItem("refresh_token")).toBeNull();
+    // The access token must not land in any web storage either.
+    expect(window.localStorage.getItem("access_token")).toBeNull();
+    expect(window.sessionStorage.getItem("access_token")).toBeNull();
+    expect(getAccessToken()).toBe("access");
   });
 });

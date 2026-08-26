@@ -1,7 +1,7 @@
 import type { User } from "@/types";
 
 import { AccountManager } from "@/lib/account-manager";
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL, IS_DESKTOP_BUILD } from "@/lib/config";
 import {
   clearSession,
   getRememberMeKey,
@@ -18,24 +18,37 @@ import {
   type ApiUserPayload,
 } from "./auth-user";
 
+// Web builds keep the raw JWT in module memory only: nothing writable by a
+// compromised script survives the page, and the httpOnly refresh cookie is
+// what actually persists a session across reloads. Desktop (Wails) builds
+// keep the legacy storage behavior until their cookie handling is verified.
+let memoryAccessToken: string | null = null;
+let lastRefreshedUser: User | null = null;
+
 export function getAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return getSessionItem("access_token");
+  if (IS_DESKTOP_BUILD) return getSessionItem("access_token");
+  return memoryAccessToken ?? getSessionItem("access_token");
 }
 
 export function setAuthTokens(accessToken: string): void {
-  if (typeof window === "undefined") return;
-
-  setSessionItem("access_token", accessToken);
+  if (IS_DESKTOP_BUILD) {
+    setSessionItem("access_token", accessToken);
+    removeSessionItem("refresh_token");
+    return;
+  }
+  memoryAccessToken = accessToken;
+  // Scrub copies written by earlier versions of the app.
+  removeSessionItem("access_token");
   removeSessionItem("refresh_token");
 }
 
 export function persistUserSession(user: User): void {
+  if (!IS_DESKTOP_BUILD) return;
   setSessionItem("user", JSON.stringify(user));
 }
 
 export function syncRememberMePreference(userId: string): void {
-  if (typeof window === "undefined") return;
+  if (!IS_DESKTOP_BUILD) return;
 
   const preference = window.localStorage.getItem(getRememberMeKey(userId));
   if (preference === "false") {
@@ -123,6 +136,8 @@ export function persistAuthPayload(
 
 export function clearAuthSession(): void {
   clearSession();
+  memoryAccessToken = null;
+  lastRefreshedUser = null;
 }
 
 export function loadStoredUser(): User | null {
@@ -161,7 +176,7 @@ async function refreshSessionTokensInternal(): Promise<boolean> {
     const data = (await response.json()) as AuthPayload;
     const saveAccount =
       data.user ? shouldPreserveSavedAccount(normalizeUser(data.user).id) : false;
-    persistAuthPayload(data, { saveAccount });
+    lastRefreshedUser = persistAuthPayload(data, { saveAccount });
     return true;
   } catch {
     clearAuthSession();
@@ -177,4 +192,18 @@ export function refreshSessionTokens(): Promise<boolean> {
   }
 
   return refreshPromise;
+}
+
+/**
+ * Silent-refreshes the session and resolves with the refreshed user (null on
+ * failure). Web builds depend on this after every page load, since the access
+ * token only lives in memory.
+ */
+export async function refreshSessionUser(): Promise<User | null> {
+  const ok = await refreshSessionTokens();
+  return ok ? lastRefreshedUser : null;
+}
+
+export function clearMemoryAccessToken(): void {
+  memoryAccessToken = null;
 }
