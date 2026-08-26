@@ -83,7 +83,7 @@ func isRecentlyRotatedToken(token *models.RefreshToken) bool {
 		time.Since(*token.RevokedAt) <= refreshReuseGraceWindow
 }
 
-func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user *models.User) error {
+func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user *models.User, rememberMe *bool) error {
 	tokenPair, err := w.jwtManager.GenerateTokenPair(
 		user.ID,
 		func() string {
@@ -115,7 +115,7 @@ func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user
 		return authInternalError(c, "An error occurred during token refresh")
 	}
 
-	return w.finishAuthResponse(c, user, tokenPair, true, nil)
+	return w.finishAuthResponse(c, user, tokenPair, true, rememberMe)
 }
 
 func (w *authWorkflow) finishAuthResponse(c *fiber.Ctx, user *models.User, tokenPair *auth.TokenPair, isRefresh bool, rememberMe *bool) error {

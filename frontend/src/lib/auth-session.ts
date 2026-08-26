@@ -42,6 +42,23 @@ export function setAuthTokens(accessToken: string): void {
   removeSessionItem("refresh_token");
 }
 
+const REMEMBER_SCOPE_KEY = "dashpoint_remember_scope";
+
+/**
+ * Desired refresh-cookie scope for this device. Web builds send it with every
+ * silent refresh so rotated cookies keep the chosen scope without needing to
+ * encode it in token claims.
+ */
+export function readRememberScope(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(REMEMBER_SCOPE_KEY) !== "false";
+}
+
+export function writeRememberScope(value: boolean): void {
+  if (IS_DESKTOP_BUILD || typeof window === "undefined") return;
+  window.localStorage.setItem(REMEMBER_SCOPE_KEY, value ? "true" : "false");
+}
+
 export function persistUserSession(user: User): void {
   if (!IS_DESKTOP_BUILD) return;
   setSessionItem("user", JSON.stringify(user));
@@ -111,6 +128,7 @@ export function persistAuthUser(
       if (options.saveAccount === false) {
         const prefKey = getRememberMeKey(user.id);
         window.localStorage.setItem(prefKey, "false");
+        writeRememberScope(false);
       }
     }
     persistUserSession(user);
@@ -159,13 +177,20 @@ function normalizeStoredUser(storedUser: string): User | null {
 }
 
 let refreshPromise: Promise<boolean> | null = null;
+let pendingRememberScope: boolean | undefined;
 
 async function refreshSessionTokensInternal(): Promise<boolean> {
   try {
+    const rememberMe =
+      pendingRememberScope !== undefined
+        ? pendingRememberScope
+        : readRememberScope();
+    pendingRememberScope = undefined;
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
+      body: JSON.stringify({ remember_me: rememberMe }),
     });
 
     if (!response.ok) {
@@ -202,6 +227,16 @@ export function refreshSessionTokens(): Promise<boolean> {
 export async function refreshSessionUser(): Promise<User | null> {
   const ok = await refreshSessionTokens();
   return ok ? lastRefreshedUser : null;
+}
+
+/**
+ * Re-issues the refresh cookie with an explicit remember-me scope without
+ * re-authenticating, so toggling the settings switch takes effect
+ * immediately. Resolves with the refreshed user, or null on failure.
+ */
+export async function reissueSessionCookie(rememberMe: boolean): Promise<User | null> {
+  pendingRememberScope = rememberMe;
+  return refreshSessionUser();
 }
 
 export function clearMemoryAccessToken(): void {

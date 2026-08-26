@@ -165,9 +165,17 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 	return h.workflow.issueAuthResponse(c, user, false, nil)
 }
 
+type RefreshRequest struct {
+	// RememberMe lets a browser re-scope its refresh cookie without
+	// re-authenticating, so toggling "remember me" in settings takes effect
+	// immediately instead of at the next login. Absent keeps current scope.
+	RememberMe *bool `json:"remember_me"`
+}
+
 // Refresh handles POST /api/v1/auth/refresh.
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
-	if err := parseStrictAuthJSON(c, &struct{}{}, true); err != nil {
+	var refreshReq RefreshRequest
+	if err := parseStrictAuthJSON(c, &refreshReq, true); err != nil {
 		return authInvalidRequest(c)
 	}
 	refreshToken := refreshTokenFromCookie(c)
@@ -211,7 +219,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		return h.workflow.issueAuthResponse(c, user, true, nil)
 	}
 
-	return h.workflow.rotateRefreshToken(c, tokenHash, user)
+	return h.workflow.rotateRefreshToken(c, tokenHash, user, refreshReq.RememberMe)
 }
 
 // Logout handles POST /api/v1/auth/logout.
