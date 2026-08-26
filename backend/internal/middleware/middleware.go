@@ -115,6 +115,28 @@ func AuthRateLimit() fiber.Handler {
 	})
 }
 
+// RefreshRateLimit guards the session-resume endpoint separately from
+// credential endpoints: with memory-only access tokens every page load fires
+// exactly one refresh, so it must tolerate normal browsing while still
+// capping abuse. It is cookie-gated (httpOnly), not a guessing surface.
+func RefreshRateLimit() fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:        60,
+		Expiration: 15 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return JSONError(
+				c,
+				fiber.StatusTooManyRequests,
+				"RATE_LIMITED",
+				"Too many session refreshes. Please try again later.",
+			)
+		},
+	})
+}
+
 func ApplyCORSHeaders(c *fiber.Ctx, allowedOrigins []string) {
 	applyCORSHeaders(c, allowedOrigins)
 }

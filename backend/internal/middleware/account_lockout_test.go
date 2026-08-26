@@ -182,3 +182,31 @@ func TestAccountLockoutPassesThroughUnidentifiableRequests(t *testing.T) {
 		t.Fatalf("expected handler's own 400 for unidentifiable body, got %d", resp.StatusCode)
 	}
 }
+
+func TestRefreshRateLimitAllowsNormalBrowsingThenCaps(t *testing.T) {
+	app := fiber.New()
+	app.Post("/refresh", RefreshRateLimit(), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	var lastStatus int
+	for i := 0; i < 60; i++ {
+		req := httptest.NewRequest("POST", "/refresh", nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		lastStatus = resp.StatusCode
+		if lastStatus != fiber.StatusOK {
+			t.Fatalf("request %d should be allowed, got %d", i+1, lastStatus)
+		}
+	}
+	req := httptest.NewRequest("POST", "/refresh", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusTooManyRequests {
+		t.Fatalf("expected 429 after budget exhaustion, got %d", resp.StatusCode)
+	}
+}

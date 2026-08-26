@@ -61,7 +61,7 @@ func registerPublicRoutes(api fiber.Router, deps *serverDependencies) {
 	authGroup := api.Group("/auth")
 	authGroup.Post("/login", middleware.AuthRateLimit(), middleware.AccountLockout(), deps.authHandler.Login)
 	authGroup.Post("/pin-login", middleware.AuthRateLimit(), middleware.AccountLockout(), deps.authHandler.PINLogin)
-	authGroup.Post("/refresh", middleware.AuthRateLimit(), deps.authHandler.Refresh)
+	authGroup.Post("/refresh", middleware.RefreshRateLimit(), deps.authHandler.Refresh)
 	authGroup.Post("/logout", deps.authHandler.Logout)
 
 	api.Get("/events/subscribe", deps.eventsHandler.Subscribe)
