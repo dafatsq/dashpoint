@@ -248,16 +248,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = useCallback(
     async (email: string, password: string, saveAccount?: boolean) => {
       // Automatic sign-in requires BOTH the device scope (settings toggle)
-      // and Save-login on this login (Quick Access save). Unchecked login
-      // always yields a session-scoped cookie.
+      // and Save-login on this login. Unchecking "Save login" means this
+      // device is not saved, so it also disables auto sign-in: the saved
+      // account is removed, the device scope drops, and the refresh cookie
+      // is session-scoped.
       const remembered = readRememberScope() && Boolean(saveAccount);
       const result = await api.login(email, password, remembered);
       if (result.error || !result.data) {
         return { success: false, error: result.error ?? "Login failed" };
       }
 
+      if (saveAccount === false) {
+        // Unchecked "Save login" = unsave this device: drop the saved
+        // account and disable automatic sign-in so settings stay consistent
+        // with the actual cookie scope.
+        const { AccountManager } = await import("@/lib/account-manager");
+        AccountManager.removeAccount(result.data.user?.id ?? "");
+        writeRememberScope(false);
+      } else if (saveAccount === true) {
+        writeRememberScope(readRememberScope());
+      }
       applyAuthPayload(result.data, { saveAccount });
-      writeRememberScope(remembered);
       return { success: true };
     },
     [applyAuthPayload],
