@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -19,6 +20,17 @@ type authWorkflow struct {
 	tokenStore authRefreshTokenStore
 	jwtManager authTokenManager
 }
+
+const (
+	// refreshReuseGraceWindow is how long a just-rotated refresh token may
+	// still be exchanged when a sibling tab presents it mid-rotation. Without
+	// this, reloading one tab logs out its sibling (memory-only access tokens
+	// make every page load refresh).
+	refreshReuseGraceWindow = 30 * time.Second
+	// tokenRefreshRevocationReason must match the reason the repository uses
+	// during normal rotation; only rotation revocations are grace-eligible.
+	tokenRefreshRevocationReason = "token_refresh"
+)
 
 func newAuthWorkflow(userRepo authUserReader, tokenStore authRefreshTokenStore, jwtManager authTokenManager) *authWorkflow {
 	return &authWorkflow{
@@ -60,6 +72,17 @@ func (w *authWorkflow) issueAuthResponse(c *fiber.Ctx, user *models.User, isRefr
 	return w.finishAuthResponse(c, user, tokenPair, isRefresh, rememberMe)
 }
 
+// isRecentlyRotatedToken reports whether a no-longer-active refresh token was
+// revoked by a normal rotation inside the reuse-grace window, meaning a
+// sibling tab likely rotated it moments ago.
+func isRecentlyRotatedToken(token *models.RefreshToken) bool {
+	if token == nil || token.RevokedAt == nil || token.RevokedReason == nil {
+		return false
+	}
+	return *token.RevokedReason == tokenRefreshRevocationReason &&
+		time.Since(*token.RevokedAt) <= refreshReuseGraceWindow
+}
+
 func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user *models.User) error {
 	tokenPair, err := w.jwtManager.GenerateTokenPair(
 		user.ID,
@@ -84,7 +107,7 @@ func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user
 		ExpiresAt: tokenPair.RefreshTokenExpiresAt,
 	}
 
-	if err := w.tokenStore.Rotate(c.Context(), currentHash, "token_refresh", refreshTokenRecord); err != nil {
+	if err := w.tokenStore.Rotate(c.Context(), currentHash, tokenRefreshRevocationReason, refreshTokenRecord); err != nil {
 		if errors.Is(err, repository.ErrRefreshTokenNotActive) {
 			return authUnauthorized(c, "INVALID_TOKEN", "Refresh token has been revoked or expired")
 		}

@@ -607,3 +607,86 @@ func TestLoginRememberMeAbsentKeepsPersistentDefault(t *testing.T) {
 		t.Fatalf("absent remember_me should keep legacy persistent cookie, got %v", cookie.Expires)
 	}
 }
+
+func newRefreshRaceTestApp(t *testing.T, revokedReason string, revokedAgo time.Duration) *fiber.App {
+	t.Helper()
+	roleID := uuid.New()
+	userID := uuid.New()
+	email := "race@example.com"
+	user := &models.User{
+		ID:       userID,
+		Email:    &email,
+		Name:     "Manager",
+		RoleID:   roleID,
+		IsActive: true,
+		Role:     &models.Role{ID: roleID, Name: "manager"},
+	}
+	currentToken := "stale-token"
+	hash := authpkg.HashToken(currentToken)
+	revokedAt := time.Now().Add(-revokedAgo)
+	stored := &models.RefreshToken{
+		UserID:        userID,
+		TokenHash:     hash,
+		ExpiresAt:     time.Now().Add(time.Hour),
+		RevokedAt:     &revokedAt,
+		RevokedReason: &revokedReason,
+	}
+	userRepo := &fakeAuthUserRepo{userByID: user}
+	tokenStore := &fakeRefreshTokenStore{stored: stored}
+	jwtManager := &fakeJWTManager{
+		validateRefreshClaims: &authpkg.Claims{UserID: userID},
+		tokenPair: &authpkg.TokenPair{
+			AccessToken:           "grace-access",
+			RefreshToken:          "grace-refresh",
+			AccessTokenExpiresAt:  time.Unix(300, 0),
+			RefreshTokenExpiresAt: time.Unix(400, 0),
+		},
+	}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+	app := fiber.New()
+	app.Post("/refresh", handler.Refresh)
+	return app
+}
+
+func postRefresh(t *testing.T, app *fiber.App) *http.Response {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookie, Value: "stale-token"})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	return resp
+}
+
+func TestRefreshGraceWindowHonorsSiblingRotationRace(t *testing.T) {
+	app := newRefreshRaceTestApp(t, "token_refresh", 5*time.Second)
+	resp := postRefresh(t, app)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected grace window to honor sibling rotation (200), got %d", resp.StatusCode)
+	}
+	if findCookie(resp.Cookies(), refreshTokenCookie) == nil {
+		t.Fatalf("expected fresh refresh cookie so the lagging tab converges")
+	}
+}
+
+func TestRefreshGraceWindowRejectsBeyondWindow(t *testing.T) {
+	app := newRefreshRaceTestApp(t, "token_refresh", 45*time.Second)
+	resp := postRefresh(t, app)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected beyond-grace replay to be rejected (401), got %d", resp.StatusCode)
+	}
+}
+
+func TestRefreshGraceWindowRejectsNonRotationRevocations(t *testing.T) {
+	app := newRefreshRaceTestApp(t, "user_logout", 5*time.Second)
+	resp := postRefresh(t, app)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected non-rotation revocation to stay rejected (401), got %d", resp.StatusCode)
+	}
+}

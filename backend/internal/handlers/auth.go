@@ -186,7 +186,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		log.Error().Err(err).Msg("Failed to get refresh token from database")
 		return authInternalError(c, "An error occurred during token refresh")
 	}
-	if storedToken == nil || !storedToken.IsValid() || storedToken.UserID != claims.UserID {
+	if storedToken == nil || storedToken.UserID != claims.UserID {
 		return authUnauthorized(c, "INVALID_TOKEN", "Refresh token has been revoked or expired")
 	}
 
@@ -197,6 +197,18 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	}
 	if user == nil || !user.IsActive {
 		return authUnauthorized(c, "ACCOUNT_DISABLED", "Your account has been disabled")
+	}
+
+	// A sibling tab rotating the same refresh token must not log this tab
+	// out: within a short grace window a just-rotated token is treated as a
+	// continuation and receives its own fresh pair.
+	siblingRotationRace := !storedToken.IsValid() && isRecentlyRotatedToken(storedToken)
+	if !storedToken.IsValid() && !siblingRotationRace {
+		return authUnauthorized(c, "INVALID_TOKEN", "Refresh token has been revoked or expired")
+	}
+	if siblingRotationRace {
+		log.Warn().Str("user_id", user.ID.String()).Msg("Refresh grace window honored for sibling-tab rotation race")
+		return h.workflow.issueAuthResponse(c, user, true, nil)
 	}
 
 	return h.workflow.rotateRefreshToken(c, tokenHash, user)
