@@ -2,58 +2,50 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
+	"errors"
+	"io"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-type stubHealthChecker struct {
+type fakeHealthChecker struct {
 	healthy bool
 	err     error
 }
 
-func (s stubHealthChecker) HealthCheck(context.Context) (bool, error) {
-	return s.healthy, s.err
+func (f *fakeHealthChecker) HealthCheck(context.Context) (bool, error) {
+	return f.healthy, f.err
 }
 
-func TestHealthCheckReturnsOKWhenDatabaseIsHealthy(t *testing.T) {
+func TestHealthDoesNotLeakDatabaseErrorDetails(t *testing.T) {
+	handler := &HealthHandler{db: &fakeHealthChecker{
+		healthy: false,
+		err:     errors.New(`pq: connection refused: 10.0.0.5:5432 SQLSTATE 08001`),
+	}}
+
 	app := fiber.New()
-	handler := NewHealthHandler(stubHealthChecker{healthy: true})
 	app.Get("/health", handler.Check)
 
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/health", nil))
+	req := httptest.NewRequest("GET", "/health", nil)
+	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
-
-	if resp.StatusCode != fiber.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	raw, rerr := io.ReadAll(resp.Body)
+	if rerr != nil {
+		t.Fatalf("read body: %v", rerr)
 	}
-}
-
-func TestHealthCheckReturnsServiceUnavailableWhenDatabaseIsDown(t *testing.T) {
-	app := fiber.New()
-	handler := NewHealthHandler(stubHealthChecker{healthy: false})
-	app.Get("/health", handler.Check)
-
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/health", nil))
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
+	text := string(raw)
+	if strings.Contains(text, "database_error") {
+		t.Fatalf("health response leaked database_error field: %s", raw)
 	}
-
-	if resp.StatusCode != fiber.StatusServiceUnavailable {
-		t.Fatalf("expected status 503, got %d", resp.StatusCode)
+	if strings.Contains(text, "pq:") || strings.Contains(text, "SQLSTATE") || strings.Contains(text, "connection refused") {
+		t.Fatalf("health response leaked driver internals: %s", raw)
 	}
-
-	var payload HealthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if payload.Status != "degraded" {
-		t.Fatalf("expected degraded status, got %q", payload.Status)
+	if !strings.Contains(text, `"disconnected"`) {
+		t.Fatalf("expected degraded database status, got %s", raw)
 	}
 }

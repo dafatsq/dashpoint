@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog/log"
 )
 
 type healthChecker interface {
@@ -39,14 +40,15 @@ func (h *HealthHandler) Check(c *fiber.Ctx) error {
 		Services:  make(map[string]string),
 	}
 
-	// Check database connection
+	// Check database connection. Driver error details stay in server logs
+	// only — this endpoint is public and must not leak database internals.
 	if healthy, err := h.db.HealthCheck(ctx); healthy {
 		response.Services["database"] = "connected"
 	} else {
 		response.Status = "degraded"
 		response.Services["database"] = "disconnected"
 		if err != nil {
-			response.Services["database_error"] = err.Error()
+			log.Error().Err(err).Msg("Health check: database unavailable")
 		}
 	}
 

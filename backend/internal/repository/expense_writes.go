@@ -28,7 +28,7 @@ func (r *ExpenseRepository) Create(ctx context.Context, expense *models.Expense)
 		expense.ExpenseDate, expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.CreatedBy, now,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create expense: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to create expense: %w", err))
 	}
 	return r.GetByID(ctx, expense.ID)
 }
@@ -55,7 +55,7 @@ func (r *ExpenseRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, expense
 		expense.ExpenseDate, expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.CreatedBy, now,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create expense: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to create expense: %w", err))
 	}
 	return r.GetByIDWithTx(ctx, tx, expense.ID)
 }
@@ -75,7 +75,7 @@ func (r *ExpenseRepository) Update(ctx context.Context, expense *models.Expense)
 		expense.ExpenseDate, expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update expense: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to update expense: %w", err))
 	}
 	if result.RowsAffected() == 0 {
 		return nil, fmt.Errorf("expense not found")
@@ -98,7 +98,7 @@ func (r *ExpenseRepository) UpdateWithTx(ctx context.Context, tx pgx.Tx, expense
 		expense.ExpenseDate, expense.Vendor, expense.ReferenceNumber, expense.Notes, expense.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update expense: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to update expense: %w", err))
 	}
 	if result.RowsAffected() == 0 {
 		return nil, fmt.Errorf("expense not found")
@@ -110,7 +110,7 @@ func (r *ExpenseRepository) UpdateWithTx(ctx context.Context, tx pgx.Tx, expense
 func (r *ExpenseRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result, err := r.pool.Exec(ctx, `DELETE FROM expenses WHERE id = $1`, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete expense: %w", err)
+		return NewInternalError(fmt.Errorf("failed to delete expense: %w", err))
 	}
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("expense not found")
@@ -122,7 +122,7 @@ func (r *ExpenseRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *ExpenseRepository) DeleteWithTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 	result, err := tx.Exec(ctx, `DELETE FROM expenses WHERE id = $1`, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete expense: %w", err)
+		return NewInternalError(fmt.Errorf("failed to delete expense: %w", err))
 	}
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("expense not found")

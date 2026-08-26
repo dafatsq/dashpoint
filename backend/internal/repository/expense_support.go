@@ -62,7 +62,7 @@ func scanExpense(scanner expenseScanner) (*models.Expense, error) {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get expense: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to get expense: %w", err))
 	}
 	return &expense, nil
 }
@@ -79,7 +79,7 @@ func collectExpenses(rows expenseRows) ([]models.Expense, error) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate expenses: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to iterate expenses: %w", err))
 	}
 	return expenses, nil
 }

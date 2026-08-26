@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog/log"
 
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/middleware"
@@ -82,11 +83,11 @@ func (h *ExpenseHandler) Create(c *fiber.Ctx) error {
 
 	created, err := h.createExpense(c.Context(), expense, userID)
 	if err != nil {
-		status := fiber.StatusInternalServerError
-		if len(err.Error()) >= len("Failed to adjust inventory") && err.Error()[:26] == "Failed to adjust inventory" {
-			status = fiber.StatusBadRequest
+		if expenseErr, ok := asSanitizedExpenseError(err); ok {
+			return expenseMessage(c, fiber.StatusBadRequest, expenseErr)
 		}
-		return expenseMessage(c, status, err.Error())
+		log.Error().Err(err).Msg("Failed to create expense")
+		return expenseMessage(c, fiber.StatusInternalServerError, "Could not record the expense. Please try again.")
 	}
 
 	newValues := expenseAuditValues(created)
@@ -230,7 +231,11 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 	}
 
 	if err := h.syncExpenseInventory(c.Context(), tx, id, userID, existing, finalAppliesInventory, finalProductID, finalQuantity); err != nil {
-		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
+		if expenseErr, ok := asSanitizedExpenseError(err); ok {
+			return expenseMessage(c, fiber.StatusBadRequest, expenseErr)
+		}
+		log.Error().Err(err).Msg("Failed to sync expense inventory")
+		return expenseMessage(c, fiber.StatusInternalServerError, "Could not update the expense. Please try again.")
 	}
 
 	existing.CategoryID = finalCategoryID

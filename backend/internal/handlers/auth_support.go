@@ -15,6 +15,7 @@ import (
 	"dashpoint/backend/internal/auth"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
+	"dashpoint/backend/internal/repository"
 )
 
 type authUserReader interface {
@@ -229,4 +230,27 @@ func checkPIN(pin, hash string) bool {
 
 func hashToken(token string) string {
 	return auth.HashToken(token)
+}
+
+// asSanitizedSaleError lets domain-validation messages (insufficient stock,
+// price mismatches, payment mismatches) reach the client verbatim, while
+// infrastructure failures are collapsed to ok=false so their internals stay
+// server-side.
+func asSanitizedSaleError(err error) (string, bool) {
+	var internal *repository.InternalError
+	if errors.As(err, &internal) {
+		return "", false
+	}
+	return err.Error(), true
+}
+
+// asSanitizedExpenseError mirrors asSanitizedSaleError for the expense
+// domain: user-facing validation text passes through, infrastructure
+// internals stay server-side.
+func asSanitizedExpenseError(err error) (string, bool) {
+	var internal *repository.InternalError
+	if errors.As(err, &internal) {
+		return "", false
+	}
+	return err.Error(), true
 }
