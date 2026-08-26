@@ -212,6 +212,17 @@ func checkPassword(password, hash string) bool {
 	return auth.CheckPassword(password, hash)
 }
 
+// dummyPasswordHash is a precomputed cost-12 bcrypt hash used to equalize
+// login timing for unknown emails: without it, missing accounts skip the
+// bcrypt round-trip and respond measurably faster than existing ones.
+var dummyPasswordHash = func() string {
+	hash, err := auth.HashPassword("dashpoint-dummy-password-equalizer")
+	if err != nil {
+		panic("failed to seed dummy password hash: " + err.Error())
+	}
+	return hash
+}()
+
 func checkPIN(pin, hash string) bool {
 	return auth.CheckPIN(pin, hash)
 }

@@ -35,6 +35,7 @@ func NewAuthHandler(
 }
 
 // Login handles POST /api/v1/auth/login.
+// Login handles POST /api/v1/auth/login.
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req LoginRequest
 	if err := parseStrictAuthJSON(c, &req, false); err != nil {
@@ -57,24 +58,18 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		log.Error().Err(err).Msg("Failed to get user by email")
 		return authInternalError(c, "An error occurred during login")
 	}
+
+	// Anti-enumeration: unknown emails burn a bcrypt comparison so response
+	// timing cannot reveal whether an account exists.
 	if user == nil {
+		checkPassword(req.Password, dummyPasswordHash)
+
 		logAuthFailure(c, authFailureContext{
 			action: models.AuditActionLoginFailed,
 			email:  normalizeLoginEmail(req.Email),
 			reason: "user_not_found",
 		})
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
-	}
-	if !user.IsActive {
-		logAuthFailure(c, authFailureContext{
-			action:   models.AuditActionLoginFailed,
-			userID:   &user.ID,
-			email:    normalizeLoginEmail(req.Email),
-			userName: user.Name,
-			roleName: user.Role.Name,
-			reason:   "account_disabled",
-		})
-		return authUnauthorized(c, "ACCOUNT_DISABLED", "Your account has been disabled")
 	}
 	if user.PasswordHash == nil || !checkPassword(req.Password, *user.PasswordHash) {
 		logAuthFailure(c, authFailureContext{
@@ -86,6 +81,20 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 			reason:   "invalid_password",
 		})
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
+	}
+	// Account state is disclosed only after the password verifies, so a wrong
+	// password for a disabled account is indistinguishable from an unknown
+	// email.
+	if !user.IsActive {
+		logAuthFailure(c, authFailureContext{
+			action:   models.AuditActionLoginFailed,
+			userID:   &user.ID,
+			email:    normalizeLoginEmail(req.Email),
+			userName: user.Name,
+			roleName: user.Role.Name,
+			reason:   "account_disabled",
+		})
+		return authUnauthorized(c, "ACCOUNT_DISABLED", "Your account has been disabled")
 	}
 
 	return h.workflow.issueAuthResponse(c, user, false, req.RememberMe)
@@ -120,11 +129,31 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 		log.Error().Err(err).Str("user_id", req.UserID).Msg("Failed to get user by ID")
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid credentials")
 	}
+
+	// Anti-enumeration: account existence/state is disclosed only after the
+	// PIN verifies; unknown ids burn a comparison to match timing.
 	if user == nil {
+		checkPIN(req.PIN, dummyPasswordHash)
+
 		logAuthFailure(c, authFailureContext{
 			action: models.AuditActionLoginFailed,
 			email:  req.UserID,
 			reason: "user_not_found",
+		})
+		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid credentials")
+	}
+	if user.PINHash == nil || !checkPIN(req.PIN, *user.PINHash) {
+		reason := "invalid_pin"
+		if user.PINHash == nil {
+			reason = "pin_not_set"
+		}
+		logAuthFailure(c, authFailureContext{
+			action:   models.AuditActionLoginFailed,
+			userID:   &user.ID,
+			email:    req.UserID,
+			userName: user.Name,
+			roleName: user.Role.Name,
+			reason:   reason,
 		})
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid credentials")
 	}
@@ -138,28 +167,6 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 			reason:   "account_disabled",
 		})
 		return authUnauthorized(c, "ACCOUNT_INACTIVE", "Account is inactive")
-	}
-	if user.PINHash == nil {
-		logAuthFailure(c, authFailureContext{
-			action:   models.AuditActionLoginFailed,
-			userID:   &user.ID,
-			email:    req.UserID,
-			userName: user.Name,
-			roleName: user.Role.Name,
-			reason:   "pin_not_set",
-		})
-		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid credentials")
-	}
-	if !checkPIN(req.PIN, *user.PINHash) {
-		logAuthFailure(c, authFailureContext{
-			action:   models.AuditActionLoginFailed,
-			userID:   &user.ID,
-			email:    req.UserID,
-			userName: user.Name,
-			roleName: user.Role.Name,
-			reason:   "invalid_pin",
-		})
-		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid PIN")
 	}
 
 	return h.workflow.issueAuthResponse(c, user, false, nil)

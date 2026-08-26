@@ -690,3 +690,148 @@ func TestRefreshGraceWindowRejectsNonRotationRevocations(t *testing.T) {
 		t.Fatalf("expected non-rotation revocation to stay rejected (401), got %d", resp.StatusCode)
 	}
 }
+
+func TestLoginAntiEnumerationUniformResponses(t *testing.T) {
+	roleID := uuid.New()
+	userID := uuid.New()
+	passwordHash, err := authpkg.HashPassword("secret123")
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	email := "disabled@example.com"
+	disabledUser := &models.User{
+		ID:           userID,
+		Email:        &email,
+		Name:         "Disabled",
+		PasswordHash: &passwordHash,
+		RoleID:       roleID,
+		IsActive:     false,
+		Role:         &models.Role{ID: roleID, Name: "cashier"},
+	}
+	userRepo := &fakeAuthUserRepo{userByEmail: disabledUser, userByID: disabledUser}
+	tokenStore := &fakeRefreshTokenStore{}
+	jwtManager := &fakeJWTManager{tokenPair: &authpkg.TokenPair{
+		AccessToken:           "access-token",
+		RefreshToken:          "refresh-token",
+		AccessTokenExpiresAt:  time.Unix(300, 0),
+		RefreshTokenExpiresAt: time.Unix(400, 0),
+	}}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+	app := fiber.New()
+	app.Post("/login", handler.Login)
+
+	cases := []struct {
+		name     string
+		body     string
+		wantCode string
+		wantMsg  string
+	}{
+		{
+			name:     "unknown email",
+			body:     `{"email":"nobody@example.com","password":"whatever"}`,
+			wantCode: "INVALID_CREDENTIALS",
+			wantMsg:  "Invalid email or password",
+		},
+		{
+			name:     "disabled account with wrong password",
+			body:     `{"email":"disabled@example.com","password":"wrong"}`,
+			wantCode: "INVALID_CREDENTIALS",
+			wantMsg:  "Invalid email or password",
+		},
+		{
+			name:     "disabled account with correct password",
+			body:     `{"email":"disabled@example.com","password":"secret123"}`,
+			wantCode: "ACCOUNT_DISABLED",
+			wantMsg:  "Your account has been disabled",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/login", bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusUnauthorized {
+				t.Fatalf("%s: expected 401, got %d", tc.name, resp.StatusCode)
+			}
+			var body struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			}
+			raw, rerr := io.ReadAll(resp.Body)
+			if rerr != nil {
+				t.Fatalf("read body: %v", rerr)
+			}
+			if err := json.Unmarshal(raw, &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if body.Code != tc.wantCode || body.Message != tc.wantMsg {
+				t.Fatalf("%s: got %s/%q want %s/%q", tc.name, body.Code, body.Message, tc.wantCode, tc.wantMsg)
+			}
+		})
+	}
+}
+
+func TestPINLoginAntiEnumerationOrder(t *testing.T) {
+	roleID := uuid.New()
+	userID := uuid.New()
+	pinHash, err := authpkg.HashPIN("9911")
+	if err != nil {
+		t.Fatalf("HashPIN returned error: %v", err)
+	}
+	inactiveUser := &models.User{
+		ID:       userID,
+		Name:     "Disabled",
+		PINHash:  &pinHash,
+		RoleID:   roleID,
+		IsActive: false,
+		Role:     &models.Role{ID: roleID, Name: "cashier"},
+	}
+	userRepo := &fakeAuthUserRepo{userByID: inactiveUser}
+	tokenStore := &fakeRefreshTokenStore{}
+	jwtManager := &fakeJWTManager{tokenPair: &authpkg.TokenPair{
+		AccessToken:           "access-token",
+		RefreshToken:          "refresh-token",
+		AccessTokenExpiresAt:  time.Unix(300, 0),
+		RefreshTokenExpiresAt: time.Unix(400, 0),
+	}}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+	app := fiber.New()
+	app.Post("/pin-login", handler.PINLogin)
+
+	// wrong PIN on an inactive account must read as generic invalid
+	// credentials, not disclose that the account is inactive
+	req := httptest.NewRequest("POST", "/pin-login", bytes.NewBufferString(
+		`{"user_id":"`+userID.String()+`","pin":"1111"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	raw, rerr := io.ReadAll(resp.Body)
+	if rerr != nil {
+		t.Fatalf("read body: %v", rerr)
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized || body.Code != "INVALID_CREDENTIALS" {
+		t.Fatalf("expected generic INVALID_CREDENTIALS for wrong pin, got %d/%s", resp.StatusCode, body.Code)
+	}
+}
