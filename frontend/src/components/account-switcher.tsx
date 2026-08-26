@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
+import { writeRememberScope } from '@/lib/auth-session';
 import { AccountManager, SavedAccount } from '@/lib/account-manager';
 import {
   filterSwitchableAccounts,
@@ -29,7 +30,7 @@ export function AccountSwitcher({
   excludeUserId,
 }: AccountSwitcherProps) {
   const router = useRouter();
-  const { pinLogin } = useAuth();
+  const { pinLogin, logout, user: currentUser } = useAuth();
   const [accounts, setAccounts] = useState<SavedAccount[]>(AccountManager.getSavedAccounts());
   const [selectedAccount, setSelectedAccount] = useState<SavedAccount | null>(null);
   const [pin, setPin] = useState('');
@@ -122,9 +123,24 @@ export function AccountSwitcher({
     }
   };
 
-  const handleRemoveAccount = (accountId: string, e: React.MouseEvent) => {
+  const handleRemoveAccount = async (accountId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     AccountManager.removeAccount(accountId);
+    // Unsaving an account revokes its automatic sign-in on this device: the
+    // scope drops so future silent refreshes downgrade, and if this exact
+    // account is the one currently signed in, sign it out fully so the live
+    // persistent cookie cannot resurrect it after a browser restart.
+    writeRememberScope(false);
+    if (currentUser?.id === accountId) {
+      try {
+        await logout();
+      } catch {
+        // best-effort; scope=false already prevents auto sign-in on reload
+      }
+      onAccountsChange?.();
+      refreshAccounts();
+      return;
+    }
     refreshAccounts();
     onAccountsChange?.();
   };
