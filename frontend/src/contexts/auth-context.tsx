@@ -196,13 +196,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // empty and the httpOnly refresh cookie decides whether a session
     // survived the reload.
     void (async () => {
-      const refreshedUser = await refreshSessionUser();
-      if (cancelled) return;
-      setUser(refreshedUser);
-      setIsLoading(false);
-      if (refreshedUser && !hasBootstrappedRefreshRef.current) {
-        hasBootstrappedRefreshRef.current = true;
-        requestUserRefresh();
+      // Hard cap the boot spinner — a hung request must never trap the user
+      // on a loading screen.
+      const failsafe = window.setTimeout(() => {
+        if (cancelled) return;
+        console.warn("Auth bootstrap timed out; releasing loading state.");
+        setUser(null);
+        setIsLoading(false);
+      }, 12000);
+      try {
+        const refreshedUser = await refreshSessionUser();
+        if (cancelled) return;
+        setUser(refreshedUser);
+        setIsLoading(false);
+        if (refreshedUser && !hasBootstrappedRefreshRef.current) {
+          hasBootstrappedRefreshRef.current = true;
+          requestUserRefresh();
+        }
+      } finally {
+        window.clearTimeout(failsafe);
       }
     })();
 

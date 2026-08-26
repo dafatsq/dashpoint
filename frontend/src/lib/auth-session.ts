@@ -214,6 +214,9 @@ export async function refreshSessionUser(): Promise<User | null> {
  * immediately. Resolves with the refreshed user, or null on failure.
  */
 export async function reissueSessionCookie(rememberMe: boolean): Promise<User | null> {
+  // Drain any in-flight (scope-less) refresh first — the deduped promise
+  // would otherwise swallow the flag and leak it onto a much later boot.
+  await refreshSessionTokens();
   pendingRememberScope = rememberMe;
   return refreshSessionUser();
 }
