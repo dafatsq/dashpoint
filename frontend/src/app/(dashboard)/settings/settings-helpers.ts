@@ -12,23 +12,11 @@ export interface SettingsProfileForm {
   pin: string;
 }
 
+// Quick Access (saved account + PIN fast login) and Automatic Sign-In
+// (persistent refresh cookie) are independent toggles.
 export function normalizeSettingsPreferences(
   preferences: SettingsPreferences,
 ): SettingsPreferences {
-  if (!preferences.quickAccess) {
-    return {
-      rememberMe: false,
-      quickAccess: false,
-    };
-  }
-
-  if (preferences.rememberMe) {
-    return {
-      rememberMe: true,
-      quickAccess: true,
-    };
-  }
-
   return preferences;
 }
 
@@ -36,39 +24,19 @@ export function updateRememberMePreference(
   current: SettingsPreferences,
   rememberMe: boolean,
 ): SettingsPreferences {
-  if (rememberMe) {
-    return {
-      rememberMe: true,
-      quickAccess: true,
-    };
-  }
-
-  return {
-    rememberMe: false,
-    quickAccess: current.quickAccess,
-  };
+  return { ...current, rememberMe };
 }
 
 export function updateQuickAccessPreference(
   current: SettingsPreferences,
   quickAccess: boolean,
 ): SettingsPreferences {
-  if (!quickAccess) {
-    return {
-      rememberMe: false,
-      quickAccess: false,
-    };
-  }
-
-  return {
-    rememberMe: current.rememberMe,
-    quickAccess: true,
-  };
+  return { ...current, quickAccess };
 }
 
-export function buildSettingsPreferences(savedPreference: string | null, hasSavedAccount: boolean): SettingsPreferences {
+export function buildSettingsPreferences(rememberScopeEnabled: boolean, hasSavedAccount: boolean): SettingsPreferences {
   return normalizeSettingsPreferences({
-    rememberMe: savedPreference !== "false",
+    rememberMe: rememberScopeEnabled,
     quickAccess: hasSavedAccount,
   });
 }

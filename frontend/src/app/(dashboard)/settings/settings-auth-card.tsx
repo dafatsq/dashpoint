@@ -49,7 +49,7 @@ export function SettingsAuthCard({ preferences, onPreferencesChange }: SettingsA
           <div className="flex-1 space-y-0.5">
             <Label>Quick Access (Save Login)</Label>
             <p className="text-sm text-muted-foreground">
-              Save this account in the browser so you can log back in instantly using only your Quick PIN. Disabling this also disables Automatic Sign-In.
+              Save this account on this device so you can sign back in instantly using your Quick PIN.
             </p>
           </div>
           <Switch

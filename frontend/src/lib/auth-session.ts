@@ -4,9 +4,7 @@ import { AccountManager } from "@/lib/account-manager";
 import { API_BASE_URL, IS_DESKTOP_BUILD } from "@/lib/config";
 import {
   clearSession,
-  getRememberMeKey,
   getSessionItem,
-  migrateSession,
   removeSessionItem,
   setSessionItem,
 } from "@/lib/session";
@@ -64,15 +62,6 @@ export function persistUserSession(user: User): void {
   setSessionItem("user", JSON.stringify(user));
 }
 
-export function syncRememberMePreference(userId: string): void {
-  if (!IS_DESKTOP_BUILD) return;
-
-  const preference = window.localStorage.getItem(getRememberMeKey(userId));
-  if (preference === "false") {
-    migrateSession(false);
-  }
-}
-
 export function syncSavedAccount(user: User): void {
   if (!user.has_pin) return;
 
@@ -114,25 +103,14 @@ export function persistAuthUser(
     syncSavedAccount(user);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("dashpoint_device_trusted", "true");
-      const prefKey = getRememberMeKey(user.id);
-      if (window.localStorage.getItem(prefKey) !== "false") {
-        window.localStorage.setItem(prefKey, "true");
-      }
     }
     persistUserSession(user);
-    syncRememberMePreference(user.id);
   } else {
     AccountManager.removeAccount(user.id);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("dashpoint_device_trusted");
-      if (options.saveAccount === false) {
-        const prefKey = getRememberMeKey(user.id);
-        window.localStorage.setItem(prefKey, "false");
-        writeRememberScope(false);
-      }
     }
     persistUserSession(user);
-    syncRememberMePreference(user.id);
   }
 
   return user;
@@ -191,6 +169,7 @@ async function refreshSessionTokensInternal(): Promise<boolean> {
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ remember_me: rememberMe }),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) {

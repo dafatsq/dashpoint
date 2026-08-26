@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 
+import { reissueSessionCookie } from "@/lib/auth-session";
 import { IS_DESKTOP_BUILD } from "@/lib/config";
-import { reissueSessionCookie, writeRememberScope } from "@/lib/auth-session";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { getRememberMeKey } from "@/lib/session";
+import { readRememberScope, writeRememberScope } from "@/lib/auth-session";
 import { useAuth } from "@/contexts/auth-context";
 import { useGlobalError } from "@/contexts/error-context";
 import { AccountManager } from "@/lib/account-manager";
@@ -70,9 +70,8 @@ export function SettingsScreen() {
     if (!user) return;
 
     const timer = window.setTimeout(() => {
-      const preferenceKey = getRememberMeKey(user.id);
       const nextPreferences = buildSettingsPreferences(
-        localStorage.getItem(preferenceKey),
+        readRememberScope(),
         AccountManager.getAccount(user.id) !== null,
       );
       setPreferences((current) =>
@@ -107,13 +106,8 @@ export function SettingsScreen() {
 
     const nextPreferences = normalizeSettingsPreferences(preferences);
 
-    const preferenceKey = getRememberMeKey(user.id);
-    localStorage.setItem(
-      preferenceKey,
-      nextPreferences.rememberMe ? "true" : "false",
-    );
-    // Keep the device-scope key in sync — silent refreshes read it on every
-    // future boot, so rotated cookies inherit this choice.
+    // Single source of truth for auto sign-in is the device scope key; the
+    // cookie is immediately re-minted below to apply it to this session.
     writeRememberScope(nextPreferences.rememberMe);
 
     // Web builds store no tokens locally, so remember-me is enforced by the

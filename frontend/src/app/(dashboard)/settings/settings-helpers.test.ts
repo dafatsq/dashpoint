@@ -26,96 +26,70 @@ const user: User = {
 
 describe("settings helpers", () => {
   test("builds initial settings preferences", () => {
-    expect(buildSettingsPreferences(null, true)).toEqual({
+    expect(buildSettingsPreferences(true, true)).toEqual({
       rememberMe: true,
       quickAccess: true,
     });
 
-    expect(buildSettingsPreferences("false", false)).toEqual({
-      rememberMe: false,
-      quickAccess: false,
-    });
-
-    expect(buildSettingsPreferences("true", false)).toEqual({
+    expect(buildSettingsPreferences(false, false)).toEqual({
       rememberMe: false,
       quickAccess: false,
     });
   });
 
-  test("normalizes dependent remember me and quick access preferences", () => {
+  test("keeps automatic sign-in and quick access independent", () => {
     expect(
       normalizeSettingsPreferences({
         rememberMe: true,
         quickAccess: false,
       }),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: false,
-    });
+    ).toEqual({ rememberMe: true, quickAccess: false });
 
     expect(
       normalizeSettingsPreferences({
         rememberMe: false,
         quickAccess: true,
       }),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: false, quickAccess: true });
 
     expect(
       normalizeSettingsPreferences({
         rememberMe: true,
         quickAccess: true,
       }),
-    ).toEqual({
-      rememberMe: true,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: true, quickAccess: true });
   });
 
-  test("enabling remember me automatically enables quick access", () => {
+  test("remember-me updates leave quick access untouched", () => {
     expect(
       updateRememberMePreference(
         { rememberMe: false, quickAccess: false },
         true,
       ),
-    ).toEqual({
-      rememberMe: true,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: true, quickAccess: false });
 
     expect(
       updateRememberMePreference(
         { rememberMe: true, quickAccess: true },
         false,
       ),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: false, quickAccess: true });
   });
 
-  test("disabling quick access automatically disables remember me", () => {
+  test("quick-access updates leave automatic sign-in untouched", () => {
     expect(
       updateQuickAccessPreference(
         { rememberMe: true, quickAccess: true },
         false,
       ),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: false,
-    });
+    ).toEqual({ rememberMe: true, quickAccess: false });
 
     expect(
       updateQuickAccessPreference(
         { rememberMe: false, quickAccess: false },
         true,
       ),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: false, quickAccess: true });
   });
 
   test("detects preference changes", () => {

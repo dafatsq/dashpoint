@@ -27,6 +27,7 @@ import {
   refreshSessionUser,
 } from "@/lib/auth-session";
 import { IS_DESKTOP_BUILD } from "@/lib/config";
+import { readRememberScope } from "@/lib/auth-session";
 import type { AuthPayload } from "@/lib/auth-user";
 import type { User } from "@/types";
 
@@ -234,7 +235,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(
     async (email: string, password: string, saveAccount?: boolean) => {
-      const result = await api.login(email, password, saveAccount);
+      // Automatic sign-in scope is owned by the settings toggle (device
+      // scope key); the login-page checkbox only governs Quick Access.
+      const result = await api.login(email, password, readRememberScope());
       if (result.error || !result.data) {
         return { success: false, error: result.error ?? "Login failed" };
       }
