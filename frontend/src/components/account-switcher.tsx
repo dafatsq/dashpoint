@@ -126,21 +126,19 @@ export function AccountSwitcher({
   const handleRemoveAccount = async (accountId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     AccountManager.removeAccount(accountId);
-    // Unsaving an account revokes its automatic sign-in on this device: the
-    // scope drops so future silent refreshes downgrade, and if this exact
-    // account is the one currently signed in, sign it out fully so the live
-    // persistent cookie cannot resurrect it after a browser restart.
-    writeRememberScope(false);
+    // Removing the currently signed-in account ends its automatic sign-in on
+    // this device: the scope drops so future silent refreshes downgrade, and
+    // a full sign-out kills the live persistent cookie. Removing a different
+    // account only trims the Quick Access list.
     if (currentUser?.id === accountId) {
+      writeRememberScope(false);
       try {
         await logout();
       } catch {
         // best-effort; scope=false already prevents auto sign-in on reload
       }
-      onAccountsChange?.();
-      refreshAccounts();
-      return;
     }
+    AccountManager.removeAccount(accountId);
     refreshAccounts();
     onAccountsChange?.();
   };

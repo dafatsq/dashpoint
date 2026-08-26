@@ -27,7 +27,7 @@ import {
   refreshSessionUser,
 } from "@/lib/auth-session";
 import { IS_DESKTOP_BUILD } from "@/lib/config";
-import { readRememberScope } from "@/lib/auth-session";
+import { readRememberScope, writeRememberScope } from "@/lib/auth-session";
 import type { AuthPayload } from "@/lib/auth-user";
 import type { User } from "@/types";
 
@@ -247,14 +247,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(
     async (email: string, password: string, saveAccount?: boolean) => {
-      // Automatic sign-in scope is owned by the settings toggle (device
-      // scope key); the login-page checkbox only governs Quick Access.
-      const result = await api.login(email, password, readRememberScope());
+      // Automatic sign-in requires BOTH the device scope (settings toggle)
+      // and Save-login on this login (Quick Access save). Unchecked login
+      // always yields a session-scoped cookie.
+      const remembered = readRememberScope() && Boolean(saveAccount);
+      const result = await api.login(email, password, remembered);
       if (result.error || !result.data) {
         return { success: false, error: result.error ?? "Login failed" };
       }
 
       applyAuthPayload(result.data, { saveAccount });
+      writeRememberScope(remembered);
       return { success: true };
     },
     [applyAuthPayload],

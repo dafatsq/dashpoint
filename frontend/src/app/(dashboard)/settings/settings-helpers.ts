@@ -67,3 +67,14 @@ export function buildProfileUpdatePayload(user: User, form: SettingsProfileForm)
 
   return payload;
 }
+
+/**
+ * Automatic sign-in requires the account to be saved on this device: if it
+ * is not, the refresh cookie is session-scoped and auto login is disabled.
+ */
+export function effectiveRememberMe(
+  rememberMe: boolean,
+  hasSavedAccount: boolean,
+): boolean {
+  return rememberMe && hasSavedAccount;
+}

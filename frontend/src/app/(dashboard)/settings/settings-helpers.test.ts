@@ -8,6 +8,7 @@ import {
   hasSettingsPreferenceChanges,
   normalizeSettingsPreferences,
   profileHasChanges,
+  effectiveRememberMe,
   updateQuickAccessPreference,
   updateRememberMePreference,
 } from "./settings-helpers";
@@ -152,5 +153,14 @@ describe("settings helpers", () => {
       password: "new-password",
       pin: "123456",
     });
+  });
+});
+
+describe("effectiveRememberMe", () => {
+  test("requires both the toggle and a saved account", () => {
+    expect(effectiveRememberMe(true, true)).toBe(true);
+    expect(effectiveRememberMe(true, false)).toBe(false);
+    expect(effectiveRememberMe(false, true)).toBe(false);
+    expect(effectiveRememberMe(false, false)).toBe(false);
   });
 });
