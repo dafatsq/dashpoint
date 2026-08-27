@@ -48,17 +48,21 @@ func (f *fakeAuthUserRepo) UpdateLastLogin(context.Context, uuid.UUID) error {
 }
 
 type fakeRefreshTokenStore struct {
-	stored          *models.RefreshToken
-	getErr          error
-	createErr       error
-	revokeErr       error
-	rotateErr       error
-	created         *models.RefreshToken
-	revokedHash     string
-	revokeReason    string
-	rotatedOldHash  string
-	rotatedReason   string
-	rotatedNewToken *models.RefreshToken
+	stored             *models.RefreshToken
+	getErr             error
+	createErr          error
+	revokeErr          error
+	rotateErr          error
+	familyRevokeErr    error
+	created            *models.RefreshToken
+	revokedHash        string
+	revokeReason       string
+	rotatedOldHash     string
+	rotatedReason      string
+	rotatedNewToken    *models.RefreshToken
+	familyRevokeCalls  int
+	revokedFamilyID    uuid.UUID
+	familyRevokeReason string
 }
 
 func (f *fakeRefreshTokenStore) Create(_ context.Context, token *models.RefreshToken) error {
@@ -81,6 +85,13 @@ func (f *fakeRefreshTokenStore) Rotate(_ context.Context, oldHash, reason string
 	f.rotatedReason = reason
 	f.rotatedNewToken = replacement
 	return f.rotateErr
+}
+
+func (f *fakeRefreshTokenStore) RevokeFamily(_ context.Context, familyID uuid.UUID, reason string) error {
+	f.familyRevokeCalls++
+	f.revokedFamilyID = familyID
+	f.familyRevokeReason = reason
+	return f.familyRevokeErr
 }
 
 type fakeJWTManager struct {
@@ -610,31 +621,43 @@ func TestLoginRememberMeAbsentKeepsPersistentDefault(t *testing.T) {
 
 func newRefreshRaceTestApp(t *testing.T, revokedReason string, revokedAgo time.Duration) *fiber.App {
 	t.Helper()
-	roleID := uuid.New()
+	app, _ := newRefreshTestAppWithToken(t, refreshRaceStoredToken(revokedReason, revokedAgo))
+	return app
+}
+
+// refreshRaceStoredToken builds a stored refresh token revoked revokedAgo ago
+// with the given reason, belonging to a fresh token family.
+func refreshRaceStoredToken(revokedReason string, revokedAgo time.Duration) *models.RefreshToken {
 	userID := uuid.New()
-	email := "race@example.com"
-	user := &models.User{
-		ID:       userID,
-		Email:    &email,
-		Name:     "Manager",
-		RoleID:   roleID,
-		IsActive: true,
-		Role:     &models.Role{ID: roleID, Name: "manager"},
-	}
-	currentToken := "stale-token"
-	hash := authpkg.HashToken(currentToken)
+	hash := authpkg.HashToken("stale-token")
 	revokedAt := time.Now().Add(-revokedAgo)
-	stored := &models.RefreshToken{
+	return &models.RefreshToken{
 		UserID:        userID,
 		TokenHash:     hash,
 		ExpiresAt:     time.Now().Add(time.Hour),
 		RevokedAt:     &revokedAt,
 		RevokedReason: &revokedReason,
+		FamilyID:      uuid.New(),
+	}
+}
+
+// newRefreshTestAppWithToken wires a refresh handler around the given stored
+// token and returns the app plus the fake store for call assertions.
+func newRefreshTestAppWithToken(t *testing.T, stored *models.RefreshToken) (*fiber.App, *fakeRefreshTokenStore) {
+	t.Helper()
+	email := "race@example.com"
+	user := &models.User{
+		ID:       stored.UserID,
+		Email:    &email,
+		Name:     "Manager",
+		RoleID:   uuid.New(),
+		IsActive: true,
+		Role:     &models.Role{ID: uuid.New(), Name: "manager"},
 	}
 	userRepo := &fakeAuthUserRepo{userByID: user}
 	tokenStore := &fakeRefreshTokenStore{stored: stored}
 	jwtManager := &fakeJWTManager{
-		validateRefreshClaims: &authpkg.Claims{UserID: userID},
+		validateRefreshClaims: &authpkg.Claims{UserID: stored.UserID},
 		tokenPair: &authpkg.TokenPair{
 			AccessToken:           "grace-access",
 			RefreshToken:          "grace-refresh",
@@ -650,7 +673,7 @@ func newRefreshRaceTestApp(t *testing.T, revokedReason string, revokedAgo time.D
 	}
 	app := fiber.New()
 	app.Post("/refresh", handler.Refresh)
-	return app
+	return app, tokenStore
 }
 
 func postRefresh(t *testing.T, app *fiber.App) *http.Response {
@@ -688,6 +711,76 @@ func TestRefreshGraceWindowRejectsNonRotationRevocations(t *testing.T) {
 	resp := postRefresh(t, app)
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("expected non-rotation revocation to stay rejected (401), got %d", resp.StatusCode)
+	}
+}
+
+func TestRefreshReuseBeyondGraceRevokesFamily(t *testing.T) {
+	stored := refreshRaceStoredToken("token_refresh", 45*time.Second)
+	app, store := newRefreshTestAppWithToken(t, stored)
+
+	resp := postRefresh(t, app)
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected beyond-grace replay to be rejected (401), got %d", resp.StatusCode)
+	}
+	if store.familyRevokeCalls != 1 {
+		t.Fatalf("expected one family revocation, got %d", store.familyRevokeCalls)
+	}
+	if store.revokedFamilyID != stored.FamilyID {
+		t.Fatalf("expected family %s to be revoked, got %s", stored.FamilyID, store.revokedFamilyID)
+	}
+	if store.familyRevokeReason != tokenFamilyReuseRevocationReason {
+		t.Fatalf("expected reason %s, got %s", tokenFamilyReuseRevocationReason, store.familyRevokeReason)
+	}
+}
+
+func TestRefreshGraceWindowContinuationJoinsSameFamily(t *testing.T) {
+	stored := refreshRaceStoredToken("token_refresh", 5*time.Second)
+	app, store := newRefreshTestAppWithToken(t, stored)
+
+	resp := postRefresh(t, app)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected grace window continuation to succeed (200), got %d", resp.StatusCode)
+	}
+	if store.familyRevokeCalls != 0 {
+		t.Fatalf("grace-window sibling race must not revoke the family, got %d revocations", store.familyRevokeCalls)
+	}
+	if store.created == nil || store.created.FamilyID != stored.FamilyID {
+		t.Fatalf("continuation token must join the presented token's family")
+	}
+}
+
+func TestRefreshReuseOfLoggedOutTokenRevokesFamily(t *testing.T) {
+	stored := refreshRaceStoredToken("user_logout", 5*time.Second)
+	app, store := newRefreshTestAppWithToken(t, stored)
+
+	resp := postRefresh(t, app)
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected replay after logout to be rejected (401), got %d", resp.StatusCode)
+	}
+	if store.familyRevokeCalls != 1 || store.revokedFamilyID != stored.FamilyID {
+		t.Fatalf("replay of a logout-revoked token must contain the family")
+	}
+}
+
+func TestRefreshExpiredTokenDoesNotRevokeFamily(t *testing.T) {
+	// An expired-but-never-revoked token is an idle session, not theft: the
+	// request is rejected without family containment.
+	stored := refreshRaceStoredToken("", 0)
+	stored.RevokedAt = nil
+	stored.RevokedReason = nil
+	stored.ExpiresAt = time.Now().Add(-time.Hour)
+	app, store := newRefreshTestAppWithToken(t, stored)
+
+	resp := postRefresh(t, app)
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected expired token to be rejected (401), got %d", resp.StatusCode)
+	}
+	if store.familyRevokeCalls != 0 {
+		t.Fatalf("expired token must not trigger family revocation, got %d", store.familyRevokeCalls)
 	}
 }
 

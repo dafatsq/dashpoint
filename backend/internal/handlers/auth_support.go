@@ -30,6 +30,7 @@ type authRefreshTokenStore interface {
 	GetByTokenHash(context.Context, string) (*models.RefreshToken, error)
 	Revoke(context.Context, string, string) error
 	Rotate(context.Context, string, string, *models.RefreshToken) error
+	RevokeFamily(context.Context, uuid.UUID, string) error
 }
 
 type authTokenManager interface {

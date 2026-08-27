@@ -24,6 +24,11 @@ type AuditLog struct {
 	NewValues map[string]interface{} `json:"new_values,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 
+	// Request source metadata (best-effort; nil for background entries).
+	IPAddress *string `json:"ip_address,omitempty"`
+	UserAgent *string `json:"user_agent,omitempty"`
+	RequestID *string `json:"request_id,omitempty"`
+
 	Status AuditStatus `json:"status"`
 }
 
@@ -39,5 +44,8 @@ type AuditLogEntry struct {
 	OldValues   map[string]interface{}
 	NewValues   map[string]interface{}
 	Metadata    map[string]interface{}
+	IPAddress   string
+	UserAgent   string
+	RequestID   string
 	Status      AuditStatus
 }

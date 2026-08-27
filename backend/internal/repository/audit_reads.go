@@ -15,7 +15,8 @@ const auditSelectColumns = `
 		COALESCE(u.name, audit_logs.user_name) as user_name, audit_logs.user_role,
 		audit_logs.action, audit_logs.entity_type, audit_logs.entity_id, audit_logs.description,
 		audit_logs.old_values, audit_logs.new_values, audit_logs.metadata,
-		audit_logs.status
+		audit_logs.status,
+		audit_logs.ip_address, audit_logs.user_agent, audit_logs.request_id
 	FROM audit_logs
 	LEFT JOIN users u ON audit_logs.user_id = u.id
 `

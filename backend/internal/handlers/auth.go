@@ -97,7 +97,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return authUnauthorized(c, "ACCOUNT_DISABLED", "Your account has been disabled")
 	}
 
-	return h.workflow.issueAuthResponse(c, user, false, req.RememberMe)
+	return h.workflow.issueAuthResponse(c, user, false, req.RememberMe, uuid.Nil)
 }
 
 // PINLogin handles POST /api/v1/auth/pin-login.
@@ -169,7 +169,7 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 		return authUnauthorized(c, "ACCOUNT_INACTIVE", "Account is inactive")
 	}
 
-	return h.workflow.issueAuthResponse(c, user, false, nil)
+	return h.workflow.issueAuthResponse(c, user, false, nil, uuid.Nil)
 }
 
 type RefreshRequest struct {
@@ -219,14 +219,24 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	// continuation and receives its own fresh pair.
 	siblingRotationRace := !storedToken.IsValid() && isRecentlyRotatedToken(storedToken)
 	if !storedToken.IsValid() && !siblingRotationRace {
+		// Presenting a token that was already revoked is the signature of a
+		// stolen token: contain the compromise by revoking every live token
+		// minted from the same login. Best-effort; the request fails anyway.
+		// Expired-but-never-revoked tokens are idle sessions, not theft, so
+		// they only get the plain rejection below.
+		if storedToken.RevokedAt != nil {
+			if err := h.refreshTokenRepo.RevokeFamily(c.Context(), storedToken.FamilyID, tokenFamilyReuseRevocationReason); err != nil {
+				log.Error().Err(err).Msg("Failed to revoke refresh token family after reuse")
+			}
+		}
 		return authUnauthorized(c, "INVALID_TOKEN", "Refresh token has been revoked or expired")
 	}
 	if siblingRotationRace {
 		log.Warn().Str("user_id", user.ID.String()).Msg("Refresh grace window honored for sibling-tab rotation race")
-		return h.workflow.issueAuthResponse(c, user, true, nil)
+		return h.workflow.issueAuthResponse(c, user, true, nil, storedToken.FamilyID)
 	}
 
-	return h.workflow.rotateRefreshToken(c, tokenHash, user, refreshReq.RememberMe)
+	return h.workflow.rotateRefreshToken(c, tokenHash, storedToken.FamilyID, user, refreshReq.RememberMe)
 }
 
 // Logout handles POST /api/v1/auth/logout.

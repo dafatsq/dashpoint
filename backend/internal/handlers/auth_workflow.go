@@ -30,6 +30,9 @@ const (
 	// tokenRefreshRevocationReason must match the reason the repository uses
 	// during normal rotation; only rotation revocations are grace-eligible.
 	tokenRefreshRevocationReason = "token_refresh"
+	// tokenFamilyReuseRevocationReason marks tokens killed because a revoked
+	// sibling in their family was replayed beyond the rotation grace window.
+	tokenFamilyReuseRevocationReason = "token_family_reuse"
 )
 
 func newAuthWorkflow(userRepo authUserReader, tokenStore authRefreshTokenStore, jwtManager authTokenManager) *authWorkflow {
@@ -40,7 +43,14 @@ func newAuthWorkflow(userRepo authUserReader, tokenStore authRefreshTokenStore, 
 	}
 }
 
-func (w *authWorkflow) issueAuthResponse(c *fiber.Ctx, user *models.User, isRefresh bool, rememberMe *bool) error {
+// issueAuthResponse mints a fresh token pair. A zero familyID starts a new
+// refresh-token family (login paths); an existing familyID continues one
+// (grace-window sibling continuation).
+func (w *authWorkflow) issueAuthResponse(c *fiber.Ctx, user *models.User, isRefresh bool, rememberMe *bool, familyID uuid.UUID) error {
+	if familyID == uuid.Nil {
+		familyID = uuid.New()
+	}
+
 	tokenPair, err := w.jwtManager.GenerateTokenPair(
 		user.ID,
 		func() string {
@@ -62,6 +72,7 @@ func (w *authWorkflow) issueAuthResponse(c *fiber.Ctx, user *models.User, isRefr
 		UserID:    user.ID,
 		TokenHash: auth.HashToken(tokenPair.RefreshToken),
 		ExpiresAt: tokenPair.RefreshTokenExpiresAt,
+		FamilyID:  familyID,
 	}
 
 	if err := w.tokenStore.Create(c.Context(), refreshTokenRecord); err != nil {
@@ -83,7 +94,9 @@ func isRecentlyRotatedToken(token *models.RefreshToken) bool {
 		time.Since(*token.RevokedAt) <= refreshReuseGraceWindow
 }
 
-func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user *models.User, rememberMe *bool) error {
+// rotateRefreshToken replaces the presented token with a new pair in the same
+// refresh-token family.
+func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, familyID uuid.UUID, user *models.User, rememberMe *bool) error {
 	tokenPair, err := w.jwtManager.GenerateTokenPair(
 		user.ID,
 		func() string {
@@ -105,6 +118,7 @@ func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, user
 		UserID:    user.ID,
 		TokenHash: auth.HashToken(tokenPair.RefreshToken),
 		ExpiresAt: tokenPair.RefreshTokenExpiresAt,
+		FamilyID:  familyID,
 	}
 
 	if err := w.tokenStore.Rotate(c.Context(), currentHash, tokenRefreshRevocationReason, refreshTokenRecord); err != nil {

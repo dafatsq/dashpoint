@@ -61,6 +61,15 @@ func LogSync(ctx context.Context, entry *models.AuditLogEntry) error {
 	return globalService.repo.Create(ctx, entry)
 }
 
+// fillRequestMetadata records where the audited action originated. All Fiber
+// handler helpers route through this; background callers with no Fiber context
+// keep empty metadata.
+func fillRequestMetadata(c *fiber.Ctx, entry *models.AuditLogEntry) {
+	entry.IPAddress = c.IP()
+	entry.UserAgent = c.Get("User-Agent")
+	entry.RequestID = middleware.GetRequestID(c)
+}
+
 // LogFromFiber creates an audit log entry with context from Fiber
 func LogFromFiber(c *fiber.Ctx, action models.AuditAction, entityType models.AuditEntityType, entityID string, description string) {
 	entry := &models.AuditLogEntry{
@@ -78,6 +87,7 @@ func LogFromFiber(c *fiber.Ctx, action models.AuditAction, entityType models.Aud
 		entry.UserRole = claims.RoleName
 	}
 
+	fillRequestMetadata(c, entry)
 	Log(c.Context(), entry)
 }
 
@@ -100,6 +110,7 @@ func LogWithValues(c *fiber.Ctx, action models.AuditAction, entityType models.Au
 		entry.UserRole = claims.RoleName
 	}
 
+	fillRequestMetadata(c, entry)
 	Log(c.Context(), entry)
 }
 
@@ -120,6 +131,7 @@ func LogFailure(c *fiber.Ctx, action models.AuditAction, entityType models.Audit
 		entry.UserRole = claims.RoleName
 	}
 
+	fillRequestMetadata(c, entry)
 	Log(c.Context(), entry)
 }
 
@@ -146,6 +158,7 @@ func LogAuth(c *fiber.Ctx, action models.AuditAction, userID *uuid.UUID, userNam
 		Status:     status,
 	}
 
+	fillRequestMetadata(c, entry)
 	Log(c.Context(), entry)
 }
 

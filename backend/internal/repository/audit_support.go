@@ -111,6 +111,7 @@ func scanAuditLog(scanner auditScanner) (*models.AuditLog, error) {
 		&logEntry.Action, &logEntry.EntityType, &logEntry.EntityID, &logEntry.Description,
 		&oldValuesJSON, &newValuesJSON, &metadataJSON,
 		&logEntry.Status,
+		&logEntry.IPAddress, &logEntry.UserAgent, &logEntry.RequestID,
 	); err != nil {
 		return nil, err
 	}
