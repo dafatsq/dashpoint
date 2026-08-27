@@ -39,6 +39,8 @@ cp .env.example .env
 
 The default values in `.env` are already configured for local development and will work seamlessly with the provided Docker Compose setup.
 
+> **Before any real or shared deployment:** replace the placeholder `JWT_SECRET` with a unique generated secret — `openssl rand -base64 48`. Never deploy with the example value.
+
 ### 3. Start the Database and Backend API
 
 The easiest way to run the backend and its PostgreSQL database is using Docker Compose. The `docker-compose.yml` file is configured to spin up both the `db` (Postgres) and the `backend` (Go API) services, automatically running database migrations on startup.
