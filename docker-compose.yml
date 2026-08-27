@@ -8,6 +8,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "127.0.0.1:${DB_PORT}:5432"
+      - "[::1]:${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,6 +34,7 @@ services:
       DEBUG: ${DEBUG:-false}
     ports:
       - "127.0.0.1:${BACKEND_PORT}:8080"
+      - "[::1]:${BACKEND_PORT}:8080"
     volumes:
       - backend_uploads:/app/uploads
     depends_on:
