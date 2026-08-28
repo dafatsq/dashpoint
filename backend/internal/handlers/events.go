@@ -52,6 +52,20 @@ type Client struct {
 	Done    chan struct{}
 }
 
+const (
+	// sseMaxConnectionsPerUser caps concurrent event streams per account so a
+	// single leaked token cannot exhaust file descriptors (one tab opens one
+	// stream, so three leaves headroom for a kiosk with a stuck reload).
+	sseMaxConnectionsPerUser = 3
+	// sseMaxTotalConnections caps the whole process. The endpoint serves
+	// in-store staff; this is generous headroom, not a scaling knob.
+	sseMaxTotalConnections = 500
+	// sseConnectionTTL forces periodic reconnects so half-open sockets from
+	// dead clients cannot accumulate forever (WriteTimeout stays 0 because
+	// streaming requires it). Clients reconnect automatically.
+	sseConnectionTTL = 30 * time.Minute
+)
+
 // EventsHandler manages SSE connections and broadcasts user events
 type EventsHandler struct {
 	clients    map[string]*Client
@@ -69,6 +83,18 @@ func NewEventsHandler(jwtManager authTokenManager, userRepo eventUserReader, ori
 		userRepo:   userRepo,
 		origins:    origins,
 	}
+}
+
+// countClientsFor returns how many active streams belong to a user.
+// Callers must hold clientsMux (write lock).
+func (h *EventsHandler) countClientsFor(userID uuid.UUID) int {
+	count := 0
+	for _, client := range h.clients {
+		if client.UserID == userID {
+			count++
+		}
+	}
+	return count
 }
 
 // Subscribe handles GET /api/v1/events/subscribe
@@ -105,8 +131,17 @@ func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
 		Done:    make(chan struct{}),
 	}
 
-	// Register the client
+	// Register the client, enforcing per-user and process-wide connection
+	// caps in the same critical section so the check cannot race a register.
 	h.clientsMux.Lock()
+	if len(h.clients) >= sseMaxTotalConnections || h.countClientsFor(claims.UserID) >= sseMaxConnectionsPerUser {
+		h.clientsMux.Unlock()
+		log.Warn().
+			Str("user_id", claims.UserID.String()).
+			Int("total", len(h.clients)).
+			Msg("SSE connection rejected: connection cap reached")
+		return middleware.JSONError(c, fiber.StatusTooManyRequests, "TOO_MANY_CONNECTIONS", "Too many event stream connections; close unused tabs and retry")
+	}
 	h.clients[clientID] = client
 	h.clientsMux.Unlock()
 
@@ -160,6 +195,8 @@ func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
 		keepaliveTicker := time.NewTicker(15 * time.Second)
 		defer keepaliveTicker.Stop()
 
+		connectedAt := time.Now()
+
 		for {
 			select {
 			case event, ok := <-client.Channel:
@@ -172,6 +209,13 @@ func (h *EventsHandler) Subscribe(c *fiber.Ctx) error {
 					return
 				}
 			case <-keepaliveTicker.C:
+				// Recycle the connection once its TTL is spent so sockets from
+				// vanished clients cannot linger indefinitely; the browser's
+				// EventSource reconnects on close.
+				if time.Since(connectedAt) >= sseConnectionTTL {
+					log.Debug().Str("client_id", clientID).Msg("SSE connection TTL reached, recycling")
+					return
+				}
 				// Send keepalive comment
 				if _, err := fmt.Fprintf(w, ": keepalive %s\n\n", time.Now().Format(time.RFC3339)); err != nil {
 					log.Debug().Err(err).Msg("SSE keepalive failed, client disconnected")

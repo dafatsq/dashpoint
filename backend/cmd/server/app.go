@@ -146,6 +146,10 @@ func serverFiberConfig(trustedProxies []string) fiber.Config {
 		WriteTimeout:   0,
 		IdleTimeout:    120 * time.Second,
 		ReadBufferSize: apiReadBufferSize,
+		// Uploads accept 5 MB; without an explicit limit Fiber's implicit 4 MB
+		// default would reject them first. This is also the only size bound on
+		// endpoints that skip the strict bounded JSON parsers.
+		BodyLimit: 6 * 1024 * 1024,
 		// Only honor X-Forwarded-For / X-Forwarded-Proto from proxies on this
 		// allowlist. Empty by default: direct deployments ignore spoofed
 		// forwarding headers entirely, and c.IP() is the real socket address.
