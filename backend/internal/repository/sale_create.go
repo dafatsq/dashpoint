@@ -187,22 +187,34 @@ func buildPreparedSaleItem(product *models.Product, item *CreateSaleItemRequest,
 
 func loadSaleProductForUpdate(ctx context.Context, tx pgx.Tx, productID uuid.UUID) (*models.Product, error) {
 	var product models.Product
-	var qty decimal.Decimal
+	// Lock the product row first; the inventory row is locked separately
+	// below because Postgres cannot FOR UPDATE the nullable side of an
+	// outer join. Holding both locks until commit serializes the
+	// read-compute-write sequence against concurrent stock adjustments,
+	// which lock the same inventory row (same pattern as the void path).
 	err := tx.QueryRow(ctx, `
-		SELECT p.id, p.name, p.sku, p.barcode, p.price, p.cost, p.tax_rate, COALESCE(i.quantity, 0)
-		FROM products p
-		LEFT JOIN inventory_items i ON p.id = i.product_id
-		WHERE p.id = $1 AND p.is_active = true
-		FOR UPDATE OF p
+		SELECT id, name, sku, barcode, price, cost, tax_rate
+		FROM products
+		WHERE id = $1 AND is_active = true
+		FOR UPDATE
 	`, productID).Scan(
 		&product.ID, &product.Name, &product.SKU, &product.Barcode,
-		&product.Price, &product.Cost, &product.TaxRate, &qty,
+		&product.Price, &product.Cost, &product.TaxRate,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("product not found: %s", productID)
 		}
 		return nil, NewInternalError(fmt.Errorf("failed to get product: %w", err))
+	}
+
+	// A product without an inventory row sells as untracked stock (qty 0).
+	var qty decimal.Decimal
+	err = tx.QueryRow(ctx, `
+		SELECT quantity FROM inventory_items WHERE product_id = $1 FOR UPDATE
+	`, productID).Scan(&qty)
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, NewInternalError(fmt.Errorf("failed to get inventory: %w", err))
 	}
 	product.Inventory = &models.InventoryItem{Quantity: qty}
 	return &product, nil

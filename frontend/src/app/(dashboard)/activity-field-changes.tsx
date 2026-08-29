@@ -7,6 +7,7 @@ import {
   formatActivityFieldName,
   formatActivityFieldValue,
   isActivityImageField,
+  isSafeActivityImageUrl,
 } from "./activity-helpers";
 
 interface ActivityFieldChangesProps {
@@ -31,9 +32,10 @@ export function ActivityFieldChanges({ log, emptyMessage = null }: ActivityField
             {label ?? formatActivityFieldName(key, log.action)}
           </div>
           <div className="mt-1 flex items-start gap-2 text-xs text-muted-foreground">
-            {isActivityImageField(key) ? (
+            {isActivityImageField(key) &&
+            (isSafeActivityImageUrl(oldVal) || isSafeActivityImageUrl(newVal)) ? (
               <div className="flex items-center gap-2">
-                {oldVal !== undefined ? (
+                {oldVal !== undefined && isSafeActivityImageUrl(oldVal) ? (
                   <div className="flex flex-col items-center gap-1">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={String(oldVal)} alt="old" className="h-8 w-8 rounded border object-cover opacity-60" />
@@ -41,7 +43,7 @@ export function ActivityFieldChanges({ log, emptyMessage = null }: ActivityField
                   </div>
                 ) : null}
                 {oldVal !== undefined && newVal !== undefined ? <span>→</span> : null}
-                {newVal !== undefined ? (
+                {newVal !== undefined && isSafeActivityImageUrl(newVal) ? (
                   <div className="flex flex-col items-center gap-1">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={String(newVal)} alt="new" className="h-8 w-8 rounded border object-cover" />

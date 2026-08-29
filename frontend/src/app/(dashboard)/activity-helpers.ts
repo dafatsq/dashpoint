@@ -288,6 +288,22 @@ export function isActivityImageField(key: string): boolean {
   return key === "image_url";
 }
 
+// Audit-log values come from the database and are not guaranteed trustworthy:
+// a manipulated image_url must not render as <img> pointing at an external
+// tracking pixel. Only backend-served upload paths may display as images;
+// anything else falls back to plain text. URL normalization also rejects
+// lookalikes like /uploads/../secret that resolve outside /uploads.
+export function isSafeActivityImageUrl(value: unknown): boolean {
+  if (typeof value !== "string" || !value.startsWith("/uploads/")) {
+    return false;
+  }
+  try {
+    return new URL(value, "http://localhost").pathname.startsWith("/uploads/");
+  } catch {
+    return false;
+  }
+}
+
 export function buildActivityFieldChanges(
   log: AuditLog,
 ): ActivityFieldChange[] {

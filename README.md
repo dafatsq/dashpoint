@@ -87,8 +87,6 @@ To build the experimental Windows Wails client that uses the existing VPS backen
 
 DashPoint is designed to be reused as a SaaS template. For a complete new-client installation—including VPS configuration, the private client environment file, DNS/Caddy, GitHub Actions deployment targets, and the client-specific desktop build—see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). For ongoing VPS operations, see [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md).
 
-For a reusable guide to SaaS tenant isolation, client extensions, versioned releases, CI/CD, VPS provisioning, and private desktop distribution, see [SAAS_DISTRIBUTION_GUIDE.md](SAAS_DISTRIBUTION_GUIDE.md).
-
 ---
 
 ## Troubleshooting

@@ -64,9 +64,38 @@ func parseListFilter(c *fiber.Ctx) (repository.ProductFilter, int, int, error) {
 	return filter, page, perPage, nil
 }
 
+// Product text field limits match the database columns (products.name
+// varchar(255), sku/barcode varchar(100)) so oversized input gets a clear
+// validation error instead of an opaque DB length 500.
+const (
+	maxProductNameLen    = 255
+	maxProductSKULen     = 100
+	maxProductBarcodeLen = 100
+)
+
+func validateProductTextLength(field, value string, maxLen int) error {
+	if len(value) > maxLen {
+		return fmt.Errorf("%s must be at most %d characters", field, maxLen)
+	}
+	return nil
+}
+
 func parseCreateProductInput(req CreateProductRequest) (*productCreateInput, error) {
 	if req.Name == "" {
 		return nil, fmt.Errorf("name is required")
+	}
+	if err := validateProductTextLength("name", req.Name, maxProductNameLen); err != nil {
+		return nil, err
+	}
+	if req.SKU != nil {
+		if err := validateProductTextLength("sku", *req.SKU, maxProductSKULen); err != nil {
+			return nil, err
+		}
+	}
+	if req.Barcode != nil {
+		if err := validateProductTextLength("barcode", *req.Barcode, maxProductBarcodeLen); err != nil {
+			return nil, err
+		}
 	}
 
 	price, err := parseDecimalField(req.Price, "price", false)
@@ -122,6 +151,9 @@ func parseCreateProductInput(req CreateProductRequest) (*productCreateInput, err
 
 func applyUpdateProductRequest(product *models.Product, req UpdateProductRequest) error {
 	if req.Name != nil {
+		if err := validateProductTextLength("name", *req.Name, maxProductNameLen); err != nil {
+			return err
+		}
 		product.Name = *req.Name
 	}
 	if req.Description != nil {
