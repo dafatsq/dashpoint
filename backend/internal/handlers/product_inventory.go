@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -9,6 +10,7 @@ import (
 	"dashpoint/backend/internal/audit"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
+	"dashpoint/backend/internal/repository"
 )
 
 // GetInventory handles GET /api/v1/products/:id/inventory
@@ -240,6 +242,12 @@ func (h *ProductHandler) AdjustStock(c *fiber.Ctx) error {
 		adjustment, err = h.inventoryRepo.AdjustStock(c.Context(), req.ProductID, req.AdjustmentType, quantity, req.Reason, nil, nil, userID)
 	}
 	if err != nil {
+		// Domain errors (insufficient stock, inventory not found) pass
+		// through verbatim; wrapped DB failures become a generic 500.
+		var internal *repository.InternalError
+		if errors.As(err, &internal) {
+			return productInternalError(c, err, "Failed to adjust inventory", "Failed to adjust inventory")
+		}
 		return productJSONError(c, fiber.StatusBadRequest, "ADJUSTMENT_FAILED", err.Error())
 	}
 

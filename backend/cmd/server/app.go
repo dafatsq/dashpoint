@@ -116,6 +116,10 @@ func newPermissionChecker(userRepo *repository.UserRepository) middleware.Permis
 }
 
 func newServerApp(cfg *config.Config, deps *serverDependencies) *fiber.App {
+	if cfg.Environment == "production" && len(cfg.TrustedProxies) == 0 {
+		log.Warn().Msg("TRUSTED_PROXIES is empty in production: forwarded headers are ignored, so behind a reverse proxy cookies lose Secure and audit IPs are the proxy address")
+	}
+
 	app := fiber.New(serverFiberConfig(cfg.TrustedProxies))
 
 	app.Use(middleware.Recover())

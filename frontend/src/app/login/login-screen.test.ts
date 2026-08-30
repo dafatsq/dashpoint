@@ -155,6 +155,7 @@ describe("LoginScreen", () => {
   test("uses the trusted-device preference in the effective save-account decision", async () => {
     window.localStorage.setItem("dashpoint_device_trusted", "true");
     process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
+    process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON = JSON.stringify([{ role: "Owner", email: "owner@dashpoint.local", pass: "owner123" }]);
     loginMock.mockResolvedValue({ success: true });
 
     await renderScreen();
@@ -193,6 +194,7 @@ describe("LoginScreen", () => {
 
   test("demo autofill updates credentials without submitting", async () => {
     process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
+    process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON = JSON.stringify([{ role: "Owner", email: "owner@dashpoint.local", pass: "owner123" }]);
 
     await renderScreen();
     // Demo credentials load via a build-flag-gated dynamic import; wait for

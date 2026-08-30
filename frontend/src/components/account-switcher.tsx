@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
-import { writeRememberScope } from '@/lib/auth-session';
 import { AccountManager, SavedAccount } from '@/lib/account-manager';
 import {
   filterSwitchableAccounts,
@@ -30,7 +29,7 @@ export function AccountSwitcher({
   excludeUserId,
 }: AccountSwitcherProps) {
   const router = useRouter();
-  const { pinLogin, logout, user: currentUser } = useAuth();
+  const { pinLogin } = useAuth();
   const [accounts, setAccounts] = useState<SavedAccount[]>(AccountManager.getSavedAccounts());
   const [selectedAccount, setSelectedAccount] = useState<SavedAccount | null>(null);
   const [pin, setPin] = useState('');
@@ -123,21 +122,10 @@ export function AccountSwitcher({
     }
   };
 
-  const handleRemoveAccount = async (accountId: string, e: React.MouseEvent) => {
+  const handleRemoveAccount = (accountId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    AccountManager.removeAccount(accountId);
-    // Removing the currently signed-in account ends its automatic sign-in on
-    // this device: the scope drops so future silent refreshes downgrade, and
-    // a full sign-out kills the live persistent cookie. Removing a different
-    // account only trims the Quick Access list.
-    if (currentUser?.id === accountId) {
-      writeRememberScope(false);
-      try {
-        await logout();
-      } catch {
-        // best-effort; scope=false already prevents auto sign-in on reload
-      }
-    }
+    // The switcher only lists non-current accounts, so this trims the Quick
+    // Access list; the signed-in user's own scope is managed by Save Login.
     AccountManager.removeAccount(accountId);
     refreshAccounts();
     onAccountsChange?.();

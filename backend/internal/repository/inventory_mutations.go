@@ -58,7 +58,7 @@ func (r *InventoryRepository) AdjustStockWithTx(
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("inventory not found for product")
 		}
-		return nil, fmt.Errorf("failed to get current quantity: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to get current quantity: %w", err))
 	}
 
 	newQty := currentQty.Add(quantityChange)
@@ -67,7 +67,7 @@ func (r *InventoryRepository) AdjustStockWithTx(
 	}
 
 	if _, err := tx.Exec(ctx, `UPDATE inventory_items SET quantity = $1, updated_at = $2 WHERE product_id = $3`, newQty, now, productID); err != nil {
-		return nil, fmt.Errorf("failed to update inventory: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to update inventory: %w", err))
 	}
 
 	adjustment := &models.StockAdjustment{
@@ -113,12 +113,12 @@ func (r *InventoryRepository) SetQuantity(ctx context.Context, productID uuid.UU
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("inventory not found for product")
 		}
-		return nil, fmt.Errorf("failed to get current quantity: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to get current quantity: %w", err))
 	}
 	quantityChange := newQuantity.Sub(currentQty)
 
 	if err := setInventoryQuantityTx(ctx, tx, productID, newQuantity, now); err != nil {
-		return nil, fmt.Errorf("failed to update inventory: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to update inventory: %w", err))
 	}
 
 	adjustment := &models.StockAdjustment{

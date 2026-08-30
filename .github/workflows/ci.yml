@@ -79,7 +79,7 @@ jobs:
 
       - name: Scan backend for known Go vulnerabilities
         working-directory: backend
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
       - name: Scan source for common secret material
         run: |

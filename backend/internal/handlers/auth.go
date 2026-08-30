@@ -35,7 +35,6 @@ func NewAuthHandler(
 }
 
 // Login handles POST /api/v1/auth/login.
-// Login handles POST /api/v1/auth/login.
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req LoginRequest
 	if err := parseStrictAuthJSON(c, &req, false); err != nil {
@@ -71,7 +70,22 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
 	}
-	if user.PasswordHash == nil || !checkPassword(req.Password, *user.PasswordHash) {
+	if user.PasswordHash == nil {
+		// Account exists but has no password set: burn the dummy hash anyway
+		// so "exists, credential not configured" is not timing-distinguishable
+		// from an unknown email.
+		checkPassword(req.Password, dummyPasswordHash)
+		logAuthFailure(c, authFailureContext{
+			action:   models.AuditActionLoginFailed,
+			userID:   &user.ID,
+			email:    normalizeLoginEmail(req.Email),
+			userName: user.Name,
+			roleName: user.Role.Name,
+			reason:   "password_not_set",
+		})
+		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
+	}
+	if !checkPassword(req.Password, *user.PasswordHash) {
 		logAuthFailure(c, authFailureContext{
 			action:   models.AuditActionLoginFailed,
 			userID:   &user.ID,
@@ -233,7 +247,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	}
 	if siblingRotationRace {
 		log.Warn().Str("user_id", user.ID.String()).Msg("Refresh grace window honored for sibling-tab rotation race")
-		return h.workflow.issueAuthResponse(c, user, true, nil, storedToken.FamilyID)
+		return h.workflow.issueAuthResponse(c, user, true, refreshReq.RememberMe, storedToken.FamilyID)
 	}
 
 	return h.workflow.rotateRefreshToken(c, tokenHash, storedToken.FamilyID, user, refreshReq.RememberMe)

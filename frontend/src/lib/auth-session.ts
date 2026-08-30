@@ -4,6 +4,7 @@ import { AccountManager } from "@/lib/account-manager";
 import { API_BASE_URL, IS_DESKTOP_BUILD } from "@/lib/config";
 import {
   clearSession,
+  getRememberMeKey,
   getSessionItem,
   removeSessionItem,
   setSessionItem,
@@ -111,6 +112,16 @@ export function persistAuthUser(
       window.localStorage.removeItem("dashpoint_device_trusted");
     }
     persistUserSession(user);
+  }
+
+  // Desktop only: getStorage() keys token persistence off this per-user
+  // preference, so keep it in sync or Save Login stops controlling whether
+  // tokens survive an app restart.
+  if (IS_DESKTOP_BUILD && typeof window !== "undefined") {
+    window.localStorage.setItem(
+      getRememberMeKey(user.id),
+      shouldSaveAccount ? "true" : "false",
+    );
   }
 
   return user;

@@ -32,6 +32,8 @@ function parseDemoCredentials(raw: string | undefined): readonly DemoCredential[
   }
 }
 
-export const DEMO_LOGIN_CREDENTIALS: readonly DemoCredential[] = parseDemoCredentials(
-  process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON,
-);
+// Resolved on call so test bodies can set the env before rendering; in
+// production builds both NEXT_PUBLIC_* values are inlined at build time.
+export function getDemoLoginCredentials(): readonly DemoCredential[] {
+  return parseDemoCredentials(process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON);
+}

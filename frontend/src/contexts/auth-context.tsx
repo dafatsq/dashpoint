@@ -24,10 +24,11 @@ import {
   loadStoredUser,
   persistAuthPayload,
   persistAuthUser,
+  readRememberScope,
   refreshSessionUser,
+  writeRememberScope,
 } from "@/lib/auth-session";
 import { IS_DESKTOP_BUILD } from "@/lib/config";
-import { readRememberScope, writeRememberScope } from "@/lib/auth-session";
 import type { AuthPayload } from "@/lib/auth-user";
 import type { User } from "@/types";
 
@@ -252,7 +253,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // device is not saved, so it also disables auto sign-in: the saved
       // account is removed, the device scope drops, and the refresh cookie
       // is session-scoped.
-      const remembered = readRememberScope() && Boolean(saveAccount);
+      // With saveAccount undefined (identity checks such as the settings
+      // password verification) the current scope is re-sent unchanged: the
+      // backend then mints a cookie with exactly the scope the user had.
+      const remembered =
+        saveAccount === undefined
+          ? readRememberScope()
+          : readRememberScope() && Boolean(saveAccount);
       const result = await api.login(email, password, remembered);
       if (result.error || !result.data) {
         return { success: false, error: result.error ?? "Login failed" };
@@ -265,8 +272,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const { AccountManager } = await import("@/lib/account-manager");
         AccountManager.removeAccount(result.data.user?.id ?? "");
         writeRememberScope(false);
-      } else if (saveAccount === true) {
-        writeRememberScope(readRememberScope());
       }
       applyAuthPayload(result.data, { saveAccount });
       return { success: true };
