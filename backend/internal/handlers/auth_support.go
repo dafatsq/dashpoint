@@ -42,9 +42,13 @@ type authTokenManager interface {
 const (
 	authMaxJSONBodyBytes = 4096
 	refreshTokenCookie   = "refresh_token"
-	refreshTokenPath     = "/api/v1/auth"
-	wailsCustomOrigin    = "wails://wails"
-	wailsWindowsOrigin   = "http://wails.localhost"
+	// "/" so the Next.js edge middleware (audit L6) can see the cookie on
+	// page routes, not just /api/v1/auth. The cookie stays httpOnly,
+	// SameSite=Strict, and host-only, so widening the path does not expose
+	// it to JavaScript or other hosts.
+	refreshTokenPath   = "/"
+	wailsCustomOrigin  = "wails://wails"
+	wailsWindowsOrigin = "http://wails.localhost"
 )
 
 var errEmptyAuthBody = errors.New("empty auth request body")
