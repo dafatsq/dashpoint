@@ -89,7 +89,10 @@ func SecureHeaders() fiber.Handler {
 		c.Set("Referrer-Policy", "no-referrer")
 		c.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 
-		if c.Protocol() == "https" || c.Get("X-Forwarded-Proto") == "https" {
+		// Protocol() derives https from X-Forwarded-Proto only when the
+		// request arrives from a proxy on the configured trusted allowlist,
+		// so a client cannot spoof HSTS onto a plain-HTTP response.
+		if c.Protocol() == "https" {
 			c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 

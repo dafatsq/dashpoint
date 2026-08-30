@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -39,5 +40,26 @@ func TestForwardedHeadersHonoredOnlyFromTrustedProxy(t *testing.T) {
 	}
 	if got := probeIPAndProtocol(nil); got != "127.0.0.1|http" {
 		t.Fatalf("untrusted headers must be ignored: got %q", got)
+	}
+}
+
+func TestSecureHeadersIgnoresSpoofedForwardedProto(t *testing.T) {
+	app := fiber.New(fiber.Config{
+		// Mirror the production server config: without the trusted-proxy
+		// check, fiber's Protocol() trusts X-Forwarded-Proto unconditionally.
+		EnableTrustedProxyCheck: true,
+		ProxyHeader:             "X-Forwarded-Proto",
+	})
+	app.Use(SecureHeaders())
+	app.Get("/", func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.Header.Get("Strict-Transport-Security") != "" {
+		t.Fatalf("spoofed X-Forwarded-Proto must not set HSTS on a plain-HTTP response")
 	}
 }
