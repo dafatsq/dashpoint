@@ -9,12 +9,12 @@ import (
 
 func buildProductAuditValues(product *models.Product) map[string]interface{} {
 	values := map[string]interface{}{
-		"affected_product":     product.Name,
-		"name":                 product.Name,
-		"price":                product.Price.String(),
-		"cost":                 product.Cost.String(),
-		"tax_rate":             product.TaxRate.String(),
-		"is_active":            product.IsActive,
+		"affected_product": product.Name,
+		"name":             product.Name,
+		"price":            product.Price.String(),
+		"cost":             product.Cost.String(),
+		"tax_rate":         product.TaxRate.String(),
+		"is_active":        product.IsActive,
 	}
 	if product.SKU != nil {
 		values["sku"] = *product.SKU
