@@ -34,7 +34,7 @@ type authRefreshTokenStore interface {
 }
 
 type authTokenManager interface {
-	GenerateTokenPair(uuid.UUID, string, string, uuid.UUID, string) (*auth.TokenPair, error)
+	GenerateTokenPair(uuid.UUID, string, string, uuid.UUID, string, int) (*auth.TokenPair, error)
 	ValidateAccessToken(string) (*auth.Claims, error)
 	ValidateRefreshToken(string) (*auth.Claims, error)
 }

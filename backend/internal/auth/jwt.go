@@ -24,6 +24,9 @@ type Claims struct {
 	RoleID    uuid.UUID `json:"role_id"`
 	RoleName  string    `json:"role_name"`
 	TokenType TokenType `json:"token_type"`
+	// TokenVersion is compared against the user's current version so a
+	// credential change instantly invalidates previously issued tokens.
+	TokenVersion int `json:"tv,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -52,18 +55,19 @@ type TokenPair struct {
 }
 
 // GenerateTokenPair generates both access and refresh tokens
-func (m *JWTManager) GenerateTokenPair(userID uuid.UUID, email, name string, roleID uuid.UUID, roleName string) (*TokenPair, error) {
+func (m *JWTManager) GenerateTokenPair(userID uuid.UUID, email, name string, roleID uuid.UUID, roleName string, tokenVersion int) (*TokenPair, error) {
 	now := time.Now()
 
 	// Generate access token
 	accessTokenExpiry := now.Add(m.accessTokenExpiry)
 	accessClaims := Claims{
-		UserID:    userID,
-		Email:     email,
-		Name:      name,
-		RoleID:    roleID,
-		RoleName:  roleName,
-		TokenType: AccessToken,
+		UserID:       userID,
+		Email:        email,
+		Name:         name,
+		RoleID:       roleID,
+		RoleName:     roleName,
+		TokenType:    AccessToken,
+		TokenVersion: tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(accessTokenExpiry),
 			IssuedAt:  jwt.NewNumericDate(now),

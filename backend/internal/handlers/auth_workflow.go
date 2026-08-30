@@ -62,6 +62,7 @@ func (w *authWorkflow) issueAuthResponse(c *fiber.Ctx, user *models.User, isRefr
 		user.Name,
 		user.RoleID,
 		user.Role.Name,
+		user.TokenVersion,
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate tokens")
@@ -108,6 +109,7 @@ func (w *authWorkflow) rotateRefreshToken(c *fiber.Ctx, currentHash string, fami
 		user.Name,
 		user.RoleID,
 		user.Role.Name,
+		user.TokenVersion,
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate tokens")

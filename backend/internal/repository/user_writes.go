@@ -47,7 +47,7 @@ func (r *UserRepository) UpdateLastLogin(ctx context.Context, userID uuid.UUID) 
 
 // UpdatePassword updates a user's password.
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
-	query := `UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3`
+	query := `UPDATE users SET password_hash = $1, token_version = token_version + 1, updated_at = $2 WHERE id = $3`
 	now := time.Now()
 	result, err := r.pool.Exec(ctx, query, passwordHash, now, userID)
 	if err != nil {
@@ -61,7 +61,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, p
 
 // UpdatePIN updates a user's PIN.
 func (r *UserRepository) UpdatePIN(ctx context.Context, userID uuid.UUID, pinHash *string) error {
-	query := `UPDATE users SET pin_hash = $1, updated_at = $2 WHERE id = $3`
+	query := `UPDATE users SET pin_hash = $1, token_version = token_version + 1, updated_at = $2 WHERE id = $3`
 	now := time.Now()
 	result, err := r.pool.Exec(ctx, query, pinHash, now, userID)
 	if err != nil {

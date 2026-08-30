@@ -103,7 +103,7 @@ type fakeJWTManager struct {
 	generateErr           error
 }
 
-func (f *fakeJWTManager) GenerateTokenPair(uuid.UUID, string, string, uuid.UUID, string) (*authpkg.TokenPair, error) {
+func (f *fakeJWTManager) GenerateTokenPair(uuid.UUID, string, string, uuid.UUID, string, int) (*authpkg.TokenPair, error) {
 	return f.tokenPair, f.generateErr
 }
 
@@ -590,6 +590,16 @@ func loginWithRememberMe(t *testing.T, app *fiber.App, body string) *http.Cookie
 		t.Fatalf("expected refresh cookie in response")
 	}
 	return cookie
+}
+
+func TestLoginRefreshCookiePathIsRoot(t *testing.T) {
+	// The Next.js proxy gate reads the cookie on page routes, so it must be
+	// scoped to the whole origin rather than only /api/v1/auth.
+	app := newRememberMeLoginApp(t)
+	cookie := loginWithRememberMe(t, app, `{"email":"remember@example.com","password":"secret123"}`)
+	if cookie.Path != "/" {
+		t.Fatalf("expected refresh cookie path /, got %q", cookie.Path)
+	}
 }
 
 func TestLoginRememberMeFalseIssuesSessionScopedCookie(t *testing.T) {
