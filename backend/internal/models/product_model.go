@@ -9,19 +9,19 @@ import (
 
 // Product represents a product in the catalog
 type Product struct {
-	ID                 uuid.UUID       `json:"id"`
-	SKU                *string         `json:"sku,omitempty"`
-	Barcode            *string         `json:"barcode,omitempty"`
-	Name               string          `json:"name"`
-	Description        *string         `json:"description,omitempty"`
-	CategoryID         *uuid.UUID      `json:"category_id,omitempty"`
-	Price              decimal.Decimal `json:"price"`
-	Cost               decimal.Decimal `json:"cost"`
-	TaxRate            decimal.Decimal `json:"tax_rate"`
-	IsActive           bool            `json:"is_active"`
-	ImageURL           *string         `json:"image_url,omitempty"`
-	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	SKU         *string         `json:"sku,omitempty"`
+	Barcode     *string         `json:"barcode,omitempty"`
+	Name        string          `json:"name"`
+	Description *string         `json:"description,omitempty"`
+	CategoryID  *uuid.UUID      `json:"category_id,omitempty"`
+	Price       decimal.Decimal `json:"price"`
+	Cost        decimal.Decimal `json:"cost"`
+	TaxRate     decimal.Decimal `json:"tax_rate"`
+	IsActive    bool            `json:"is_active"`
+	ImageURL    *string         `json:"image_url,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 
 	Category  *Category      `json:"category,omitempty"`
 	Inventory *InventoryItem `json:"inventory,omitempty"`
