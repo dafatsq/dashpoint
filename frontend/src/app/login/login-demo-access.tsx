@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useState } from "react";
-
 import { Button } from "@/components/ui/button";
 
-import type { DemoCredential } from "./login-demo-credentials";
+import { DEMO_LOGIN_CREDENTIALS } from "./login-demo-credentials";
 
 interface LoginDemoAccessProps {
   onSelectCredentials: (email: string, password: string) => void;
@@ -13,30 +11,10 @@ interface LoginDemoAccessProps {
 export function LoginDemoAccess({
   onSelectCredentials,
 }: LoginDemoAccessProps) {
-  const [credentials, setCredentials] = useState<readonly DemoCredential[]>(
-    [],
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    // Guarded by a build-time constant so bundlers dead-code eliminate the
-    // dynamic import whenever NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS is not
-    // "true", keeping demo credentials out of production bundles.
-    if (process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS === "true") {
-      import("./login-demo-credentials").then((module) => {
-        if (!cancelled) {
-          setCredentials(module.DEMO_LOGIN_CREDENTIALS);
-        }
-      });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (credentials.length === 0) {
+  // DEMO_LOGIN_CREDENTIALS is empty unless this build opted into demo mode
+  // via NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=true plus
+  // NEXT_PUBLIC_DEMO_CREDENTIALS_JSON at build time.
+  if (DEMO_LOGIN_CREDENTIALS.length === 0) {
     return null;
   }
 
@@ -46,7 +24,7 @@ export function LoginDemoAccess({
         Quick Demo Access
       </p>
       <div className="grid grid-cols-1 gap-2">
-        {credentials.map((demo) => (
+        {DEMO_LOGIN_CREDENTIALS.map((demo) => (
           <Button
             key={demo.role}
             variant="outline"
