@@ -39,6 +39,10 @@ func NewSaleHandler(saleRepo saleStore, shiftRepo shiftLookupStore) *SaleHandler
 	}
 }
 
+// saleMaxJSONBodyBytes bounds sale JSON bodies for the strict parser: the
+// cart cap allows 200 items, each with a handful of fields.
+const saleMaxJSONBodyBytes = 64 * 1024
+
 // SaleItemRequest represents a sale item in the request.
 type SaleItemRequest struct {
 	ProductID      string  `json:"product_id"`

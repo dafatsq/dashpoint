@@ -9,16 +9,12 @@ export const LOGIN_INFO_MESSAGES: Record<string, string> = {
     "Your account has been deactivated by an administrator.",
   account_deleted: "Your account has been deleted.",
   force_logout: "You have been logged out by an administrator.",
+  owner_created:
+    "Owner account created successfully. Please sign in with your new credentials.",
   permissions_changed: "Your permissions have been updated. Please log in again.",
   role_changed: "Your role has been changed. Please log in again.",
   role_changed_relogin: "Your role has been changed. Please log in again.",
 };
-
-export const DEMO_LOGIN_CREDENTIALS = [
-  { role: "Owner", email: "owner@dashpoint.local", pass: "owner123" },
-  { role: "Manager", email: "manager@dashpoint.local", pass: "manager123" },
-  { role: "Cashier", email: "cashier@dashpoint.local", pass: "cashier123" },
-] as const;
 
 export function getLoginInfoMessage(message: string | null | undefined): string {
   if (!message) {

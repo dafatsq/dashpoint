@@ -37,14 +37,16 @@ func (r *AuditRepository) Create(ctx context.Context, entry *models.AuditLogEntr
 	query := `
 		INSERT INTO audit_logs (
 			id, created_at, user_id, user_name, user_role, action, entity_type,
-			entity_id, description, old_values, new_values, metadata, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			entity_id, description, old_values, new_values, metadata, status,
+			ip_address, user_agent, request_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
 	_, err = r.pool.Exec(ctx, query,
 		id, now, entry.UserID, optionalAuditString(entry.UserName), optionalAuditString(entry.UserRole),
 		entry.Action, entry.EntityType, optionalAuditString(entry.EntityID), optionalAuditString(entry.Description),
 		oldValuesJSON, newValuesJSON, metadataJSON, status,
+		optionalAuditString(entry.IPAddress), optionalAuditString(entry.UserAgent), optionalAuditString(entry.RequestID),
 	)
 
 	return err

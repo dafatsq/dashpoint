@@ -4,18 +4,18 @@ import "dashpoint/backend/internal/models"
 
 func (h *ProductHandler) toProductResponse(p *models.Product) ProductResponse {
 	response := ProductResponse{
-		ID:                 p.ID.String(),
-		SKU:                p.SKU,
-		Barcode:            p.Barcode,
-		Name:               p.Name,
-		Description:        p.Description,
-		Price:              p.Price.String(),
-		Cost:               p.Cost.String(),
-		TaxRate:            p.TaxRate.String(),
-		IsActive:           p.IsActive,
-		ImageURL:           p.ImageURL,
-		CreatedAt:          p.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:          p.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:          p.ID.String(),
+		SKU:         p.SKU,
+		Barcode:     p.Barcode,
+		Name:        p.Name,
+		Description: p.Description,
+		Price:       p.Price.String(),
+		Cost:        p.Cost.String(),
+		TaxRate:     p.TaxRate.String(),
+		IsActive:    p.IsActive,
+		ImageURL:    p.ImageURL,
+		CreatedAt:   p.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   p.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	if p.CategoryID != nil {

@@ -117,16 +117,22 @@ type UpdateUserRequest struct {
 	IsActive          *bool   `json:"is_active"`
 	PIN               *string `json:"pin"`
 	Password          *string `json:"password"`
+	CurrentPassword   *string `json:"current_password"`
+	CurrentPIN        *string `json:"current_pin"`
 	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
 type UpdatePasswordRequest struct {
 	Password          string  `json:"password"`
+	CurrentPassword   *string `json:"current_password"`
+	CurrentPIN        *string `json:"current_pin"`
 	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
 type UpdatePINRequest struct {
 	PIN               *string `json:"pin"`
+	CurrentPassword   *string `json:"current_password"`
+	CurrentPIN        *string `json:"current_pin"`
 	ExpectedUpdatedAt *string `json:"expected_updated_at"`
 }
 
@@ -349,6 +355,13 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 				return userForbidden(c, "You cannot assign the "+role.Name+" role")
 			}
 			user.RoleID = roleID
+		}
+	}
+	// A user changing their own credentials must prove knowledge of an
+	// existing one; admins resetting others' credentials stay permission-gated.
+	if middleware.GetUserID(c) == id && ((req.Password != nil && *req.Password != "") || req.PIN != nil) {
+		if ok, err := verifySelfCredentialProof(c, user, req.CurrentPassword, req.CurrentPIN); !ok {
+			return err
 		}
 	}
 	if req.IsActive != nil {

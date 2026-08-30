@@ -90,6 +90,10 @@ type InventoryResponse struct {
 	UpdatedAt         string `json:"updated_at,omitempty"`
 }
 
+// productMaxJSONBodyBytes bounds product JSON bodies (free-form description
+// text) for the strict parser; 4 KB auth-style caps are too tight here.
+const productMaxJSONBodyBytes = 16 * 1024
+
 type CreateProductRequest struct {
 	SKU               *string `json:"sku"`
 	Barcode           *string `json:"barcode"`

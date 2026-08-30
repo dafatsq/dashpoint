@@ -17,6 +17,10 @@ func saleValidationAPIError(code, message string) error {
 	return &apiError{status: fiber.StatusBadRequest, code: code, message: message}
 }
 
+// maxSaleItems bounds cart size: every item takes a row lock inside one
+// checkout transaction, so an unbounded cart is a lock-contention lever.
+const maxSaleItems = 200
+
 func parseRequiredPositiveDecimal(raw, code, message string) (decimal.Decimal, error) {
 	value, err := decimal.NewFromString(raw)
 	if err != nil || value.LessThanOrEqual(decimal.Zero) {
@@ -28,6 +32,9 @@ func parseRequiredPositiveDecimal(raw, code, message string) (decimal.Decimal, e
 func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 	if len(req.Items) == 0 {
 		return nil, saleValidationAPIError("NO_ITEMS", "At least one item is required")
+	}
+	if len(req.Items) > maxSaleItems {
+		return nil, saleValidationAPIError("TOO_MANY_ITEMS", fmt.Sprintf("Cart is limited to %d items", maxSaleItems))
 	}
 	if len(req.Payments) == 0 {
 		return nil, saleValidationAPIError("NO_PAYMENTS", "At least one payment is required")
@@ -108,6 +115,9 @@ func parseCreateSaleInput(req CreateSaleRequest) (*saleCreateInput, error) {
 func parseSaleCartValidationInput(req ValidateSaleCartRequest) (*saleCartValidationInput, error) {
 	if len(req.Items) == 0 {
 		return nil, saleValidationAPIError("NO_ITEMS", "At least one item is required")
+	}
+	if len(req.Items) > maxSaleItems {
+		return nil, saleValidationAPIError("TOO_MANY_ITEMS", fmt.Sprintf("Cart is limited to %d items", maxSaleItems))
 	}
 	items, err := parseSaleItems(req.Items)
 	if err != nil {

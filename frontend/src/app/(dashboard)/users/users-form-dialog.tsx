@@ -22,14 +22,16 @@ import {
 } from "@/components/ui/select";
 import type { CreateUserRequest, User, UserRole } from "@/types";
 
+export type UsersFormValues = CreateUserRequest & { current_password?: string };
+
 interface UsersFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingUser: User | null;
   currentUser: User | null;
   availableRoles: UserRole[];
-  formData: CreateUserRequest;
-  setFormData: React.Dispatch<React.SetStateAction<CreateUserRequest>>;
+  formData: UsersFormValues;
+  setFormData: React.Dispatch<React.SetStateAction<UsersFormValues>>;
   formErrors: { general?: string };
   isSubmitting: boolean;
   hasChanges: boolean;
@@ -128,6 +130,25 @@ export function UsersFormDialog({
               maxLength={6}
             />
           </div>
+
+          {editingUser?.id === currentUser?.id && (
+            <div className="grid gap-2">
+              <Label htmlFor="current_password">Your current password</Label>
+              <Input
+                id="current_password"
+                type="password"
+                value={formData.current_password ?? ""}
+                onChange={(event) =>
+                  setFormData((current) => ({
+                    ...current,
+                    current_password: event.target.value,
+                  }))
+                }
+                placeholder="Required when changing your own password or PIN"
+                autoComplete="current-password"
+              />
+            </div>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="role">Role</Label>

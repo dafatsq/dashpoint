@@ -58,6 +58,8 @@ export interface UpdateUserRequest {
   is_active?: boolean;
   password?: string;
   pin?: string;
+  current_password?: string;
+  current_pin?: string;
   permissions?: string[];
   expected_updated_at?: string;
 }

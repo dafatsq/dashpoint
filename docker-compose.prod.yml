@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:15-alpine@sha256:fe0737ba566a2c5b2a28f34433c0a423261900ec17b9bf7ad115e1aae7e57f1b
     container_name: ${PROJECT_NAME}-db-prod
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -36,6 +36,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=require
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRY_MINUTES: ${JWT_EXPIRY_MINUTES:-15}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       REFRESH_EXPIRY_HOURS: ${REFRESH_EXPIRY_HOURS:-168}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
       PORT: "8080"
@@ -57,6 +58,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
         NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS: ${NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS:-false}
+        NEXT_PUBLIC_DEMO_CREDENTIALS_JSON: ${NEXT_PUBLIC_DEMO_CREDENTIALS_JSON:-}
     container_name: ${PROJECT_NAME}-frontend-prod
     environment:
       NODE_ENV: production

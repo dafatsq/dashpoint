@@ -135,6 +135,7 @@ export interface AuthApi {
   login(
     email: string,
     password: string,
+    rememberMe?: boolean,
   ): Promise<ApiResponse<import("@/lib/auth-user").AuthPayload>>;
   pinLogin(
     userId: string,

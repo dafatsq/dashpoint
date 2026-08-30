@@ -14,8 +14,10 @@ import { Logo } from "@/components/ui/logo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/auth-context";
 import { AccountManager } from "@/lib/account-manager";
+import { api } from "@/lib/api";
 import { LoginDemoAccess } from "./login-demo-access";
 import { LoginEmailForm } from "./login-email-form";
+import { LoginOwnerSetup } from "./login-owner-setup";
 import {
   getDefaultLoginTab,
   getEffectiveSaveAccountDecision,
@@ -41,6 +43,7 @@ export function LoginScreen() {
   const [isDeviceTrusted, setIsDeviceTrusted] = useState(false);
   const [showDemoAccess, setShowDemoAccess] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [setupRequired, setSetupRequired] = useState(false);
   const [hasSavedAccounts, setHasSavedAccounts] = useState(false);
   const [activeTab, setActiveTab] = useState<LoginTab>("saved");
   const saveLoginControlState = getSaveLoginControlState(
@@ -77,6 +80,23 @@ export function LoginScreen() {
 
   useEffect(() => {
     setIsClient(true);
+    let cancelled = false;
+    api
+      .getSetupStatus()
+      .then((result) => {
+        if (!cancelled && !result.error && result.data?.setup_required) {
+          setSetupRequired(true);
+        }
+      })
+      .catch(() => {
+        // Setup detection is best-effort; the login form remains usable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const trustedDeviceEnabled = isStoredPreferenceEnabled(
       localStorage.getItem("dashpoint_device_trusted"),
     );
@@ -149,7 +169,9 @@ export function LoginScreen() {
           <Logo className="mx-auto mb-4 h-16 w-16 text-primary" />
           <h2 className="text-2xl font-bold tracking-tight text-foreground">DashPoint POS</h2>
           <p className="text-sm text-muted-foreground">
-            Sign in to access your point of sale system
+            {isClient && setupRequired
+              ? "Create your owner account to get started"
+              : "Sign in to access your point of sale system"}
           </p>
         </div>
         <div className="p-4 sm:p-6">
@@ -160,6 +182,14 @@ export function LoginScreen() {
             </div>
           )}
 
+          {isClient && setupRequired ? (
+            <LoginOwnerSetup
+              onSuccess={() => {
+                setSetupRequired(false);
+                router.push("/login?message=owner_created");
+              }}
+            />
+          ) : (
           <Tabs
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as LoginTab)}
@@ -202,6 +232,7 @@ export function LoginScreen() {
               )}
             </TabsContent>
           </Tabs>
+          )}
         </div>
       </div>
     </div>

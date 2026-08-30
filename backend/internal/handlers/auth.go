@@ -57,7 +57,12 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		log.Error().Err(err).Msg("Failed to get user by email")
 		return authInternalError(c, "An error occurred during login")
 	}
+
+	// Anti-enumeration: unknown emails burn a bcrypt comparison so response
+	// timing cannot reveal whether an account exists.
 	if user == nil {
+		checkPassword(req.Password, dummyPasswordHash)
+
 		logAuthFailure(c, authFailureContext{
 			action: models.AuditActionLoginFailed,
 			email:  normalizeLoginEmail(req.Email),
@@ -65,6 +70,35 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
 	}
+	if user.PasswordHash == nil {
+		// Account exists but has no password set: burn the dummy hash anyway
+		// so "exists, credential not configured" is not timing-distinguishable
+		// from an unknown email.
+		checkPassword(req.Password, dummyPasswordHash)
+		logAuthFailure(c, authFailureContext{
+			action:   models.AuditActionLoginFailed,
+			userID:   &user.ID,
+			email:    normalizeLoginEmail(req.Email),
+			userName: user.Name,
+			roleName: user.Role.Name,
+			reason:   "password_not_set",
+		})
+		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
+	}
+	if !checkPassword(req.Password, *user.PasswordHash) {
+		logAuthFailure(c, authFailureContext{
+			action:   models.AuditActionLoginFailed,
+			userID:   &user.ID,
+			email:    normalizeLoginEmail(req.Email),
+			userName: user.Name,
+			roleName: user.Role.Name,
+			reason:   "invalid_password",
+		})
+		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
+	}
+	// Account state is disclosed only after the password verifies, so a wrong
+	// password for a disabled account is indistinguishable from an unknown
+	// email.
 	if !user.IsActive {
 		logAuthFailure(c, authFailureContext{
 			action:   models.AuditActionLoginFailed,
@@ -76,19 +110,8 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 		return authUnauthorized(c, "ACCOUNT_DISABLED", "Your account has been disabled")
 	}
-	if user.PasswordHash == nil || !checkPassword(req.Password, *user.PasswordHash) {
-		logAuthFailure(c, authFailureContext{
-			action:   models.AuditActionLoginFailed,
-			userID:   &user.ID,
-			email:    normalizeLoginEmail(req.Email),
-			userName: user.Name,
-			roleName: user.Role.Name,
-			reason:   "invalid_password",
-		})
-		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid email or password")
-	}
 
-	return h.workflow.issueAuthResponse(c, user, false)
+	return h.workflow.issueAuthResponse(c, user, false, req.RememberMe, uuid.Nil)
 }
 
 // PINLogin handles POST /api/v1/auth/pin-login.
@@ -120,11 +143,31 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 		log.Error().Err(err).Str("user_id", req.UserID).Msg("Failed to get user by ID")
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid credentials")
 	}
+
+	// Anti-enumeration: account existence/state is disclosed only after the
+	// PIN verifies; unknown ids burn a comparison to match timing.
 	if user == nil {
+		checkPIN(req.PIN, dummyPasswordHash)
+
 		logAuthFailure(c, authFailureContext{
 			action: models.AuditActionLoginFailed,
 			email:  req.UserID,
 			reason: "user_not_found",
+		})
+		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid credentials")
+	}
+	if user.PINHash == nil || !checkPIN(req.PIN, *user.PINHash) {
+		reason := "invalid_pin"
+		if user.PINHash == nil {
+			reason = "pin_not_set"
+		}
+		logAuthFailure(c, authFailureContext{
+			action:   models.AuditActionLoginFailed,
+			userID:   &user.ID,
+			email:    req.UserID,
+			userName: user.Name,
+			roleName: user.Role.Name,
+			reason:   reason,
 		})
 		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid credentials")
 	}
@@ -139,35 +182,21 @@ func (h *AuthHandler) PINLogin(c *fiber.Ctx) error {
 		})
 		return authUnauthorized(c, "ACCOUNT_INACTIVE", "Account is inactive")
 	}
-	if user.PINHash == nil {
-		logAuthFailure(c, authFailureContext{
-			action:   models.AuditActionLoginFailed,
-			userID:   &user.ID,
-			email:    req.UserID,
-			userName: user.Name,
-			roleName: user.Role.Name,
-			reason:   "pin_not_set",
-		})
-		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid credentials")
-	}
-	if !checkPIN(req.PIN, *user.PINHash) {
-		logAuthFailure(c, authFailureContext{
-			action:   models.AuditActionLoginFailed,
-			userID:   &user.ID,
-			email:    req.UserID,
-			userName: user.Name,
-			roleName: user.Role.Name,
-			reason:   "invalid_pin",
-		})
-		return authUnauthorized(c, "INVALID_CREDENTIALS", "Invalid PIN")
-	}
 
-	return h.workflow.issueAuthResponse(c, user, false)
+	return h.workflow.issueAuthResponse(c, user, false, nil, uuid.Nil)
+}
+
+type RefreshRequest struct {
+	// RememberMe lets a browser re-scope its refresh cookie without
+	// re-authenticating, so toggling "remember me" in settings takes effect
+	// immediately instead of at the next login. Absent keeps current scope.
+	RememberMe *bool `json:"remember_me"`
 }
 
 // Refresh handles POST /api/v1/auth/refresh.
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
-	if err := parseStrictAuthJSON(c, &struct{}{}, true); err != nil {
+	var refreshReq RefreshRequest
+	if err := parseStrictAuthJSON(c, &refreshReq, true); err != nil {
 		return authInvalidRequest(c)
 	}
 	refreshToken := refreshTokenFromCookie(c)
@@ -186,7 +215,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		log.Error().Err(err).Msg("Failed to get refresh token from database")
 		return authInternalError(c, "An error occurred during token refresh")
 	}
-	if storedToken == nil || !storedToken.IsValid() || storedToken.UserID != claims.UserID {
+	if storedToken == nil || storedToken.UserID != claims.UserID {
 		return authUnauthorized(c, "INVALID_TOKEN", "Refresh token has been revoked or expired")
 	}
 
@@ -199,7 +228,29 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		return authUnauthorized(c, "ACCOUNT_DISABLED", "Your account has been disabled")
 	}
 
-	return h.workflow.rotateRefreshToken(c, tokenHash, user)
+	// A sibling tab rotating the same refresh token must not log this tab
+	// out: within a short grace window a just-rotated token is treated as a
+	// continuation and receives its own fresh pair.
+	siblingRotationRace := !storedToken.IsValid() && isRecentlyRotatedToken(storedToken)
+	if !storedToken.IsValid() && !siblingRotationRace {
+		// Presenting a token that was already revoked is the signature of a
+		// stolen token: contain the compromise by revoking every live token
+		// minted from the same login. Best-effort; the request fails anyway.
+		// Expired-but-never-revoked tokens are idle sessions, not theft, so
+		// they only get the plain rejection below.
+		if storedToken.RevokedAt != nil {
+			if err := h.refreshTokenRepo.RevokeFamily(c.Context(), storedToken.FamilyID, tokenFamilyReuseRevocationReason); err != nil {
+				log.Error().Err(err).Msg("Failed to revoke refresh token family after reuse")
+			}
+		}
+		return authUnauthorized(c, "INVALID_TOKEN", "Refresh token has been revoked or expired")
+	}
+	if siblingRotationRace {
+		log.Warn().Str("user_id", user.ID.String()).Msg("Refresh grace window honored for sibling-tab rotation race")
+		return h.workflow.issueAuthResponse(c, user, true, refreshReq.RememberMe, storedToken.FamilyID)
+	}
+
+	return h.workflow.rotateRefreshToken(c, tokenHash, storedToken.FamilyID, user, refreshReq.RememberMe)
 }
 
 // Logout handles POST /api/v1/auth/logout.

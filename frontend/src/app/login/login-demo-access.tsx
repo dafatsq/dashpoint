@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 
-import { DEMO_LOGIN_CREDENTIALS } from "./login-helpers";
+import { getDemoLoginCredentials } from "./login-demo-credentials";
 
 interface LoginDemoAccessProps {
   onSelectCredentials: (email: string, password: string) => void;
@@ -11,13 +11,21 @@ interface LoginDemoAccessProps {
 export function LoginDemoAccess({
   onSelectCredentials,
 }: LoginDemoAccessProps) {
+  // Empty unless this build opted into demo mode via
+  // NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=true plus
+  // NEXT_PUBLIC_DEMO_CREDENTIALS_JSON at build time.
+  const demoCredentials = getDemoLoginCredentials();
+  if (demoCredentials.length === 0) {
+    return null;
+  }
+
   return (
     <div className="mt-8 border-t pt-6">
       <p className="mb-4 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         Quick Demo Access
       </p>
       <div className="grid grid-cols-1 gap-2">
-        {DEMO_LOGIN_CREDENTIALS.map((demo) => (
+        {demoCredentials.map((demo) => (
           <Button
             key={demo.role}
             variant="outline"

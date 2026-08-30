@@ -124,6 +124,8 @@ export function AccountSwitcher({
 
   const handleRemoveAccount = (accountId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    // The switcher only lists non-current accounts, so this trims the Quick
+    // Access list; the signed-in user's own scope is managed by Save Login.
     AccountManager.removeAccount(accountId);
     refreshAccounts();
     onAccountsChange?.();

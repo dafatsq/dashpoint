@@ -12,7 +12,7 @@ import (
 )
 
 const userWithRoleSelect = `
-	SELECT u.id, u.email, u.name, u.password_hash, u.pin_hash, u.role_id, u.is_active, u.last_login_at, u.created_at, u.updated_at,
+	SELECT u.id, u.email, u.name, u.password_hash, u.pin_hash, u.role_id, u.is_active, u.last_login_at, u.created_at, u.updated_at, u.token_version,
 	       r.id, r.name, r.description, r.created_at, r.updated_at
 	FROM users u
 	JOIN roles r ON u.role_id = r.id
@@ -181,6 +181,7 @@ func scanOptionalUser(row pgx.Row, errPrefix string) (*models.User, error) {
 		&user.LastLoginAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.TokenVersion,
 		&user.Role.ID,
 		&user.Role.Name,
 		&user.Role.Description,

@@ -39,6 +39,8 @@ cp .env.example .env
 
 The default values in `.env` are already configured for local development and will work seamlessly with the provided Docker Compose setup.
 
+> **Before any real or shared deployment:** replace the placeholder `JWT_SECRET` with a unique generated secret — `openssl rand -base64 48`. Never deploy with the example value.
+
 ### 3. Start the Database and Backend API
 
 The easiest way to run the backend and its PostgreSQL database is using Docker Compose. The `docker-compose.yml` file is configured to spin up both the `db` (Postgres) and the `backend` (Go API) services, automatically running database migrations on startup.
@@ -84,8 +86,6 @@ To build the experimental Windows Wails client that uses the existing VPS backen
 ## New client installation
 
 DashPoint is designed to be reused as a SaaS template. For a complete new-client installation—including VPS configuration, the private client environment file, DNS/Caddy, GitHub Actions deployment targets, and the client-specific desktop build—see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). For ongoing VPS operations, see [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md).
-
-For a reusable guide to SaaS tenant isolation, client extensions, versioned releases, CI/CD, VPS provisioning, and private desktop distribution, see [SAAS_DISTRIBUTION_GUIDE.md](SAAS_DISTRIBUTION_GUIDE.md).
 
 ---
 

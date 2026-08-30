@@ -22,14 +22,14 @@ type salePreparedItem struct {
 func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*models.Sale, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to begin transaction: %w", err))
 	}
 	defer tx.Rollback(ctx)
 
 	now := time.Now()
 	invoiceNo, err := r.generateInvoiceNumber(ctx, tx, now)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate invoice number: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to generate invoice number: %w", err))
 	}
 
 	preparedItems, subtotal, taxAmount, itemDiscountAmount, err := prepareSaleItems(ctx, tx, req.Items, now)
@@ -67,7 +67,7 @@ func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*m
 	}
 
 	if err := insertSaleTx(ctx, tx, sale); err != nil {
-		return nil, fmt.Errorf("failed to insert sale: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to insert sale: %w", err))
 	}
 	if err := insertSaleItemsAndAdjustInventoryTx(ctx, tx, sale, preparedItems, req.EmployeeID, invoiceNo, now); err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*m
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to commit transaction: %w", err))
 	}
 	return sale, nil
 }
@@ -91,7 +91,7 @@ func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*m
 func (r *SaleRepository) ValidateCart(ctx context.Context, req *ValidateSaleCartRequest) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return NewInternalError(fmt.Errorf("failed to begin transaction: %w", err))
 	}
 	defer tx.Rollback(ctx)
 
@@ -187,23 +187,37 @@ func buildPreparedSaleItem(product *models.Product, item *CreateSaleItemRequest,
 
 func loadSaleProductForUpdate(ctx context.Context, tx pgx.Tx, productID uuid.UUID) (*models.Product, error) {
 	var product models.Product
+	// Lock the inventory row FIRST, the product row second. Every flow that
+	// touches both rows takes inventory before products (stock adjustments
+	// additionally take a FOR KEY SHARE on products through the
+	// stock_adjustments foreign key), so this order is globally cycle-free.
+	// Two queries because Postgres cannot FOR UPDATE the nullable side of an
+	// outer join.
 	var qty decimal.Decimal
 	err := tx.QueryRow(ctx, `
-		SELECT p.id, p.name, p.sku, p.barcode, p.price, p.cost, p.tax_rate, COALESCE(i.quantity, 0)
-		FROM products p
-		LEFT JOIN inventory_items i ON p.id = i.product_id
-		WHERE p.id = $1 AND p.is_active = true
-		FOR UPDATE OF p
+		SELECT quantity FROM inventory_items WHERE product_id = $1 FOR UPDATE
+	`, productID).Scan(&qty)
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, NewInternalError(fmt.Errorf("failed to get inventory: %w", err))
+	}
+
+	err = tx.QueryRow(ctx, `
+		SELECT id, name, sku, barcode, price, cost, tax_rate
+		FROM products
+		WHERE id = $1 AND is_active = true
+		FOR UPDATE
 	`, productID).Scan(
 		&product.ID, &product.Name, &product.SKU, &product.Barcode,
-		&product.Price, &product.Cost, &product.TaxRate, &qty,
+		&product.Price, &product.Cost, &product.TaxRate,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("product not found: %s", productID)
 		}
-		return nil, fmt.Errorf("failed to get product: %w", err)
+		return nil, NewInternalError(fmt.Errorf("failed to get product: %w", err))
 	}
+
+	// A product without an inventory row sells as untracked stock (qty 0).
 	product.Inventory = &models.InventoryItem{Quantity: qty}
 	return &product, nil
 }
@@ -306,10 +320,10 @@ func insertSaleItemsAndAdjustInventoryTx(ctx context.Context, tx pgx.Tx, sale *m
 		saleItem.SaleID = sale.ID
 
 		if err := insertSaleItemTx(ctx, tx, saleItem); err != nil {
-			return fmt.Errorf("failed to insert sale item: %w", err)
+			return NewInternalError(fmt.Errorf("failed to insert sale item: %w", err))
 		}
 		if err := setInventoryQuantityTx(ctx, tx, saleItem.ProductID, prepared.NewQty, now); err != nil {
-			return fmt.Errorf("failed to update inventory: %w", err)
+			return NewInternalError(fmt.Errorf("failed to update inventory: %w", err))
 		}
 		if err := insertStockAdjustmentTx(ctx, tx, stockAdjustmentRecord{
 			ProductID:      saleItem.ProductID,
@@ -323,7 +337,7 @@ func insertSaleItemsAndAdjustInventoryTx(ctx context.Context, tx pgx.Tx, sale *m
 			AdjustedBy:     employeeID,
 			CreatedAt:      now,
 		}); err != nil {
-			return fmt.Errorf("failed to record stock adjustment: %w", err)
+			return NewInternalError(fmt.Errorf("failed to record stock adjustment: %w", err))
 		}
 
 		sale.Items = append(sale.Items, saleItem)
@@ -345,7 +359,7 @@ func insertSalePaymentsTx(ctx context.Context, tx pgx.Tx, sale *models.Sale, pay
 			CreatedAt:      now,
 		}
 		if err := insertPaymentTx(ctx, tx, payment); err != nil {
-			return fmt.Errorf("failed to insert payment: %w", err)
+			return NewInternalError(fmt.Errorf("failed to insert payment: %w", err))
 		}
 		sale.Payments = append(sale.Payments, payment)
 	}
@@ -361,7 +375,7 @@ func updateShiftSalesTotalsTx(ctx context.Context, tx pgx.Tx, shiftID uuid.UUID,
 		WHERE id = $3
 	`, totalAmount, now, shiftID)
 	if err != nil {
-		return fmt.Errorf("failed to update shift totals: %w", err)
+		return NewInternalError(fmt.Errorf("failed to update shift totals: %w", err))
 	}
 	return nil
 }

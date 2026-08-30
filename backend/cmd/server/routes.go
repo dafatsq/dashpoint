@@ -51,10 +51,17 @@ func registerPublicRoutes(api fiber.Router, deps *serverDependencies) {
 	api.Get("/health", deps.healthHandler.Check)
 	api.Get("/ping", deps.healthHandler.Ping)
 
+	// Initial-setup bootstrap endpoints. They are only meaningful while the
+	// database has zero active users; POST /setup/owner atomically refuses
+	// once any active user exists.
+	setupGroup := api.Group("/setup")
+	setupGroup.Get("/status", deps.setupHandler.Status)
+	setupGroup.Post("/owner", middleware.AuthRateLimit(), deps.setupHandler.CreateOwner)
+
 	authGroup := api.Group("/auth")
-	authGroup.Post("/login", middleware.AuthRateLimit(), deps.authHandler.Login)
-	authGroup.Post("/pin-login", middleware.AuthRateLimit(), deps.authHandler.PINLogin)
-	authGroup.Post("/refresh", middleware.AuthRateLimit(), deps.authHandler.Refresh)
+	authGroup.Post("/login", middleware.AuthRateLimit(), middleware.AccountLockout(), deps.authHandler.Login)
+	authGroup.Post("/pin-login", middleware.AuthRateLimit(), middleware.AccountLockout(), deps.authHandler.PINLogin)
+	authGroup.Post("/refresh", middleware.RefreshRateLimit(), deps.authHandler.Refresh)
 	authGroup.Post("/logout", deps.authHandler.Logout)
 
 	api.Get("/events/subscribe", deps.eventsHandler.Subscribe)

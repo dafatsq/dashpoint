@@ -1,12 +1,11 @@
 import type { User } from "@/types";
 
 import { AccountManager } from "@/lib/account-manager";
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL, IS_DESKTOP_BUILD } from "@/lib/config";
 import {
   clearSession,
   getRememberMeKey,
   getSessionItem,
-  migrateSession,
   removeSessionItem,
   setSessionItem,
 } from "@/lib/session";
@@ -18,29 +17,50 @@ import {
   type ApiUserPayload,
 } from "./auth-user";
 
+// Web builds keep the raw JWT in module memory only: nothing writable by a
+// compromised script survives the page, and the httpOnly refresh cookie is
+// what actually persists a session across reloads. Desktop (Wails) builds
+// keep the legacy storage behavior until their cookie handling is verified.
+let memoryAccessToken: string | null = null;
+let lastRefreshedUser: User | null = null;
+
 export function getAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return getSessionItem("access_token");
+  if (IS_DESKTOP_BUILD) return getSessionItem("access_token");
+  return memoryAccessToken ?? getSessionItem("access_token");
 }
 
 export function setAuthTokens(accessToken: string): void {
-  if (typeof window === "undefined") return;
-
-  setSessionItem("access_token", accessToken);
+  if (IS_DESKTOP_BUILD) {
+    setSessionItem("access_token", accessToken);
+    removeSessionItem("refresh_token");
+    return;
+  }
+  memoryAccessToken = accessToken;
+  // Scrub copies written by earlier versions of the app.
+  removeSessionItem("access_token");
   removeSessionItem("refresh_token");
 }
 
-export function persistUserSession(user: User): void {
-  setSessionItem("user", JSON.stringify(user));
+const REMEMBER_SCOPE_KEY = "dashpoint_remember_scope";
+
+/**
+ * Desired refresh-cookie scope for this device. Web builds send it with every
+ * silent refresh so rotated cookies keep the chosen scope without needing to
+ * encode it in token claims.
+ */
+export function readRememberScope(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(REMEMBER_SCOPE_KEY) !== "false";
 }
 
-export function syncRememberMePreference(userId: string): void {
-  if (typeof window === "undefined") return;
+export function writeRememberScope(value: boolean): void {
+  if (IS_DESKTOP_BUILD || typeof window === "undefined") return;
+  window.localStorage.setItem(REMEMBER_SCOPE_KEY, value ? "true" : "false");
+}
 
-  const preference = window.localStorage.getItem(getRememberMeKey(userId));
-  if (preference === "false") {
-    migrateSession(false);
-  }
+export function persistUserSession(user: User): void {
+  if (!IS_DESKTOP_BUILD) return;
+  setSessionItem("user", JSON.stringify(user));
 }
 
 export function syncSavedAccount(user: User): void {
@@ -84,24 +104,24 @@ export function persistAuthUser(
     syncSavedAccount(user);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("dashpoint_device_trusted", "true");
-      const prefKey = getRememberMeKey(user.id);
-      if (window.localStorage.getItem(prefKey) !== "false") {
-        window.localStorage.setItem(prefKey, "true");
-      }
     }
     persistUserSession(user);
-    syncRememberMePreference(user.id);
   } else {
     AccountManager.removeAccount(user.id);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("dashpoint_device_trusted");
-      if (options.saveAccount === false) {
-        const prefKey = getRememberMeKey(user.id);
-        window.localStorage.setItem(prefKey, "false");
-      }
     }
     persistUserSession(user);
-    syncRememberMePreference(user.id);
+  }
+
+  // Desktop only: getStorage() keys token persistence off this per-user
+  // preference, so keep it in sync or Save Login stops controlling whether
+  // tokens survive an app restart.
+  if (IS_DESKTOP_BUILD && typeof window !== "undefined") {
+    window.localStorage.setItem(
+      getRememberMeKey(user.id),
+      shouldSaveAccount ? "true" : "false",
+    );
   }
 
   return user;
@@ -123,6 +143,8 @@ export function persistAuthPayload(
 
 export function clearAuthSession(): void {
   clearSession();
+  memoryAccessToken = null;
+  lastRefreshedUser = null;
 }
 
 export function loadStoredUser(): User | null {
@@ -144,13 +166,21 @@ function normalizeStoredUser(storedUser: string): User | null {
 }
 
 let refreshPromise: Promise<boolean> | null = null;
+let pendingRememberScope: boolean | undefined;
 
 async function refreshSessionTokensInternal(): Promise<boolean> {
   try {
+    const rememberMe =
+      pendingRememberScope !== undefined
+        ? pendingRememberScope
+        : readRememberScope();
+    pendingRememberScope = undefined;
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
+      body: JSON.stringify({ remember_me: rememberMe }),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) {
@@ -161,7 +191,7 @@ async function refreshSessionTokensInternal(): Promise<boolean> {
     const data = (await response.json()) as AuthPayload;
     const saveAccount =
       data.user ? shouldPreserveSavedAccount(normalizeUser(data.user).id) : false;
-    persistAuthPayload(data, { saveAccount });
+    lastRefreshedUser = persistAuthPayload(data, { saveAccount });
     return true;
   } catch {
     clearAuthSession();
@@ -177,4 +207,31 @@ export function refreshSessionTokens(): Promise<boolean> {
   }
 
   return refreshPromise;
+}
+
+/**
+ * Silent-refreshes the session and resolves with the refreshed user (null on
+ * failure). Web builds depend on this after every page load, since the access
+ * token only lives in memory.
+ */
+export async function refreshSessionUser(): Promise<User | null> {
+  const ok = await refreshSessionTokens();
+  return ok ? lastRefreshedUser : null;
+}
+
+/**
+ * Re-issues the refresh cookie with an explicit remember-me scope without
+ * re-authenticating, so toggling the settings switch takes effect
+ * immediately. Resolves with the refreshed user, or null on failure.
+ */
+export async function reissueSessionCookie(rememberMe: boolean): Promise<User | null> {
+  // Drain any in-flight (scope-less) refresh first — the deduped promise
+  // would otherwise swallow the flag and leak it onto a much later boot.
+  await refreshSessionTokens();
+  pendingRememberScope = rememberMe;
+  return refreshSessionUser();
+}
+
+export function clearMemoryAccessToken(): void {
+  memoryAccessToken = null;
 }

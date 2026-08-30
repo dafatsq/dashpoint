@@ -6,6 +6,7 @@ import { createCatalogApi } from "./catalog";
 import { createExpensesApi } from "./expenses";
 import { createOperationsApi } from "./operations";
 import { createReportsApi } from "./reports";
+import { createSetupApi, type SetupApi } from "./setup";
 import { ApiTransport } from "./transport";
 import type {
   AuditApi,
@@ -24,7 +25,8 @@ export type ApiClient = AuthApi &
   OperationsApi &
   ReportsApi &
   AuditApi &
-  ExpensesApi & {
+  ExpensesApi &
+  SetupApi & {
     request: ApiTransport["request"];
     setTokens: ApiTransport["setTokens"];
     clearTokens: ApiTransport["clearTokens"];
@@ -41,6 +43,7 @@ export const api: ApiClient = {
   ...createReportsApi(transport),
   ...createAuditApi(transport),
   ...createExpensesApi(transport),
+  ...createSetupApi(transport),
 };
 
 export * from "./types";

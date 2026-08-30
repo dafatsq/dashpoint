@@ -12,21 +12,7 @@ import (
 
 // Create creates a new user.
 func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
-	query := `
-		INSERT INTO users (id, email, name, password_hash, pin_hash, role_id, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`
-
-	now := time.Now()
-	user.ID = uuid.New()
-	user.CreatedAt = now
-	user.UpdatedAt = now
-
-	_, err := r.pool.Exec(ctx, query, user.ID, user.Email, user.Name, user.PasswordHash, user.PINHash, user.RoleID, user.IsActive, user.CreatedAt, user.UpdatedAt)
-	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
-	}
-	return nil
+	return insertUser(ctx, r.pool, user)
 }
 
 // Update updates a user's basic information.
@@ -61,7 +47,7 @@ func (r *UserRepository) UpdateLastLogin(ctx context.Context, userID uuid.UUID) 
 
 // UpdatePassword updates a user's password.
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
-	query := `UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3`
+	query := `UPDATE users SET password_hash = $1, token_version = token_version + 1, updated_at = $2 WHERE id = $3`
 	now := time.Now()
 	result, err := r.pool.Exec(ctx, query, passwordHash, now, userID)
 	if err != nil {
@@ -75,7 +61,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, p
 
 // UpdatePIN updates a user's PIN.
 func (r *UserRepository) UpdatePIN(ctx context.Context, userID uuid.UUID, pinHash *string) error {
-	query := `UPDATE users SET pin_hash = $1, updated_at = $2 WHERE id = $3`
+	query := `UPDATE users SET pin_hash = $1, token_version = token_version + 1, updated_at = $2 WHERE id = $3`
 	now := time.Now()
 	result, err := r.pool.Exec(ctx, query, pinHash, now, userID)
 	if err != nil {

@@ -48,17 +48,21 @@ func (f *fakeAuthUserRepo) UpdateLastLogin(context.Context, uuid.UUID) error {
 }
 
 type fakeRefreshTokenStore struct {
-	stored          *models.RefreshToken
-	getErr          error
-	createErr       error
-	revokeErr       error
-	rotateErr       error
-	created         *models.RefreshToken
-	revokedHash     string
-	revokeReason    string
-	rotatedOldHash  string
-	rotatedReason   string
-	rotatedNewToken *models.RefreshToken
+	stored             *models.RefreshToken
+	getErr             error
+	createErr          error
+	revokeErr          error
+	rotateErr          error
+	familyRevokeErr    error
+	created            *models.RefreshToken
+	revokedHash        string
+	revokeReason       string
+	rotatedOldHash     string
+	rotatedReason      string
+	rotatedNewToken    *models.RefreshToken
+	familyRevokeCalls  int
+	revokedFamilyID    uuid.UUID
+	familyRevokeReason string
 }
 
 func (f *fakeRefreshTokenStore) Create(_ context.Context, token *models.RefreshToken) error {
@@ -83,6 +87,13 @@ func (f *fakeRefreshTokenStore) Rotate(_ context.Context, oldHash, reason string
 	return f.rotateErr
 }
 
+func (f *fakeRefreshTokenStore) RevokeFamily(_ context.Context, familyID uuid.UUID, reason string) error {
+	f.familyRevokeCalls++
+	f.revokedFamilyID = familyID
+	f.familyRevokeReason = reason
+	return f.familyRevokeErr
+}
+
 type fakeJWTManager struct {
 	validateAccessClaims  *authpkg.Claims
 	validateRefreshClaims *authpkg.Claims
@@ -92,7 +103,7 @@ type fakeJWTManager struct {
 	generateErr           error
 }
 
-func (f *fakeJWTManager) GenerateTokenPair(uuid.UUID, string, string, uuid.UUID, string) (*authpkg.TokenPair, error) {
+func (f *fakeJWTManager) GenerateTokenPair(uuid.UUID, string, string, uuid.UUID, string, int) (*authpkg.TokenPair, error) {
 	return f.tokenPair, f.generateErr
 }
 
@@ -278,7 +289,7 @@ func TestAuthHandlerLoginUsesWailsCompatibleRefreshCookie(t *testing.T) {
 func TestRefreshCookieSameSiteSupportsWailsCustomScheme(t *testing.T) {
 	app := fiber.New()
 	app.Get("/cookie", func(c *fiber.Ctx) error {
-		setRefreshTokenCookie(c, "refresh-token", time.Unix(400, 0))
+		setRefreshTokenCookie(c, "refresh-token", time.Unix(400, 0), false)
 		return c.SendStatus(fiber.StatusOK)
 	})
 
@@ -524,4 +535,406 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func newRememberMeLoginApp(t *testing.T) *fiber.App {
+	t.Helper()
+	roleID := uuid.New()
+	userID := uuid.New()
+	passwordHash, err := authpkg.HashPassword("secret123")
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	email := "remember@example.com"
+	user := &models.User{
+		ID:           userID,
+		Email:        &email,
+		Name:         "Owner",
+		PasswordHash: &passwordHash,
+		RoleID:       roleID,
+		IsActive:     true,
+		Role:         &models.Role{ID: roleID, Name: "owner"},
+	}
+	userRepo := &fakeAuthUserRepo{userByEmail: user, userByID: user}
+	tokenStore := &fakeRefreshTokenStore{}
+	jwtManager := &fakeJWTManager{tokenPair: &authpkg.TokenPair{
+		AccessToken:           "access-token",
+		RefreshToken:          "refresh-token",
+		AccessTokenExpiresAt:  time.Unix(300, 0),
+		RefreshTokenExpiresAt: time.Unix(400, 0),
+	}}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+	app := fiber.New()
+	app.Post("/login", handler.Login)
+	return app
+}
+
+func loginWithRememberMe(t *testing.T, app *fiber.App, body string) *http.Cookie {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/login", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	cookie := findCookie(resp.Cookies(), refreshTokenCookie)
+	if cookie == nil {
+		t.Fatalf("expected refresh cookie in response")
+	}
+	return cookie
+}
+
+func TestLoginRefreshCookiePathIsRoot(t *testing.T) {
+	// The Next.js proxy gate reads the cookie on page routes, so it must be
+	// scoped to the whole origin rather than only /api/v1/auth.
+	app := newRememberMeLoginApp(t)
+	cookie := loginWithRememberMe(t, app, `{"email":"remember@example.com","password":"secret123"}`)
+	if cookie.Path != "/" {
+		t.Fatalf("expected refresh cookie path /, got %q", cookie.Path)
+	}
+}
+
+func TestLoginRememberMeFalseIssuesSessionScopedCookie(t *testing.T) {
+	app := newRememberMeLoginApp(t)
+	cookie := loginWithRememberMe(t, app, `{"email":"remember@example.com","password":"secret123","remember_me":false}`)
+	if !cookie.Expires.IsZero() {
+		t.Fatalf("session-scoped cookie must not carry Expires, got %v", cookie.Expires)
+	}
+	if cookie.MaxAge != 0 {
+		t.Fatalf("session-scoped cookie must not carry MaxAge, got %d", cookie.MaxAge)
+	}
+}
+
+func TestLoginRememberMeTrueKeepsPersistentCookie(t *testing.T) {
+	app := newRememberMeLoginApp(t)
+	cookie := loginWithRememberMe(t, app, `{"email":"remember@example.com","password":"secret123","remember_me":true}`)
+	if cookie.Expires.IsZero() || cookie.Expires.Unix() != 400 {
+		t.Fatalf("persistent cookie should keep configured expiry, got %v", cookie.Expires)
+	}
+}
+
+func TestLoginRememberMeAbsentKeepsPersistentDefault(t *testing.T) {
+	app := newRememberMeLoginApp(t)
+	cookie := loginWithRememberMe(t, app, `{"email":"remember@example.com","password":"secret123"}`)
+	if cookie.Expires.IsZero() || cookie.Expires.Unix() != 400 {
+		t.Fatalf("absent remember_me should keep legacy persistent cookie, got %v", cookie.Expires)
+	}
+}
+
+func newRefreshRaceTestApp(t *testing.T, revokedReason string, revokedAgo time.Duration) *fiber.App {
+	t.Helper()
+	app, _ := newRefreshTestAppWithToken(t, refreshRaceStoredToken(revokedReason, revokedAgo))
+	return app
+}
+
+// refreshRaceStoredToken builds a stored refresh token revoked revokedAgo ago
+// with the given reason, belonging to a fresh token family.
+func refreshRaceStoredToken(revokedReason string, revokedAgo time.Duration) *models.RefreshToken {
+	userID := uuid.New()
+	hash := authpkg.HashToken("stale-token")
+	revokedAt := time.Now().Add(-revokedAgo)
+	return &models.RefreshToken{
+		UserID:        userID,
+		TokenHash:     hash,
+		ExpiresAt:     time.Now().Add(time.Hour),
+		RevokedAt:     &revokedAt,
+		RevokedReason: &revokedReason,
+		FamilyID:      uuid.New(),
+	}
+}
+
+// newRefreshTestAppWithToken wires a refresh handler around the given stored
+// token and returns the app plus the fake store for call assertions.
+func newRefreshTestAppWithToken(t *testing.T, stored *models.RefreshToken) (*fiber.App, *fakeRefreshTokenStore) {
+	t.Helper()
+	email := "race@example.com"
+	user := &models.User{
+		ID:       stored.UserID,
+		Email:    &email,
+		Name:     "Manager",
+		RoleID:   uuid.New(),
+		IsActive: true,
+		Role:     &models.Role{ID: uuid.New(), Name: "manager"},
+	}
+	userRepo := &fakeAuthUserRepo{userByID: user}
+	tokenStore := &fakeRefreshTokenStore{stored: stored}
+	jwtManager := &fakeJWTManager{
+		validateRefreshClaims: &authpkg.Claims{UserID: stored.UserID},
+		tokenPair: &authpkg.TokenPair{
+			AccessToken:           "grace-access",
+			RefreshToken:          "grace-refresh",
+			AccessTokenExpiresAt:  time.Unix(300, 0),
+			RefreshTokenExpiresAt: time.Unix(400, 0),
+		},
+	}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+	app := fiber.New()
+	app.Post("/refresh", handler.Refresh)
+	return app, tokenStore
+}
+
+func postRefresh(t *testing.T, app *fiber.App) *http.Response {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookie, Value: "stale-token"})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	return resp
+}
+
+func TestRefreshGraceWindowHonorsSiblingRotationRace(t *testing.T) {
+	app := newRefreshRaceTestApp(t, "token_refresh", 5*time.Second)
+	resp := postRefresh(t, app)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected grace window to honor sibling rotation (200), got %d", resp.StatusCode)
+	}
+	if findCookie(resp.Cookies(), refreshTokenCookie) == nil {
+		t.Fatalf("expected fresh refresh cookie so the lagging tab converges")
+	}
+}
+
+func TestRefreshGraceWindowRejectsBeyondWindow(t *testing.T) {
+	app := newRefreshRaceTestApp(t, "token_refresh", 45*time.Second)
+	resp := postRefresh(t, app)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected beyond-grace replay to be rejected (401), got %d", resp.StatusCode)
+	}
+}
+
+func TestRefreshGraceWindowRejectsNonRotationRevocations(t *testing.T) {
+	app := newRefreshRaceTestApp(t, "user_logout", 5*time.Second)
+	resp := postRefresh(t, app)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected non-rotation revocation to stay rejected (401), got %d", resp.StatusCode)
+	}
+}
+
+func TestRefreshReuseBeyondGraceRevokesFamily(t *testing.T) {
+	stored := refreshRaceStoredToken("token_refresh", 45*time.Second)
+	app, store := newRefreshTestAppWithToken(t, stored)
+
+	resp := postRefresh(t, app)
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected beyond-grace replay to be rejected (401), got %d", resp.StatusCode)
+	}
+	if store.familyRevokeCalls != 1 {
+		t.Fatalf("expected one family revocation, got %d", store.familyRevokeCalls)
+	}
+	if store.revokedFamilyID != stored.FamilyID {
+		t.Fatalf("expected family %s to be revoked, got %s", stored.FamilyID, store.revokedFamilyID)
+	}
+	if store.familyRevokeReason != tokenFamilyReuseRevocationReason {
+		t.Fatalf("expected reason %s, got %s", tokenFamilyReuseRevocationReason, store.familyRevokeReason)
+	}
+}
+
+func TestRefreshGraceWindowContinuationJoinsSameFamily(t *testing.T) {
+	stored := refreshRaceStoredToken("token_refresh", 5*time.Second)
+	app, store := newRefreshTestAppWithToken(t, stored)
+
+	resp := postRefresh(t, app)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected grace window continuation to succeed (200), got %d", resp.StatusCode)
+	}
+	if store.familyRevokeCalls != 0 {
+		t.Fatalf("grace-window sibling race must not revoke the family, got %d revocations", store.familyRevokeCalls)
+	}
+	if store.created == nil || store.created.FamilyID != stored.FamilyID {
+		t.Fatalf("continuation token must join the presented token's family")
+	}
+}
+
+func TestRefreshReuseOfLoggedOutTokenRevokesFamily(t *testing.T) {
+	stored := refreshRaceStoredToken("user_logout", 5*time.Second)
+	app, store := newRefreshTestAppWithToken(t, stored)
+
+	resp := postRefresh(t, app)
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected replay after logout to be rejected (401), got %d", resp.StatusCode)
+	}
+	if store.familyRevokeCalls != 1 || store.revokedFamilyID != stored.FamilyID {
+		t.Fatalf("replay of a logout-revoked token must contain the family")
+	}
+}
+
+func TestRefreshExpiredTokenDoesNotRevokeFamily(t *testing.T) {
+	// An expired-but-never-revoked token is an idle session, not theft: the
+	// request is rejected without family containment.
+	stored := refreshRaceStoredToken("", 0)
+	stored.RevokedAt = nil
+	stored.RevokedReason = nil
+	stored.ExpiresAt = time.Now().Add(-time.Hour)
+	app, store := newRefreshTestAppWithToken(t, stored)
+
+	resp := postRefresh(t, app)
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected expired token to be rejected (401), got %d", resp.StatusCode)
+	}
+	if store.familyRevokeCalls != 0 {
+		t.Fatalf("expired token must not trigger family revocation, got %d", store.familyRevokeCalls)
+	}
+}
+
+func TestLoginAntiEnumerationUniformResponses(t *testing.T) {
+	roleID := uuid.New()
+	userID := uuid.New()
+	passwordHash, err := authpkg.HashPassword("secret123")
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	email := "disabled@example.com"
+	disabledUser := &models.User{
+		ID:           userID,
+		Email:        &email,
+		Name:         "Disabled",
+		PasswordHash: &passwordHash,
+		RoleID:       roleID,
+		IsActive:     false,
+		Role:         &models.Role{ID: roleID, Name: "cashier"},
+	}
+	userRepo := &fakeAuthUserRepo{userByEmail: disabledUser, userByID: disabledUser}
+	tokenStore := &fakeRefreshTokenStore{}
+	jwtManager := &fakeJWTManager{tokenPair: &authpkg.TokenPair{
+		AccessToken:           "access-token",
+		RefreshToken:          "refresh-token",
+		AccessTokenExpiresAt:  time.Unix(300, 0),
+		RefreshTokenExpiresAt: time.Unix(400, 0),
+	}}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+	app := fiber.New()
+	app.Post("/login", handler.Login)
+
+	cases := []struct {
+		name     string
+		body     string
+		wantCode string
+		wantMsg  string
+	}{
+		{
+			name:     "unknown email",
+			body:     `{"email":"nobody@example.com","password":"whatever"}`,
+			wantCode: "INVALID_CREDENTIALS",
+			wantMsg:  "Invalid email or password",
+		},
+		{
+			name:     "disabled account with wrong password",
+			body:     `{"email":"disabled@example.com","password":"wrong"}`,
+			wantCode: "INVALID_CREDENTIALS",
+			wantMsg:  "Invalid email or password",
+		},
+		{
+			name:     "disabled account with correct password",
+			body:     `{"email":"disabled@example.com","password":"secret123"}`,
+			wantCode: "ACCOUNT_DISABLED",
+			wantMsg:  "Your account has been disabled",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/login", bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusUnauthorized {
+				t.Fatalf("%s: expected 401, got %d", tc.name, resp.StatusCode)
+			}
+			var body struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			}
+			raw, rerr := io.ReadAll(resp.Body)
+			if rerr != nil {
+				t.Fatalf("read body: %v", rerr)
+			}
+			if err := json.Unmarshal(raw, &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if body.Code != tc.wantCode || body.Message != tc.wantMsg {
+				t.Fatalf("%s: got %s/%q want %s/%q", tc.name, body.Code, body.Message, tc.wantCode, tc.wantMsg)
+			}
+		})
+	}
+}
+
+func TestPINLoginAntiEnumerationOrder(t *testing.T) {
+	roleID := uuid.New()
+	userID := uuid.New()
+	pinHash, err := authpkg.HashPIN("9911")
+	if err != nil {
+		t.Fatalf("HashPIN returned error: %v", err)
+	}
+	inactiveUser := &models.User{
+		ID:       userID,
+		Name:     "Disabled",
+		PINHash:  &pinHash,
+		RoleID:   roleID,
+		IsActive: false,
+		Role:     &models.Role{ID: roleID, Name: "cashier"},
+	}
+	userRepo := &fakeAuthUserRepo{userByID: inactiveUser}
+	tokenStore := &fakeRefreshTokenStore{}
+	jwtManager := &fakeJWTManager{tokenPair: &authpkg.TokenPair{
+		AccessToken:           "access-token",
+		RefreshToken:          "refresh-token",
+		AccessTokenExpiresAt:  time.Unix(300, 0),
+		RefreshTokenExpiresAt: time.Unix(400, 0),
+	}}
+	handler := &AuthHandler{
+		userRepo:         userRepo,
+		refreshTokenRepo: tokenStore,
+		jwtManager:       jwtManager,
+		workflow:         newAuthWorkflow(userRepo, tokenStore, jwtManager),
+	}
+	app := fiber.New()
+	app.Post("/pin-login", handler.PINLogin)
+
+	// wrong PIN on an inactive account must read as generic invalid
+	// credentials, not disclose that the account is inactive
+	req := httptest.NewRequest("POST", "/pin-login", bytes.NewBufferString(
+		`{"user_id":"`+userID.String()+`","pin":"1111"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	raw, rerr := io.ReadAll(resp.Body)
+	if rerr != nil {
+		t.Fatalf("read body: %v", rerr)
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized || body.Code != "INVALID_CREDENTIALS" {
+		t.Fatalf("expected generic INVALID_CREDENTIALS for wrong pin, got %d/%s", resp.StatusCode, body.Code)
+	}
 }

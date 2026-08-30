@@ -27,6 +27,7 @@ type serverDependencies struct {
 	permissionChecker middleware.PermissionChecker
 	healthHandler     *handlers.HealthHandler
 	authHandler       *handlers.AuthHandler
+	setupHandler      *handlers.SetupHandler
 	eventsHandler     *handlers.EventsHandler
 	userHandler       *handlers.UserHandler
 	roleHandler       *handlers.RoleHandler
@@ -66,6 +67,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 
 	healthHandler := handlers.NewHealthHandler(db)
 	authHandler := handlers.NewAuthHandler(userRepo, refreshTokenRepo, jwtManager)
+	setupHandler := handlers.NewSetupHandler(userRepo, roleRepo)
 	eventsHandler := handlers.NewEventsHandler(jwtManager, userRepo, cfg.CORSOrigins)
 	userHandler := handlers.NewUserHandler(userRepo, roleRepo)
 	userHandler.SetEventsHandler(eventsHandler)
@@ -79,6 +81,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 		permissionChecker: newPermissionChecker(userRepo),
 		healthHandler:     healthHandler,
 		authHandler:       authHandler,
+		setupHandler:      setupHandler,
 		eventsHandler:     eventsHandler,
 		userHandler:       userHandler,
 		roleHandler:       roleHandler,
@@ -113,7 +116,11 @@ func newPermissionChecker(userRepo *repository.UserRepository) middleware.Permis
 }
 
 func newServerApp(cfg *config.Config, deps *serverDependencies) *fiber.App {
-	app := fiber.New(serverFiberConfig())
+	if cfg.Environment == "production" && len(cfg.TrustedProxies) == 0 {
+		log.Warn().Msg("TRUSTED_PROXIES is empty in production: forwarded headers are ignored, so behind a reverse proxy cookies lose Secure and audit IPs are the proxy address")
+	}
+
+	app := fiber.New(serverFiberConfig(cfg.TrustedProxies))
 
 	app.Use(middleware.Recover())
 	app.Use(middleware.Logger())
@@ -135,7 +142,7 @@ func newServerApp(cfg *config.Config, deps *serverDependencies) *fiber.App {
 	return app
 }
 
-func serverFiberConfig() fiber.Config {
+func serverFiberConfig(trustedProxies []string) fiber.Config {
 	return fiber.Config{
 		AppName:        "DashPoint POS API",
 		ErrorHandler:   errorHandler,
@@ -143,6 +150,16 @@ func serverFiberConfig() fiber.Config {
 		WriteTimeout:   0,
 		IdleTimeout:    120 * time.Second,
 		ReadBufferSize: apiReadBufferSize,
+		// Uploads accept 5 MB; without an explicit limit Fiber's implicit 4 MB
+		// default would reject them first. This is also the only size bound on
+		// endpoints that skip the strict bounded JSON parsers.
+		BodyLimit: 6 * 1024 * 1024,
+		// Only honor X-Forwarded-For / X-Forwarded-Proto from proxies on this
+		// allowlist. Empty by default: direct deployments ignore spoofed
+		// forwarding headers entirely, and c.IP() is the real socket address.
+		EnableTrustedProxyCheck: true,
+		TrustedProxies:          trustedProxies,
+		ProxyHeader:             "X-Forwarded-For",
 	}
 }
 

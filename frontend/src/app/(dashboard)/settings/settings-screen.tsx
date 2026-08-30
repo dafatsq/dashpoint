@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 
+import { reissueSessionCookie } from "@/lib/auth-session";
+import { IS_DESKTOP_BUILD } from "@/lib/config";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { getRememberMeKey, migrateSession } from "@/lib/session";
+import { readRememberScope, writeRememberScope } from "@/lib/auth-session";
 import { useAuth } from "@/contexts/auth-context";
 import { useGlobalError } from "@/contexts/error-context";
 import { AccountManager } from "@/lib/account-manager";
@@ -16,6 +18,7 @@ import { SettingsEditProfileDialog } from "./settings-edit-profile-dialog";
 import {
   buildProfileUpdatePayload,
   buildSettingsPreferences,
+  effectiveRememberMe,
   hasSettingsPreferenceChanges,
   normalizeSettingsPreferences,
   profileHasChanges,
@@ -24,6 +27,10 @@ import {
 } from "./settings-helpers";
 import { SettingsProfileCard } from "./settings-profile-card";
 import { SettingsVerifyPasswordDialog } from "./settings-verify-password-dialog";
+import {
+  captureDeviceSessionState,
+  restoreDeviceSessionState,
+} from "./verify-session-guard";
 
 function preferencesAreEqual(
   left: SettingsPreferences,
@@ -64,9 +71,8 @@ export function SettingsScreen() {
     if (!user) return;
 
     const timer = window.setTimeout(() => {
-      const preferenceKey = getRememberMeKey(user.id);
       const nextPreferences = buildSettingsPreferences(
-        localStorage.getItem(preferenceKey),
+        readRememberScope(),
         AccountManager.getAccount(user.id) !== null,
       );
       setPreferences((current) =>
@@ -101,14 +107,40 @@ export function SettingsScreen() {
 
     const nextPreferences = normalizeSettingsPreferences(preferences);
 
-    const preferenceKey = getRememberMeKey(user.id);
-    localStorage.setItem(
-      preferenceKey,
-      nextPreferences.rememberMe ? "true" : "false",
-    );
-    migrateSession(nextPreferences.rememberMe);
+    // Automatic sign-in requires the account to be saved on this device.
+    // Enabling it without a saved entry force-saves the account when a PIN
+    // exists; without a PIN the request is rejected and the toggle reverts.
+    let workingPreferences = nextPreferences;
+    if (
+      workingPreferences.rememberMe &&
+      AccountManager.getAccount(user.id) === null
+    ) {
+      if (!user.has_pin) {
+        showError(
+          "Set a PIN first",
+          "Automatic Sign-In requires Save Login with a PIN. Add a PIN, then enable it.",
+        );
+        const reverted = { ...workingPreferences, rememberMe: false };
+        setPreferences(reverted);
+        setInitialPreferences(reverted);
+        setIsSaving(false);
+        return;
+      }
+      workingPreferences = { ...workingPreferences, quickAccess: true };
+    }
 
-    if (nextPreferences.quickAccess) {
+    // Effective remember-me depends on the account being saved; removing the
+    // saved account (Quick Access off) always disables automatic sign-in.
+    const effectiveRemember = effectiveRememberMe(
+      workingPreferences.rememberMe,
+      workingPreferences.quickAccess,
+    );
+
+    // Single source of truth for auto sign-in is the device scope key; the
+    // cookie is immediately re-minted below to apply it to this session.
+    writeRememberScope(effectiveRemember);
+
+    if (workingPreferences.quickAccess) {
       AccountManager.saveAccount({
         id: user.id,
         name: user.name,
@@ -122,8 +154,22 @@ export function SettingsScreen() {
       localStorage.removeItem("dashpoint_device_trusted");
     }
 
-    setPreferences(nextPreferences);
-    setInitialPreferences(nextPreferences);
+    // Web builds store no tokens locally, so remember-me is enforced by the
+    // refresh cookie — re-mint it unconditionally on save so the scope change
+    // applies to THIS browser session instead of the next login.
+    if (!IS_DESKTOP_BUILD) {
+      try {
+        await reissueSessionCookie(effectiveRemember);
+      } catch {
+        showError(
+          "Preference Not Applied",
+          "Could not update your session scope. Log out and back in for it to take effect.",
+        );
+      }
+    }
+
+    setPreferences(workingPreferences);
+    setInitialPreferences(workingPreferences);
 
     await new Promise((resolve) => setTimeout(resolve, 500));
     setIsSaving(false);
@@ -145,8 +191,12 @@ export function SettingsScreen() {
     setIsVerifyingPassword(true);
 
     try {
-      const result = await login(user.email || "", passwordEntry, false);
+      // This login is only an identity check: omitting saveAccount keeps the
+      // refresh cookie and remembered-device state exactly as they were.
+      const deviceSessionState = captureDeviceSessionState(user.id);
+      const result = await login(user.email || "", passwordEntry);
       if (result.success) {
+        restoreDeviceSessionState(deviceSessionState, user.id);
         setVerifyPasswordOpen(false);
         setEditForm({
           name: user.name,
@@ -180,10 +230,16 @@ export function SettingsScreen() {
     setIsUpdatingProfile(true);
 
     try {
+      const payload = buildProfileUpdatePayload(user, editForm);
+      // The server requires proof of the current credential when a user
+      // changes their own password/PIN; reuse the password that was just
+      // verified to open this dialog.
+      const updatesCredentials = Boolean(payload.password || payload.pin);
       const result = await api.updateUser(
         user.id,
         {
-          ...buildProfileUpdatePayload(user, editForm),
+          ...payload,
+          ...(updatesCredentials ? { current_password: passwordEntry } : {}),
           expected_updated_at: user.updated_at,
         },
       );

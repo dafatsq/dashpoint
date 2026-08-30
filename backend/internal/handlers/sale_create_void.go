@@ -16,7 +16,7 @@ import (
 // CreateSale handles POST /api/v1/sales.
 func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 	var req CreateSaleRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, saleMaxJSONBodyBytes); err != nil {
 		return saleInvalidRequest(c)
 	}
 
@@ -49,7 +49,10 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 	sale, err := h.saleRepo.Create(c.Context(), createReq)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create sale")
-		return middleware.JSONError(c, fiber.StatusBadRequest, "SALE_FAILED", err.Error())
+		if saleErr, ok := asSanitizedSaleError(err); ok {
+			return middleware.JSONError(c, fiber.StatusBadRequest, "SALE_FAILED", saleErr)
+		}
+		return middleware.JSONError(c, fiber.StatusInternalServerError, "SALE_FAILED", "Could not complete the sale. Please try again.")
 	}
 
 	newVals := map[string]interface{}{
@@ -68,7 +71,7 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 // ValidateCart handles POST /api/v1/sales/validate.
 func (h *SaleHandler) ValidateCart(c *fiber.Ctx) error {
 	var req ValidateSaleCartRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, saleMaxJSONBodyBytes); err != nil {
 		return saleInvalidRequest(c)
 	}
 
@@ -85,7 +88,11 @@ func (h *SaleHandler) ValidateCart(c *fiber.Ctx) error {
 	}
 
 	if err := h.saleRepo.ValidateCart(c.Context(), &repository.ValidateSaleCartRequest{Items: input.items}); err != nil {
-		return middleware.JSONError(c, fiber.StatusBadRequest, "SALE_VALIDATION_FAILED", err.Error())
+		if saleErr, ok := asSanitizedSaleError(err); ok {
+			return middleware.JSONError(c, fiber.StatusBadRequest, "SALE_VALIDATION_FAILED", saleErr)
+		}
+		log.Error().Err(err).Msg("Cart validation failed with internal error")
+		return middleware.JSONError(c, fiber.StatusInternalServerError, "SALE_VALIDATION_FAILED", "Could not validate the cart. Please try again.")
 	}
 
 	return c.JSON(fiber.Map{
@@ -116,7 +123,7 @@ func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
 	}
 
 	var req VoidSaleRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, saleMaxJSONBodyBytes); err != nil {
 		return saleInvalidRequest(c)
 	}
 	if req.Reason == "" {
@@ -141,7 +148,10 @@ func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
 
 	if err := h.saleRepo.VoidSale(c.Context(), id, userID, req.Reason); err != nil {
 		log.Error().Err(err).Msg("Failed to void sale")
-		return middleware.JSONError(c, fiber.StatusBadRequest, "VOID_FAILED", err.Error())
+		if saleErr, ok := asSanitizedSaleError(err); ok {
+			return middleware.JSONError(c, fiber.StatusBadRequest, "VOID_FAILED", saleErr)
+		}
+		return middleware.JSONError(c, fiber.StatusInternalServerError, "VOID_FAILED", "Could not void the sale. Please try again.")
 	}
 
 	sale, _ = h.saleRepo.GetByID(c.Context(), id)

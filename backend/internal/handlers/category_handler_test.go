@@ -124,7 +124,6 @@ func TestCategoryHandlerListUsesBatchedProductCounts(t *testing.T) {
 	}
 }
 
-
 func TestCategoryHandlerGetRejectsInvalidID(t *testing.T) {
 	handler := NewCategoryHandler(&fakeManagedCategoryStore{})
 	app := fiber.New()

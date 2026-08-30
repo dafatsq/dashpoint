@@ -15,6 +15,7 @@ import (
 	"dashpoint/backend/internal/auth"
 	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
+	"dashpoint/backend/internal/repository"
 )
 
 type authUserReader interface {
@@ -29,10 +30,11 @@ type authRefreshTokenStore interface {
 	GetByTokenHash(context.Context, string) (*models.RefreshToken, error)
 	Revoke(context.Context, string, string) error
 	Rotate(context.Context, string, string, *models.RefreshToken) error
+	RevokeFamily(context.Context, uuid.UUID, string) error
 }
 
 type authTokenManager interface {
-	GenerateTokenPair(uuid.UUID, string, string, uuid.UUID, string) (*auth.TokenPair, error)
+	GenerateTokenPair(uuid.UUID, string, string, uuid.UUID, string, int) (*auth.TokenPair, error)
 	ValidateAccessToken(string) (*auth.Claims, error)
 	ValidateRefreshToken(string) (*auth.Claims, error)
 }
@@ -40,9 +42,13 @@ type authTokenManager interface {
 const (
 	authMaxJSONBodyBytes = 4096
 	refreshTokenCookie   = "refresh_token"
-	refreshTokenPath     = "/api/v1/auth"
-	wailsCustomOrigin    = "wails://wails"
-	wailsWindowsOrigin   = "http://wails.localhost"
+	// "/" so the Next.js edge middleware (audit L6) can see the cookie on
+	// page routes, not just /api/v1/auth. The cookie stays httpOnly,
+	// SameSite=Strict, and host-only, so widening the path does not expose
+	// it to JavaScript or other hosts.
+	refreshTokenPath   = "/"
+	wailsCustomOrigin  = "wails://wails"
+	wailsWindowsOrigin = "http://wails.localhost"
 )
 
 var errEmptyAuthBody = errors.New("empty auth request body")
@@ -51,6 +57,11 @@ var errEmptyAuthBody = errors.New("empty auth request body")
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// RememberMe opts the browser session into a persistent refresh cookie.
+	// When explicitly false the cookie is session-scoped and disappears when
+	// the browser closes. Absent keeps the historical persistent default so
+	// existing clients (desktop, older web bundles) are unaffected.
+	RememberMe *bool `json:"remember_me"`
 }
 
 // PINLoginRequest represents the PIN login request body.
@@ -141,8 +152,8 @@ func refreshCookieSameSite(c *fiber.Ctx) string {
 	return fiber.CookieSameSiteStrictMode
 }
 
-func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time) {
-	c.Cookie(&fiber.Cookie{
+func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time, sessionScoped bool) {
+	cookie := &fiber.Cookie{
 		Name:     refreshTokenCookie,
 		Value:    token,
 		Path:     refreshTokenPath,
@@ -150,7 +161,13 @@ func setRefreshTokenCookie(c *fiber.Ctx, token string, expiresAt time.Time) {
 		HTTPOnly: true,
 		Secure:   isSecureRequest(c),
 		SameSite: refreshCookieSameSite(c),
-	})
+	}
+	if sessionScoped {
+		// No Expires/MaxAge attributes: the browser drops the cookie when the
+		// session ends — "remember me off" semantics for memory-only tokens.
+		cookie.Expires = time.Time{}
+	}
+	c.Cookie(cookie)
 }
 
 func clearRefreshTokenCookie(c *fiber.Ctx) {
@@ -167,7 +184,7 @@ func clearRefreshTokenCookie(c *fiber.Ctx) {
 }
 
 func isSecureRequest(c *fiber.Ctx) bool {
-	return c.Protocol() == "https" || strings.EqualFold(c.Get("X-Forwarded-Proto"), "https")
+	return c.Protocol() == "https"
 }
 
 func normalizeLoginEmail(email string) string {
@@ -201,10 +218,44 @@ func checkPassword(password, hash string) bool {
 	return auth.CheckPassword(password, hash)
 }
 
+// dummyPasswordHash is a precomputed cost-12 bcrypt hash used to equalize
+// login timing for unknown emails: without it, missing accounts skip the
+// bcrypt round-trip and respond measurably faster than existing ones.
+var dummyPasswordHash = func() string {
+	hash, err := auth.HashPassword("dashpoint-dummy-password-equalizer")
+	if err != nil {
+		panic("failed to seed dummy password hash: " + err.Error())
+	}
+	return hash
+}()
+
 func checkPIN(pin, hash string) bool {
 	return auth.CheckPIN(pin, hash)
 }
 
 func hashToken(token string) string {
 	return auth.HashToken(token)
+}
+
+// asSanitizedSaleError lets domain-validation messages (insufficient stock,
+// price mismatches, payment mismatches) reach the client verbatim, while
+// infrastructure failures are collapsed to ok=false so their internals stay
+// server-side.
+func asSanitizedSaleError(err error) (string, bool) {
+	var internal *repository.InternalError
+	if errors.As(err, &internal) {
+		return "", false
+	}
+	return err.Error(), true
+}
+
+// asSanitizedExpenseError mirrors asSanitizedSaleError for the expense
+// domain: user-facing validation text passes through, infrastructure
+// internals stay server-side.
+func asSanitizedExpenseError(err error) (string, bool) {
+	var internal *repository.InternalError
+	if errors.As(err, &internal) {
+		return "", false
+	}
+	return err.Error(), true
 }

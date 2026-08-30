@@ -24,10 +24,13 @@ export function createAuthApi(transport: ApiTransport): AuthApi & {
       if (result.error) return { error: result.error };
       return { data: result.data?.user };
     },
-    login(email: string, password: string) {
+    login(email: string, password: string, rememberMe?: boolean) {
       return request<AuthPayload>("/auth/login", {
         method: "POST",
-        body: { email, password },
+        body:
+          rememberMe === undefined
+            ? { email, password }
+            : { email, password, remember_me: rememberMe },
         credentials: "include",
         skipAuth: true,
       });

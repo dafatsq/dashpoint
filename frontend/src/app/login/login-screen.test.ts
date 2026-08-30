@@ -155,13 +155,21 @@ describe("LoginScreen", () => {
   test("uses the trusted-device preference in the effective save-account decision", async () => {
     window.localStorage.setItem("dashpoint_device_trusted", "true");
     process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
+    process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON = JSON.stringify([{ role: "Owner", email: "owner@dashpoint.local", pass: "owner123" }]);
     loginMock.mockResolvedValue({ success: true });
 
     await renderScreen();
-
-    const demoButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("owner@dashpoint.local"),
-    );
+    // Demo credentials load via a build-flag-gated dynamic import; wait for
+    // the button they render instead of relying on import timing.
+    const demoButton = await vi.waitFor(() => {
+      const button = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent?.includes("owner@dashpoint.local"),
+      );
+      if (!button) {
+        throw new Error("demo access button not rendered yet");
+      }
+      return button;
+    });
     const form = container.querySelector("form");
 
     await act(async () => {
@@ -186,12 +194,20 @@ describe("LoginScreen", () => {
 
   test("demo autofill updates credentials without submitting", async () => {
     process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
+    process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON = JSON.stringify([{ role: "Owner", email: "owner@dashpoint.local", pass: "owner123" }]);
 
     await renderScreen();
-
-    const demoButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("owner@dashpoint.local"),
-    );
+    // Demo credentials load via a build-flag-gated dynamic import; wait for
+    // the button they render instead of relying on import timing.
+    const demoButton = await vi.waitFor(() => {
+      const button = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent?.includes("owner@dashpoint.local"),
+      );
+      if (!button) {
+        throw new Error("demo access button not rendered yet");
+      }
+      return button;
+    });
 
     await act(async () => {
       demoButton?.dispatchEvent(

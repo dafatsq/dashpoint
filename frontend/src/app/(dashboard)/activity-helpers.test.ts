@@ -14,6 +14,7 @@ import {
   getActivityBadgeColor,
   getActivityEntityLabel,
   incrementActivityRefreshKey,
+  isSafeActivityImageUrl,
 } from "./activity-helpers";
 
 function normalizeCurrency(value: string): string {
@@ -274,5 +275,26 @@ describe("activity helpers", () => {
   test("increments activity refresh keys for retry flows", () => {
     expect(incrementActivityRefreshKey(0)).toBe(1);
     expect(incrementActivityRefreshKey(7)).toBe(8);
+  });
+});
+
+describe("isSafeActivityImageUrl", () => {
+  test("allows backend upload paths", () => {
+    expect(isSafeActivityImageUrl("/uploads/products/abc.png")).toBe(true);
+  });
+
+  test("rejects external and scheme-based URLs", () => {
+    expect(isSafeActivityImageUrl("https://evil.example.com/pixel.png")).toBe(false);
+    expect(isSafeActivityImageUrl("http://evil.example.com/pixel.png")).toBe(false);
+    expect(isSafeActivityImageUrl("data:image/png;base64,AAAA")).toBe(false);
+    expect(isSafeActivityImageUrl("javascript:alert(1)")).toBe(false);
+  });
+
+  test("rejects non-string and lookalike values", () => {
+    expect(isSafeActivityImageUrl(undefined)).toBe(false);
+    expect(isSafeActivityImageUrl(null)).toBe(false);
+    expect(isSafeActivityImageUrl(123)).toBe(false);
+    expect(isSafeActivityImageUrl("//evil.example.com/pixel.png")).toBe(false);
+    expect(isSafeActivityImageUrl("/uploads/../etc/passwd")).toBe(false);
   });
 });

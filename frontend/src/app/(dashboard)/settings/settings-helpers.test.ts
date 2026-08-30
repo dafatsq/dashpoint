@@ -8,6 +8,7 @@ import {
   hasSettingsPreferenceChanges,
   normalizeSettingsPreferences,
   profileHasChanges,
+  effectiveRememberMe,
   updateQuickAccessPreference,
   updateRememberMePreference,
 } from "./settings-helpers";
@@ -26,96 +27,70 @@ const user: User = {
 
 describe("settings helpers", () => {
   test("builds initial settings preferences", () => {
-    expect(buildSettingsPreferences(null, true)).toEqual({
+    expect(buildSettingsPreferences(true, true)).toEqual({
       rememberMe: true,
       quickAccess: true,
     });
 
-    expect(buildSettingsPreferences("false", false)).toEqual({
-      rememberMe: false,
-      quickAccess: false,
-    });
-
-    expect(buildSettingsPreferences("true", false)).toEqual({
+    expect(buildSettingsPreferences(false, false)).toEqual({
       rememberMe: false,
       quickAccess: false,
     });
   });
 
-  test("normalizes dependent remember me and quick access preferences", () => {
+  test("normalizes so auto sign-in always implies quick access", () => {
     expect(
       normalizeSettingsPreferences({
         rememberMe: true,
         quickAccess: false,
       }),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: false,
-    });
+    ).toEqual({ rememberMe: false, quickAccess: false });
 
     expect(
       normalizeSettingsPreferences({
         rememberMe: false,
         quickAccess: true,
       }),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: false, quickAccess: true });
 
     expect(
       normalizeSettingsPreferences({
         rememberMe: true,
         quickAccess: true,
       }),
-    ).toEqual({
-      rememberMe: true,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: true, quickAccess: true });
   });
 
-  test("enabling remember me automatically enables quick access", () => {
+  test("enabling auto sign-in force-enables quick access", () => {
     expect(
       updateRememberMePreference(
         { rememberMe: false, quickAccess: false },
         true,
       ),
-    ).toEqual({
-      rememberMe: true,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: true, quickAccess: true });
 
     expect(
       updateRememberMePreference(
         { rememberMe: true, quickAccess: true },
         false,
       ),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: false, quickAccess: true });
   });
 
-  test("disabling quick access automatically disables remember me", () => {
+  test("disabling quick access force-disables auto sign-in", () => {
     expect(
       updateQuickAccessPreference(
         { rememberMe: true, quickAccess: true },
         false,
       ),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: false,
-    });
+    ).toEqual({ rememberMe: false, quickAccess: false });
 
     expect(
       updateQuickAccessPreference(
         { rememberMe: false, quickAccess: false },
         true,
       ),
-    ).toEqual({
-      rememberMe: false,
-      quickAccess: true,
-    });
+    ).toEqual({ rememberMe: false, quickAccess: true });
   });
 
   test("detects preference changes", () => {
@@ -178,5 +153,14 @@ describe("settings helpers", () => {
       password: "new-password",
       pin: "123456",
     });
+  });
+});
+
+describe("effectiveRememberMe", () => {
+  test("requires both the toggle and a saved account", () => {
+    expect(effectiveRememberMe(true, true)).toBe(true);
+    expect(effectiveRememberMe(true, false)).toBe(false);
+    expect(effectiveRememberMe(false, true)).toBe(false);
+    expect(effectiveRememberMe(false, false)).toBe(false);
   });
 });

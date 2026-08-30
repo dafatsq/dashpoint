@@ -35,12 +35,15 @@ func NewRefreshTokenRepository(pool *pgxpool.Pool) *RefreshTokenRepository {
 // Create creates a new refresh token record
 func (r *RefreshTokenRepository) Create(ctx context.Context, token *models.RefreshToken) error {
 	query := `
-		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at, family_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
 	token.ID = uuid.New()
 	token.CreatedAt = time.Now()
+	if token.FamilyID == uuid.Nil {
+		token.FamilyID = uuid.New()
+	}
 
 	_, err := r.pool.Exec(ctx, query,
 		token.ID,
@@ -48,6 +51,7 @@ func (r *RefreshTokenRepository) Create(ctx context.Context, token *models.Refre
 		token.TokenHash,
 		token.ExpiresAt,
 		token.CreatedAt,
+		token.FamilyID,
 	)
 
 	if err != nil {
@@ -60,7 +64,7 @@ func (r *RefreshTokenRepository) Create(ctx context.Context, token *models.Refre
 // GetByTokenHash retrieves a refresh token by its hash
 func (r *RefreshTokenRepository) GetByTokenHash(ctx context.Context, tokenHash string) (*models.RefreshToken, error) {
 	query := `
-		SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, revoked_reason
+		SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, revoked_reason, family_id
 		FROM refresh_tokens
 		WHERE token_hash = $1
 	`
@@ -74,6 +78,7 @@ func (r *RefreshTokenRepository) GetByTokenHash(ctx context.Context, tokenHash s
 		&token.CreatedAt,
 		&token.RevokedAt,
 		&token.RevokedReason,
+		&token.FamilyID,
 	)
 
 	if err != nil {
@@ -119,6 +124,9 @@ func rotateRefreshTokenTx(ctx context.Context, tx refreshTokenTx, currentTokenHa
 	if replacement.ID == uuid.Nil {
 		replacement.ID = uuid.New()
 	}
+	if replacement.FamilyID == uuid.Nil {
+		replacement.FamilyID = uuid.New()
+	}
 	replacement.CreatedAt = now
 
 	tag, err := tx.Exec(ctx, `
@@ -134,9 +142,9 @@ func rotateRefreshTokenTx(ctx context.Context, tx refreshTokenTx, currentTokenHa
 	}
 
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, replacement.ID, replacement.UserID, replacement.TokenHash, replacement.ExpiresAt, replacement.CreatedAt); err != nil {
+		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at, family_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, replacement.ID, replacement.UserID, replacement.TokenHash, replacement.ExpiresAt, replacement.CreatedAt, replacement.FamilyID); err != nil {
 		return fmt.Errorf("failed to store rotated refresh token: %w", err)
 	}
 
@@ -159,6 +167,25 @@ func (r *RefreshTokenRepository) RevokeAllForUser(ctx context.Context, userID uu
 	_, err := r.pool.Exec(ctx, query, now, reason, userID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke all refresh tokens: %w", err)
+	}
+
+	return nil
+}
+
+// RevokeFamily revokes every live token minted from the same login (and its
+// rotation descendants). Used to contain a compromised family when a revoked
+// token is replayed.
+func (r *RefreshTokenRepository) RevokeFamily(ctx context.Context, familyID uuid.UUID, reason string) error {
+	query := `
+		UPDATE refresh_tokens
+		SET revoked_at = $1, revoked_reason = $2
+		WHERE family_id = $3 AND revoked_at IS NULL
+	`
+
+	now := time.Now()
+	_, err := r.pool.Exec(ctx, query, now, reason, familyID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke refresh token family: %w", err)
 	}
 
 	return nil

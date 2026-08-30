@@ -12,11 +12,13 @@ import type { UseUserEventsOptions, UserEvent } from "@/hooks/useUserEvents";
 const {
   getMeMock,
   loadStoredUserMock,
+  refreshSessionUserMock,
   persistAuthUserMock,
   latestUserEventsOptions,
 } = vi.hoisted(() => ({
   getMeMock: vi.fn(),
   loadStoredUserMock: vi.fn(),
+  refreshSessionUserMock: vi.fn(),
   persistAuthUserMock: vi.fn((user: User) => user),
   latestUserEventsOptions: {} as { current?: UseUserEventsOptions },
 }));
@@ -34,6 +36,7 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/auth-session", () => ({
   clearAuthSession: vi.fn(),
   loadStoredUser: loadStoredUserMock,
+  refreshSessionUser: refreshSessionUserMock,
   persistAuthPayload: vi.fn(),
   persistAuthUser: persistAuthUserMock,
 }));
@@ -91,6 +94,10 @@ describe("AuthProvider", () => {
 
     getMeMock.mockReset();
     loadStoredUserMock.mockReset();
+    // Web boot now restores the session through the silent refresh; default
+    // it to whatever the legacy stored user would have been.
+    refreshSessionUserMock.mockReset();
+    refreshSessionUserMock.mockImplementation(async () => loadStoredUserMock());
     persistAuthUserMock.mockClear();
     latestUserEventsOptions.current = undefined;
   });

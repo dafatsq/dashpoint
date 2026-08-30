@@ -15,6 +15,8 @@ import (
 
 	"dashpoint/backend/internal/models"
 	"dashpoint/backend/internal/repository"
+	"fmt"
+	"io"
 )
 
 type fakeSaleStore struct {
@@ -402,5 +404,57 @@ func TestListSalesResponseSerializesPayments(t *testing.T) {
 	}
 	if len(payload.Sales) != 1 {
 		t.Fatalf("expected one sale, got %d", len(payload.Sales))
+	}
+}
+
+func TestCreateSaleInternalErrorIsSanitized(t *testing.T) {
+	handler := NewSaleHandler(&fakeSaleStore{
+		createFunc: func(context.Context, *repository.CreateSaleRequest) (*models.Sale, error) {
+			return nil, repository.NewInternalError(fmt.Errorf("failed to insert sale: pq: duplicate key value violates unique constraint \"sales_pkey\""))
+		},
+	}, &fakeShiftLookup{shift: &models.Shift{ID: uuid.New()}})
+	app := saleTestApp(handler, uuid.New(), "owner")
+	body := `{
+		"items":[{"product_id":"00000000-0000-0000-0000-000000000001","quantity":"1","unit_price":"10.00","discount_value":"0","discount_amount":"0"}],
+		"payments":[{"payment_method":"cash","amount":"10.00"}],
+		"discount_type":"fixed",
+		"discount_value":"0"
+	}`
+
+	resp := performJSONRequest(t, app, http.MethodPost, "/sales", body)
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("expected 500 for internal failure, got %d", resp.StatusCode)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	text := string(raw)
+	if strings.Contains(text, "pq:") || strings.Contains(text, "SQLSTATE") || strings.Contains(text, "duplicate key") {
+		t.Fatalf("internal error details leaked to client: %s", text)
+	}
+	if !strings.Contains(text, "Could not complete the sale") {
+		t.Fatalf("expected generic fallback message, got %s", text)
+	}
+}
+
+func TestCreateSaleDomainErrorPassesThrough(t *testing.T) {
+	handler := NewSaleHandler(&fakeSaleStore{
+		createFunc: func(context.Context, *repository.CreateSaleRequest) (*models.Sale, error) {
+			return nil, fmt.Errorf("insufficient stock for Test Product: available 2, requested 5")
+		},
+	}, &fakeShiftLookup{shift: &models.Shift{ID: uuid.New()}})
+	app := saleTestApp(handler, uuid.New(), "owner")
+	body := `{
+		"items":[{"product_id":"00000000-0000-0000-0000-000000000001","quantity":"5","unit_price":"10.00","discount_value":"0","discount_amount":"0"}],
+		"payments":[{"payment_method":"cash","amount":"50.00"}],
+		"discount_type":"fixed",
+		"discount_value":"0"
+	}`
+
+	resp := performJSONRequest(t, app, http.MethodPost, "/sales", body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400 for domain validation, got %d", resp.StatusCode)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(raw), "insufficient stock") {
+		t.Fatalf("expected domain message to pass through, got %s", string(raw))
 	}
 }

@@ -24,7 +24,11 @@ import {
   loadStoredUser,
   persistAuthPayload,
   persistAuthUser,
+  readRememberScope,
+  refreshSessionUser,
+  writeRememberScope,
 } from "@/lib/auth-session";
+import { IS_DESKTOP_BUILD } from "@/lib/config";
 import type { AuthPayload } from "@/lib/auth-user";
 import type { User } from "@/types";
 
@@ -175,14 +179,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
   });
 
   useEffect(() => {
-    const storedUser = loadStoredUser();
-    setUser(storedUser);
-    setIsLoading(false);
+    let cancelled = false;
 
-    if (storedUser && !hasBootstrappedRefreshRef.current) {
-      hasBootstrappedRefreshRef.current = true;
-      requestUserRefresh();
+    if (IS_DESKTOP_BUILD) {
+      // Desktop (Wails) keeps the legacy storage-backed session.
+      const storedUser = loadStoredUser();
+      setUser(storedUser);
+      setIsLoading(false);
+      if (storedUser && !hasBootstrappedRefreshRef.current) {
+        hasBootstrappedRefreshRef.current = true;
+        requestUserRefresh();
+      }
+      return;
     }
+
+    // Web: the access token only exists in memory, so every page load starts
+    // empty and the httpOnly refresh cookie decides whether a session
+    // survived the reload.
+    void (async () => {
+      // Hard cap the boot spinner — a hung request must never trap the user
+      // on a loading screen.
+      const failsafe = window.setTimeout(() => {
+        if (cancelled) return;
+        console.warn("Auth bootstrap timed out; releasing loading state.");
+        setUser(null);
+        setIsLoading(false);
+      }, 12000);
+      try {
+        const refreshedUser = await refreshSessionUser();
+        if (cancelled) return;
+        setUser(refreshedUser);
+        setIsLoading(false);
+        if (refreshedUser && !hasBootstrappedRefreshRef.current) {
+          hasBootstrappedRefreshRef.current = true;
+          requestUserRefresh();
+        }
+      } finally {
+        window.clearTimeout(failsafe);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [requestUserRefresh]);
 
   useEffect(() => {
@@ -208,12 +247,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [requestUserRefresh, user]);
 
   const login = useCallback(
-    async (email: string, password: string, saveAccount = true) => {
-      const result = await api.login(email, password);
+    async (email: string, password: string, saveAccount?: boolean) => {
+      // Automatic sign-in requires BOTH the device scope (settings toggle)
+      // and Save-login on this login. Unchecking "Save login" means this
+      // device is not saved, so it also disables auto sign-in: the saved
+      // account is removed, the device scope drops, and the refresh cookie
+      // is session-scoped.
+      // With saveAccount undefined (identity checks such as the settings
+      // password verification) the current scope is re-sent unchanged: the
+      // backend then mints a cookie with exactly the scope the user had.
+      const remembered =
+        saveAccount === undefined
+          ? readRememberScope()
+          : readRememberScope() && Boolean(saveAccount);
+      const result = await api.login(email, password, remembered);
       if (result.error || !result.data) {
         return { success: false, error: result.error ?? "Login failed" };
       }
 
+      if (saveAccount === false) {
+        // Unchecked "Save login" = unsave this device: drop the saved
+        // account and disable automatic sign-in so settings stay consistent
+        // with the actual cookie scope.
+        const { AccountManager } = await import("@/lib/account-manager");
+        AccountManager.removeAccount(result.data.user?.id ?? "");
+        writeRememberScope(false);
+      }
       applyAuthPayload(result.data, { saveAccount });
       return { success: true };
     },

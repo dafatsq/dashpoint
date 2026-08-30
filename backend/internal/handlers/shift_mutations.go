@@ -140,6 +140,9 @@ func parseStartShiftRequest(c *fiber.Ctx) (*StartShiftRequest, decimal.Decimal, 
 		if err != nil {
 			return nil, decimal.Zero, middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_AMOUNT", "Invalid opening cash amount")
 		}
+		if cash.IsNegative() {
+			return nil, decimal.Zero, middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_AMOUNT", "Opening cash amount cannot be negative")
+		}
 		openingCash = cash
 	}
 
@@ -155,6 +158,9 @@ func parseCloseShiftRequest(c *fiber.Ctx) (*CloseShiftRequest, decimal.Decimal, 
 	closingCash, err := decimal.NewFromString(req.ClosingCash)
 	if err != nil {
 		return nil, decimal.Zero, middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_AMOUNT", "Invalid closing cash amount")
+	}
+	if closingCash.IsNegative() {
+		return nil, decimal.Zero, middleware.JSONError(c, fiber.StatusBadRequest, "INVALID_AMOUNT", "Closing cash amount cannot be negative")
 	}
 
 	return &req, closingCash, nil

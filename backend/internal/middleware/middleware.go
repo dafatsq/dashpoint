@@ -89,7 +89,10 @@ func SecureHeaders() fiber.Handler {
 		c.Set("Referrer-Policy", "no-referrer")
 		c.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 
-		if c.Protocol() == "https" || c.Get("X-Forwarded-Proto") == "https" {
+		// Protocol() derives https from X-Forwarded-Proto only when the
+		// request arrives from a proxy on the configured trusted allowlist,
+		// so a client cannot spoof HSTS onto a plain-HTTP response.
+		if c.Protocol() == "https" {
 			c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 
@@ -110,6 +113,28 @@ func AuthRateLimit() fiber.Handler {
 				fiber.StatusTooManyRequests,
 				"RATE_LIMITED",
 				"Too many authentication attempts. Please try again later.",
+			)
+		},
+	})
+}
+
+// RefreshRateLimit guards the session-resume endpoint separately from
+// credential endpoints: with memory-only access tokens every page load fires
+// exactly one refresh, so it must tolerate normal browsing while still
+// capping abuse. It is cookie-gated (httpOnly), not a guessing surface.
+func RefreshRateLimit() fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:        60,
+		Expiration: 15 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return JSONError(
+				c,
+				fiber.StatusTooManyRequests,
+				"RATE_LIMITED",
+				"Too many session refreshes. Please try again later.",
 			)
 		},
 	})

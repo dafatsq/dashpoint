@@ -15,6 +15,7 @@ func TestJWTManagerValidatesAccessAndRefreshTokens(t *testing.T) {
 		"User",
 		uuid.New(),
 		"manager",
+		0,
 	)
 	if err != nil {
 		t.Fatalf("GenerateTokenPair returned error: %v", err)
@@ -38,6 +39,7 @@ func TestJWTManagerRejectsWrongTokenType(t *testing.T) {
 		"User",
 		uuid.New(),
 		"manager",
+		0,
 	)
 	if err != nil {
 		t.Fatalf("GenerateTokenPair returned error: %v", err)

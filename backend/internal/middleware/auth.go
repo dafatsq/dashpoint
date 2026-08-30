@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -8,11 +9,16 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"dashpoint/backend/internal/auth"
-	"dashpoint/backend/internal/repository"
+	"dashpoint/backend/internal/models"
 )
 
+// authUserReader is the user lookup the auth middleware needs.
+type authUserReader interface {
+	GetByID(context.Context, uuid.UUID) (*models.User, error)
+}
+
 // AuthMiddleware creates an authentication middleware
-func AuthMiddleware(jwtManager *auth.JWTManager, userRepo *repository.UserRepository) fiber.Handler {
+func AuthMiddleware(jwtManager *auth.JWTManager, userRepo authUserReader) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get the Authorization header
 		authHeader := c.Get("Authorization")
@@ -43,6 +49,12 @@ func AuthMiddleware(jwtManager *auth.JWTManager, userRepo *repository.UserReposi
 
 		if user == nil || !user.IsActive {
 			return JSONError(c, fiber.StatusUnauthorized, "ACCOUNT_INACTIVE", "Your account has been deactivated")
+		}
+
+		// A credential change bumps token_version; older access tokens die
+		// instantly instead of living out their 15-minute expiry.
+		if claims.TokenVersion != user.TokenVersion {
+			return JSONError(c, fiber.StatusUnauthorized, "INVALID_TOKEN", "Session expired, please sign in again")
 		}
 
 		roleName := claims.RoleName

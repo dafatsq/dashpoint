@@ -13,6 +13,7 @@ type User struct {
 	Name         string     `json:"name"`
 	PasswordHash *string    `json:"-"`
 	PINHash      *string    `json:"-"`
+	TokenVersion int        `json:"-"`
 	RoleID       uuid.UUID  `json:"role_id"`
 	IsActive     bool       `json:"is_active"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -145,5 +146,54 @@ func TestEventsHandlerDisconnectUserRemovesClients(t *testing.T) {
 	}
 	if _, exists := handler.clients["1"]; exists {
 		t.Fatalf("expected target user client to be removed")
+	}
+}
+
+func TestEventsHandlerSubscribeCapsConnectionsPerUser(t *testing.T) {
+	userID := uuid.New()
+	handler := NewEventsHandler(
+		&fakeJWTManager{validateAccessClaims: &authpkg.Claims{UserID: userID}},
+		&fakeAuthUserRepo{userByID: &models.User{ID: userID, IsActive: true}},
+		[]string{"http://localhost:3000"},
+	)
+	for i := 0; i < sseMaxConnectionsPerUser; i++ {
+		handler.clients[fmt.Sprintf("existing-%d", i)] = &Client{ID: fmt.Sprintf("existing-%d", i), UserID: userID}
+	}
+	app := fiber.New()
+	app.Get("/events/subscribe", handler.Subscribe)
+
+	req := httptest.NewRequest("GET", "/events/subscribe", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusTooManyRequests {
+		t.Fatalf("expected per-user cap to reject with 429, got %d", resp.StatusCode)
+	}
+}
+
+func TestEventsHandlerSubscribeCapsTotalConnections(t *testing.T) {
+	userID := uuid.New()
+	handler := NewEventsHandler(
+		&fakeJWTManager{validateAccessClaims: &authpkg.Claims{UserID: userID}},
+		&fakeAuthUserRepo{userByID: &models.User{ID: userID, IsActive: true}},
+		[]string{"http://localhost:3000"},
+	)
+	for i := 0; i < sseMaxTotalConnections; i++ {
+		id := fmt.Sprintf("other-%d", i)
+		handler.clients[id] = &Client{ID: id, UserID: uuid.New()}
+	}
+	app := fiber.New()
+	app.Get("/events/subscribe", handler.Subscribe)
+
+	req := httptest.NewRequest("GET", "/events/subscribe", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusTooManyRequests {
+		t.Fatalf("expected total cap to reject with 429, got %d", resp.StatusCode)
 	}
 }

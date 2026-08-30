@@ -1,0 +1,9 @@
+# Secrets — keep real env files out of the build context and layer cache
+.env*
+# Local artifacts — never needed inside the image
+server
+*.log
+dashpoint.db
+uploads
+.DS_Store
+.git

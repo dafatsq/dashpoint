@@ -16,7 +16,7 @@ import (
 func (r *SaleRepository) VoidSale(ctx context.Context, saleID, voidedBy uuid.UUID, reason string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return NewInternalError(fmt.Errorf("failed to begin transaction: %w", err))
 	}
 	defer tx.Rollback(ctx)
 
@@ -94,11 +94,11 @@ func restoreSaleInventoryTx(ctx context.Context, tx pgx.Tx, items []saleRestoreI
 	for _, item := range items {
 		currentQty, err := getInventoryQuantityForUpdateTx(ctx, tx, item.ProductID)
 		if err != nil {
-			return fmt.Errorf("failed to get inventory: %w", err)
+			return NewInternalError(fmt.Errorf("failed to get inventory: %w", err))
 		}
 		newQty := currentQty.Add(item.Quantity)
 		if err := setInventoryQuantityTx(ctx, tx, item.ProductID, newQty, now); err != nil {
-			return fmt.Errorf("failed to restore inventory: %w", err)
+			return NewInternalError(fmt.Errorf("failed to restore inventory: %w", err))
 		}
 		if err := insertStockAdjustmentTx(ctx, tx, stockAdjustmentRecord{
 			ProductID:      item.ProductID,
@@ -112,7 +112,7 @@ func restoreSaleInventoryTx(ctx context.Context, tx pgx.Tx, items []saleRestoreI
 			AdjustedBy:     voidedBy,
 			CreatedAt:      now,
 		}); err != nil {
-			return fmt.Errorf("failed to record adjustment: %w", err)
+			return NewInternalError(fmt.Errorf("failed to record adjustment: %w", err))
 		}
 	}
 	return nil
@@ -125,7 +125,7 @@ func updateVoidedSaleTx(ctx context.Context, tx pgx.Tx, saleID, voidedBy uuid.UU
 		WHERE id = $7
 	`, models.SaleStatusVoided, models.PaymentStatusVoided, now, voidedBy, reason, now, saleID)
 	if err != nil {
-		return fmt.Errorf("failed to update sale: %w", err)
+		return NewInternalError(fmt.Errorf("failed to update sale: %w", err))
 	}
 	return nil
 }
@@ -133,7 +133,7 @@ func updateVoidedSaleTx(ctx context.Context, tx pgx.Tx, saleID, voidedBy uuid.UU
 func refundPaymentsTx(ctx context.Context, tx pgx.Tx, saleID uuid.UUID) error {
 	_, err := tx.Exec(ctx, `UPDATE payments SET status = $1 WHERE sale_id = $2`, models.PaymentRecordRefunded, saleID)
 	if err != nil {
-		return fmt.Errorf("failed to update payments: %w", err)
+		return NewInternalError(fmt.Errorf("failed to update payments: %w", err))
 	}
 	return nil
 }
@@ -147,7 +147,7 @@ func updateShiftVoidTotalsTx(ctx context.Context, tx pgx.Tx, shiftID uuid.UUID, 
 		WHERE id = $3
 	`, totalAmount, now, shiftID)
 	if err != nil {
-		return fmt.Errorf("failed to update shift: %w", err)
+		return NewInternalError(fmt.Errorf("failed to update shift: %w", err))
 	}
 	return nil
 }

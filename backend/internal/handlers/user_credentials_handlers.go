@@ -12,6 +12,26 @@ import (
 	"dashpoint/backend/internal/models"
 )
 
+// verifySelfCredentialProof enforces that a user changing their own
+// credentials proves knowledge of an existing one (password or PIN — either
+// authenticates, so either counts as proof). Admins changing other users'
+// credentials are permission-gated instead and skip this check.
+// On failure the error response has already been written; callers must stop.
+func verifySelfCredentialProof(c *fiber.Ctx, user *models.User, currentPassword, currentPIN *string) (bool, error) {
+	hasPasswordProof := currentPassword != nil && *currentPassword != ""
+	hasPINProof := currentPIN != nil && *currentPIN != ""
+	if !hasPasswordProof && !hasPINProof {
+		return false, badUserRequest(c, "VALIDATION_ERROR", "Enter your current password or PIN to change your own credentials")
+	}
+	if hasPasswordProof && user.PasswordHash != nil && auth.CheckPassword(*currentPassword, *user.PasswordHash) {
+		return true, nil
+	}
+	if hasPINProof && user.PINHash != nil && *user.PINHash != "" && auth.CheckPIN(*currentPIN, *user.PINHash) {
+		return true, nil
+	}
+	return false, middleware.JSONError(c, fiber.StatusForbidden, "INVALID_CREDENTIALS", "Your current password or PIN is incorrect")
+}
+
 // UpdatePassword handles PATCH /api/v1/users/:id/password.
 func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 	id, err := parseUserIDParam(c)
@@ -43,6 +63,8 @@ func (h *UserHandler) UpdatePassword(c *fiber.Ctx) error {
 		if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
 			return nil
 		}
+	} else if ok, err := verifySelfCredentialProof(c, user, req.CurrentPassword, req.CurrentPIN); !ok {
+		return err
 	}
 
 	hash, err := auth.HashPassword(req.Password)
@@ -105,6 +127,8 @@ func (h *UserHandler) UpdatePIN(c *fiber.Ctx) error {
 		if !h.enforceTargetUserAction(c, targetRoleName, userActionEdit) {
 			return nil
 		}
+	} else if ok, err := verifySelfCredentialProof(c, user, req.CurrentPassword, req.CurrentPIN); !ok {
+		return err
 	}
 
 	var pinHash *string

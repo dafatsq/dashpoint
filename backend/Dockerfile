@@ -1,5 +1,5 @@
-# Build stage
-FROM golang:1.24-alpine AS builder
+# Build stage (1.25: stdlib security fixes; see govulncheck in CI)
+FROM golang:1.25-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS builder
 
 WORKDIR /app
 
@@ -18,8 +18,8 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
 
-# Runtime stage
-FROM alpine:3.19
+# Runtime stage (3.22: 3.19 reached end of life)
+FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
 
 WORKDIR /app
 
