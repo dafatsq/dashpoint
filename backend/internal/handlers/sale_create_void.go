@@ -16,7 +16,7 @@ import (
 // CreateSale handles POST /api/v1/sales.
 func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 	var req CreateSaleRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, saleMaxJSONBodyBytes); err != nil {
 		return saleInvalidRequest(c)
 	}
 
@@ -71,7 +71,7 @@ func (h *SaleHandler) CreateSale(c *fiber.Ctx) error {
 // ValidateCart handles POST /api/v1/sales/validate.
 func (h *SaleHandler) ValidateCart(c *fiber.Ctx) error {
 	var req ValidateSaleCartRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, saleMaxJSONBodyBytes); err != nil {
 		return saleInvalidRequest(c)
 	}
 
@@ -123,7 +123,7 @@ func (h *SaleHandler) VoidSale(c *fiber.Ctx) error {
 	}
 
 	var req VoidSaleRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, saleMaxJSONBodyBytes); err != nil {
 		return saleInvalidRequest(c)
 	}
 	if req.Reason == "" {

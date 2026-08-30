@@ -22,7 +22,7 @@ func (h *ProductHandler) ensureProductNameAvailable(c *fiber.Ctx, name string, e
 // Create handles POST /api/v1/products
 func (h *ProductHandler) Create(c *fiber.Ctx) error {
 	var req CreateProductRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, productMaxJSONBodyBytes); err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 	}
 
@@ -126,7 +126,7 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	originalCategoryID := product.CategoryID
 
 	var req UpdateProductRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, productMaxJSONBodyBytes); err != nil {
 		return productJSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 	}
 	stale, staleErr := isStaleSubmit(req.ExpectedUpdatedAt, product.UpdatedAt)

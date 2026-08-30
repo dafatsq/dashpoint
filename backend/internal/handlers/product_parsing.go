@@ -206,7 +206,7 @@ func parseStockAdjustmentRequest(c *fiber.Ctx) (*stockAdjustmentRequest, error) 
 		ExpectedUpdatedAt *string `json:"expected_updated_at"`
 	}
 
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, productMaxJSONBodyBytes); err != nil {
 		return nil, newProductRequestError(fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 	}
 
@@ -274,7 +274,7 @@ func parseInventoryThresholdUpdateRequest(c *fiber.Ctx) (*inventoryThresholdUpda
 		ExpectedUpdatedAt *string `json:"expected_updated_at"`
 	}
 
-	if err := c.BodyParser(&req); err != nil {
+	if err := parseStrictJSONBody(c, &req, productMaxJSONBodyBytes); err != nil {
 		return nil, productJSONError(c, fiber.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 	}
 

@@ -14,6 +14,10 @@ ENV NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=${NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS}
 
 RUN npm run build
 
+# Drop dev-only dependencies so the runtime image ships production modules
+# only (next/react are regular dependencies and survive the prune).
+RUN npm prune --omit=dev
+
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runtime
 
 WORKDIR /app
