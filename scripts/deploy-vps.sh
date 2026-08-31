@@ -82,11 +82,19 @@ for env_file in "${env_files[@]}"; do
     -f "$compose_file" \
     config --quiet
 
+  # DEPLOY_TAG is set by CI when images were prebuilt and loaded onto this
+  # host; plain `up -d` then uses those images. Without it, fall back to
+  # building locally (not recommended on small VPS instances).
+  up_flags="-d"
+  if [[ -z "${DEPLOY_TAG:-}" ]]; then
+    up_flags="$up_flags --build"
+  fi
+
   docker compose \
     --env-file "$env_file" \
     -p "$project_name" \
     -f "$compose_file" \
-    up -d --build
+    up $up_flags
 
   selected_count=$((selected_count + 1))
   deployed_projects+=("$project_name")

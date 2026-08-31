@@ -166,6 +166,24 @@ jobs:
             "$VPS_USER@$VPS_HOST" \
             "printf '%s\\n' '$SOURCE_SHA' > $remote_app/.deploy-commit && chmod 600 $remote_app/.deploy-commit"
 
+      - name: Build and ship images to VPS
+        run: |
+          set -euo pipefail
+          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
+          # Building Next.js on a small VPS gets OOM-killed; build here
+          # (7 GB runner RAM) and stream the images to the VPS instead.
+          # The tag is the source commit, so the VPS always knows exactly
+          # what is running.
+          docker build --build-arg NEXT_PUBLIC_API_URL=/api/v1 \
+            -t "dashpoint-frontend:$SOURCE_SHA" frontend
+          docker build \
+            -t "dashpoint-backend:$SOURCE_SHA" backend
+          docker save "dashpoint-backend:$SOURCE_SHA" | \
+            ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" "docker load"
+          docker save "dashpoint-frontend:$SOURCE_SHA" | \
+            ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" "docker load"
+
       - name: Deploy selected client stacks
         run: |
           set -euo pipefail
@@ -183,7 +201,7 @@ jobs:
           # small VPS, which otherwise resets sshd connections mid-build.
           ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" "
             rm -f $remote_app/.deploy-exit
-            nohup sh -c 'APP_DIR=$remote_app CLIENT_ENV_DIR=$remote_env_dir CADDY_FILE=$remote_caddy_file CLIENT_ENV_FILTER=$remote_filter COMPOSE_PARALLEL_LIMIT=1 $remote_script > $remote_app/.deploy-log 2>&1; echo \$? > $remote_app/.deploy-exit' >/dev/null 2>&1 &
+            nohup sh -c 'APP_DIR=$remote_app CLIENT_ENV_DIR=$remote_env_dir CADDY_FILE=$remote_caddy_file CLIENT_ENV_FILTER=$remote_filter COMPOSE_PARALLEL_LIMIT=1 DEPLOY_TAG=$SOURCE_SHA $remote_script > $remote_app/.deploy-log 2>&1; echo \$? > $remote_app/.deploy-exit' >/dev/null 2>&1 &
           "
 
           for _ in $(seq 1 80); do
