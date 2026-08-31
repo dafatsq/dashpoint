@@ -28,6 +28,10 @@ services:
       - internal
 
   backend:
+    # Image is prebuilt in CI and loaded onto the VPS (DEPLOY_TAG = source
+    # commit). A local build still happens when DEPLOY_TAG is unset, but
+    # building Next.js/Go on a small VPS is not recommended.
+    image: dashpoint-backend:${DEPLOY_TAG:-local}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -52,6 +56,7 @@ services:
       - proxy
 
   frontend:
+    image: dashpoint-frontend:${DEPLOY_TAG:-local}
     build:
       context: ./frontend
       dockerfile: Dockerfile
