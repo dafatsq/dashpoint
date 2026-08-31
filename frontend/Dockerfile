@@ -13,6 +13,9 @@ ARG NEXT_PUBLIC_DEMO_CREDENTIALS_JSON
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=${NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS}
 ENV NEXT_PUBLIC_DEMO_CREDENTIALS_JSON=${NEXT_PUBLIC_DEMO_CREDENTIALS_JSON}
+# Cap the Node heap so `next build` fails gracefully under memory pressure
+# instead of triggering the kernel OOM killer on small VPS instances.
+ENV NODE_OPTIONS=--max-old-space-size=1536
 
 RUN npm run build
 

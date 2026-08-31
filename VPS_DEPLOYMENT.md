@@ -57,6 +57,14 @@ Install Docker and the Compose plugin, configure the firewall for only SSH, HTTP
 
 If the network already exists, keep using it. Do not expose ports 3000, 8080, or 5432 publicly.
 
+The VPS needs swap: a 2 GB instance dies mid-build otherwise, because the frontend Docker build peaks above the available RAM (the container gets SIGKILLed, or sshd resets under pressure). Create a swapfile:
+
+    fallocate -l 2G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
 After the first client env file exists, generate its routes and start the shared Caddy service from the project folder:
 
     cd /opt/dashpoint
