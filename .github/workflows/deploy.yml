@@ -170,7 +170,32 @@ jobs:
           printf -v remote_caddy_file '%q' "$VPS_CADDY_FILE"
           printf -v remote_filter '%q' "$VPS_CLIENT_ENV_FILTER"
           printf -v remote_script '%q' "$VPS_APP_DIR/scripts/deploy-vps.sh"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
-            "$VPS_USER@$VPS_HOST" \
-            "APP_DIR=$remote_app CLIENT_ENV_DIR=$remote_env_dir CADDY_FILE=$remote_caddy_file CLIENT_ENV_FILTER=$remote_filter $remote_script"
+          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
+
+          # The remote build can take ~20 minutes. Run it detached from SSH
+          # (a dropped or reset connection must not kill a half-finished
+          # build) and poll with short-lived connections. COMPOSE_PARALLEL_LIMIT=1
+          # serializes the backend/frontend builds to avoid exhausting a
+          # small VPS, which otherwise resets sshd connections mid-build.
+          ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" "
+            rm -f $remote_app/.deploy-exit
+            nohup sh -c 'APP_DIR=$remote_app CLIENT_ENV_DIR=$remote_env_dir CADDY_FILE=$remote_caddy_file CLIENT_ENV_FILTER=$remote_filter COMPOSE_PARALLEL_LIMIT=1 $remote_script > $remote_app/.deploy-log 2>&1; echo \$? > $remote_app/.deploy-exit' >/dev/null 2>&1 &
+          "
+
+          for _ in $(seq 1 80); do
+            sleep 30
+            exit_code=$(ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" \
+              "cat $remote_app/.deploy-exit 2>/dev/null" 2>/dev/null) || continue
+            if [[ -n "$exit_code" ]]; then
+              ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" \
+                "tail -n 80 $remote_app/.deploy-log" >&2 || true
+              if [[ "$exit_code" == "0" ]]; then
+                exit 0
+              fi
+              exit 1
+            fi
+          done
+          echo "Remote deploy did not finish within 40 minutes" >&2
+          ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" \
+            "tail -n 80 $remote_app/.deploy-log" >&2 || true
+          exit 1
