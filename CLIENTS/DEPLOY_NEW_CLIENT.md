@@ -1,6 +1,6 @@
 # Deploy a New DashPoint Client
 
-DashPoint is a reusable SaaS template. The application source, Docker Compose files, database schema, and Caddy configuration are shared. A client is configured with a private environment file, isolated storage, unique credentials, a domain, and a client-specific desktop executable.
+DashPoint is a reusable SaaS template. The application source, Docker Compose files, database schema, and Caddy configuration are shared. Each client is deployed from its own long-lived Git branch (`clients/<client-slug>`, cut from `main`) and is configured with a private environment file, isolated storage, unique credentials, a domain, and a client-specific desktop executable.
 
 This guide assumes one client instance on a new VPS. The same repository can also host multiple client env files on one VPS.
 
@@ -8,13 +8,14 @@ This guide assumes one client instance on a new VPS. The same repository can als
 
 Create or configure only these client-specific items:
 
+- A long-lived `clients/<client-slug>` deployment branch cut from `main`. Even if the client runs the core as-is, the branch exists so deploys have a fixed source and future custom requests have a home.
 - A private `CLIENTS/.env.<client-slug>` file on the VPS.
 - A unique domain or API hostname pointing to the VPS.
 - A unique `DATA_DIR`, database name, database credentials, and JWT secret.
-- A private Windows executable built with that client's public API URL.
-- A GitHub Actions deployment target if this VPS should receive automatic deployments. The current workflow supports one VPS target per run.
+- A private Windows executable built from that client's branch with that client's public API URL.
+- A GitHub Actions deployment target if this VPS should receive deployments. The current workflow supports one VPS target per run.
 
-Do not edit the shared frontend, backend, database, Docker Compose, or generated Caddy routes for a normal client installation.
+Do not edit the shared frontend, backend, database, Docker Compose, or generated Caddy routes for a normal client installation — client-specific code goes on the client's branch, not on `main`.
 
 ## 1. Prepare the VPS
 
@@ -37,7 +38,25 @@ docker network create dashpoint_proxy
 
 If the network already exists, keep using it.
 
-## 2. Configure the client environment
+## 2. Cut the client branch
+
+From an up-to-date local clone:
+
+```bash
+git checkout main
+git pull
+git checkout -b clients/acme
+git push -u origin clients/acme
+```
+
+Commit any client-specific code directly onto this branch; never merge it back into `main` without review. Keep the branch current with `main`:
+
+- **Bug fixes / patches** on `main` are cherry-picked onto `clients/acme` as soon as they are verified.
+- **New features** on `main` are merged into the branch only deliberately, after a compatibility review (API fields, permissions, migrations, desktop contract).
+
+Keep the distinction explicit in commit messages or PR labels (`fix` vs `feature`). The branch inherits `.github/workflows/deploy.yml` from `main`, which is what makes deployments dispatchable from it.
+
+## 3. Configure the client environment
 
 Create the private client file on the VPS. Do not commit it to GitHub:
 
@@ -80,7 +99,7 @@ CADDY_API_ONLY=true
 CORS_ORIGINS=wails://wails,http://wails.localhost
 ```
 
-## 3. Configure DNS and client storage
+## 4. Configure DNS and client storage
 
 Create an A record for the configured hostname pointing to the VPS. Caddy uses this hostname to obtain and renew the HTTPS certificate.
 
@@ -98,9 +117,16 @@ chmod 644 /opt/dashpoint/clients/acme/data/postgres-tls/server.crt
 
 Do not reuse another client's data directory or PostgreSQL certificate directory.
 
-## 4. Deploy the client stack
+## 5. Deploy the client stack
 
-Validate and start only this client:
+A deploy has two parts: the client's branch is synchronized into the project folder, then that client's stack is rebuilt from that source. CI performs the sync by streaming a Git archive of the branch over SSH; for a first manual deploy, run from a local checkout of `clients/acme`:
+
+```bash
+git archive --format=tar clients/acme | ssh <vps-user>@<vps-host> "tar -xf - -C /opt/dashpoint"
+ssh <vps-user>@<vps-host> "printf '%s\n' $(git rev-parse HEAD) > /opt/dashpoint/.deploy-commit && chmod 600 /opt/dashpoint/.deploy-commit"
+```
+
+Then validate and start only this client:
 
 ```bash
 cd /opt/dashpoint
@@ -139,7 +165,7 @@ CADDY_FILE=/opt/dashpoint/Caddyfile \
 ./scripts/deploy-vps.sh
 ```
 
-## 5. Verify the installation
+## 6. Verify the installation
 
 ```bash
 docker ps --filter name=acme
@@ -149,7 +175,7 @@ curl -fsS https://pos.acme.example.com/api/v1/health
 
 Then verify browser login, desktop login if applicable, refresh-token behavior, uploads, and one representative POS or inventory flow. Confirm PostgreSQL is not publicly exposed.
 
-## 6. Configure GitHub Actions for this VPS
+## 7. Configure GitHub Actions for this VPS
 
 The current `.github/workflows/deploy.yml` has one deployment target. It receives the target VPS through repository or GitHub Environment secrets:
 
@@ -165,25 +191,28 @@ VPS_CADDY_FILE=/opt/dashpoint/Caddyfile
 
 Configure these under the repository's **Settings → Secrets and variables → Actions**. Never place SSH keys, database passwords, JWT secrets, or client env contents in the repository.
 
-When a successful push to `main` changes deployment-relevant paths, GitHub Actions:
+When the client needs a deployment, dispatch the **Test And Deploy** workflow from the `clients/acme` branch with `client_env=.env.acme`. GitHub Actions:
 
-1. Runs CI.
+1. Runs CI on the branch head.
 2. SSHs into the configured VPS.
-3. Copies the exact commit to `VPS_APP_DIR`.
+3. Copies that exact branch commit to `VPS_APP_DIR`.
 4. Preserves the ignored client env files and client data.
 5. Runs `scripts/deploy-vps.sh`.
 
-An empty deployment filter rebuilds every active `CLIENTS/.env.*` file on that VPS. A manual workflow dispatch can target one file, such as `.env.acme`.
+A dispatch from the branch with an empty deployment filter rebuilds every active `CLIENTS/.env.*` file on that VPS from that branch; a filter targeting `.env.acme` rebuilds only this client.
 
-For a second client on the same VPS, add another private env file; no workflow change is required. For a client on a separate VPS, use the manual deployment procedure unless you first extend `.github/workflows/deploy.yml` with a deployment matrix. Do not replace the existing `VPS_*` secrets, or future deployments will be redirected away from the existing client.
+CI note: `deploy.yml` currently also auto-deploys successful pushes to `main` through its `workflow_run` gate. Under this distribution model that gate should be removed (or reserved for the legacy demo target) so `main` never deploys to client stacks directly — this workflow change is a tracked follow-up. Until then, dispatch from the client branch; do not rely on `main` pushes to update clients.
+
+For a second client on the same VPS, cut its own `clients/<slug>` branch and add its own private env file; no workflow change is required. For a client on a separate VPS, use the manual deployment procedure unless you first extend `.github/workflows/deploy.yml` with a deployment matrix. Do not replace the existing `VPS_*` secrets, or future deployments will be redirected away from the existing client.
 
 Desktop-only changes do not deploy the VPS. Shared `frontend/`, `backend/`, migration, Docker, Caddy, or deployment changes are VPS-relevant.
 
-## 7. Build the client's desktop application
+## 8. Build the client's desktop application
 
-On a private Windows build machine, update the repository and build with the client's public HTTPS API URL:
+On a private Windows build machine, check out the client's deployment branch and build with the client's public HTTPS API URL:
 
 ```powershell
+git checkout clients/acme
 git pull
 .\desktop\scripts\build-windows.ps1 `
   -ApiBaseUrl "https://pos.acme.example.com/api/v1"
@@ -195,15 +224,22 @@ The output is always:
 build\bin\DashPoint.exe
 ```
 
-Transfer the executable to the client through a private distribution channel. Do not commit it to GitHub or publish it in a public release. The executable contains the shared frontend and public API URL only; it never contains database credentials, JWT secrets, SSH keys, or production `.env` files.
+Record the branch commit the executable was built from alongside the build date — the desktop build is not tracked anywhere automatic. Transfer the executable to the client through a private distribution channel. Do not commit it to GitHub or publish it in a public release. The executable contains the shared frontend and public API URL only; it never contains database credentials, JWT secrets, SSH keys, or production `.env` files.
 
 The production desktop build has demo access disabled by default. Only use `-EnableQuickDemoAccess:$true` for an intentional demo build. Localhost builds require `-AllowLocalApi`.
 
-## 8. Updates and data safety
+## 9. Updates and data safety
 
-Shared application updates are made once in the main repository. After a successful merge to `main`, configured VPS targets receive the commit through GitHub Actions. The VPS does not poll GitHub.
+A client is always updated from its own branch. The update flow is:
 
-The current desktop distribution is private and local: a frontend or backend update does not automatically replace an executable already distributed to a client. Rebuild and privately distribute a new executable when the desktop client needs the update.
+```text
+fix on main  → cherry-pick onto clients/<slug>  → dispatch deploy for that client
+feature      → compatibility review → merge into clients/<slug> → dispatch deploy
+```
+
+Never deploy a client from `main` directly. The VPS does not poll GitHub; deploys happen through the dispatched workflow or the manual command. The `.deploy-commit` file in the project folder records the last deployed source commit.
+
+The current desktop distribution is private and local: a frontend or backend update does not automatically replace an executable already distributed to a client. Rebuild from the client's branch and privately distribute a new executable when the desktop client needs the update.
 
 Rebuild one client without affecting other client stacks:
 
@@ -221,6 +257,7 @@ Never use `down --volumes` or delete `DATA_DIR` unless the client's database and
 
 ## Go-live checklist
 
+- [ ] `clients/<client-slug>` branch exists, is pushed, and contains the workflow file.
 - [ ] VPS has Docker, Compose, OpenSSL, `curl`, and ports 22/80/443 configured.
 - [ ] `dashpoint_proxy` external Docker network exists.
 - [ ] `CLIENTS/.env.<client>` exists on the VPS and is mode 600.
@@ -232,4 +269,5 @@ Never use `down --volumes` or delete `DATA_DIR` unless the client's database and
 - [ ] PostgreSQL is not publicly exposed.
 - [ ] Database and uploads backups exist.
 - [ ] GitHub Actions secrets are configured for the correct VPS, if automatic deployment is required.
-- [ ] A private desktop executable was built with the correct client API URL, if required.
+- [ ] A private desktop executable was built from the client's branch with the correct client API URL, if required.
+- [ ] A deployment record exists (branch, deployed commit, desktop build version).

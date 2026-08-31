@@ -15,9 +15,10 @@ The build script installs the pinned Wails CLI v2.13.0 when the required version
 
 ## Build a client executable privately
 
-Run from the repository root. The default target is the DashPoint demo API:
+Each client's executable is built from that client's deployment branch (`clients/<client-slug>`, cut from `main`), so any client-specific frontend code is included. Run from the repository root. The default target is the DashPoint demo API:
 
 ```powershell
+git checkout clients/<client-slug>
 git pull
 .\desktop\scripts\build-windows.ps1
 ```
@@ -35,7 +36,7 @@ The output is always:
 build\bin\DashPoint.exe
 ```
 
-The `build` directory and executable are ignored by Git. Transfer the executable to the client through the private distribution channel chosen for that client; do not commit or publish it in a GitHub release.
+Record the branch and commit the executable was built from alongside the build date — the desktop build is not tracked anywhere automatic. The `build` directory and executable are ignored by Git. Transfer the executable to the client through the private distribution channel chosen for that client; do not commit or publish it in a GitHub release.
 
 For the full client provisioning flow—including the VPS environment file, DNS, Caddy, CI/CD target, and desktop API URL—see [CLIENTS/DEPLOY_NEW_CLIENT.md](../CLIENTS/DEPLOY_NEW_CLIENT.md).
 

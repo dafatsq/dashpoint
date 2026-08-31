@@ -2,6 +2,24 @@
 
 DashPoint is a reusable SaaS application template. One VPS can run multiple isolated client instances from one checked-out project folder.
 
+## Distribution Model
+
+Every client is deployed from its own long-lived Git branch:
+
+    main                     # core product
+    clients/<client-slug>    # that client's deployment branch, cut from main
+
+A client stack is always built from its own branch — never from `main` directly and never from another client's branch. Client-specific code (a custom workflow, integration, or client-only migration) is committed directly onto that client's branch and does not touch `main` or any other client.
+
+`main` changes reach a client branch in two ways:
+
+- **Bug fixes / patches** are cherry-picked from `main` onto every client branch as soon as they are verified, so all clients stay on a secure baseline without inheriting new features.
+- **New features** are merged into a client branch only deliberately, after a compatibility review (API fields, permissions, migrations, desktop contract).
+
+Keep the distinction explicit in commit messages or PR labels (`fix` vs `feature`) so it is obvious which commits are safe to cherry-pick.
+
+The checked-out project folder on the VPS (`VPS_APP_DIR`) is a staging area for the most recently deployed branch. Client isolation comes from the per-client Compose project, credentials, and `DATA_DIR` — already-built containers keep running their own images regardless of which branch was synced last.
+
 ## Architecture
 
     Internet
@@ -10,7 +28,9 @@ DashPoint is a reusable SaaS application template. One VPS can run multiple isol
         -> client backend container
           -> client PostgreSQL container
 
-Each client gets one private env file, one Compose project name, one database and uploads directory, one hostname, and unique credentials. The database is never published to the internet. Client stacks share only the external Docker network used by Caddy.
+One VPS can host exactly one client or several — the layout is the same either way. Whichever clients a VPS hosts, each client's full stack (frontend, backend, and PostgreSQL) runs on that same VPS as an isolated Compose project; adding a client never requires a new server, and no component of a client's stack is shared or offloaded elsewhere.
+
+Each client gets one private env file, one Compose project name, one deployment branch, one database and uploads directory, one hostname, and unique credentials. The database is never published to the internet. Client stacks share only the external Docker network used by Caddy.
 
 ## Deployment Files
 
@@ -20,6 +40,7 @@ Each client gets one private env file, one Compose project name, one database an
     scripts/render-caddyfile.sh   builds routes from client env files
     CLIENTS/.env.example          safe client configuration template
     CLIENTS/DEPLOY_NEW_CLIENT.md  client deployment procedure
+    clients/<client-slug>         per-client deployment branch, cut from main
 
 Real client env files and production secrets stay on the VPS and are ignored by Git.
 
@@ -93,7 +114,12 @@ Use a separate certificate directory for each client.
 
 ## Deploy A Client
 
-Validate the selected client env before creating containers:
+Deploying a client means two things: its branch is synchronized into the project folder, and its stack is rebuilt from that source. CI performs the sync by streaming a Git archive of the client branch over SSH. To sync manually, run from a local checkout of that client's branch:
+
+    git archive --format=tar clients/acme | ssh <vps-user>@<vps-host> "tar -xf - -C /opt/dashpoint"
+    ssh <vps-user>@<vps-host> "printf '%s\n' <commit-sha> > /opt/dashpoint/.deploy-commit && chmod 600 /opt/dashpoint/.deploy-commit"
+
+Then validate the selected client env before creating containers:
 
     docker compose \
       --env-file CLIENTS/.env.acme \
@@ -165,9 +191,11 @@ Database imports, seed data, and destructive resets require a separate explicit 
 
 ## CI/CD
 
-`.github/workflows/deploy.yml` runs backend tests, frontend tests, and a production build before deployment. On `main`, a successful run streams the exact pushed commit to the VPS, runs `scripts/deploy-vps.sh`, rebuilds the active client stacks, runs backend migrations during startup, and reloads Caddy after route validation.
+`.github/workflows/deploy.yml` runs backend tests, frontend tests, and a production build before deployment. A client is updated by dispatching the workflow from that client's branch (`clients/<client-slug>`) with `client_env=.env.<client-slug>`: the exact branch head is streamed to the VPS, `scripts/deploy-vps.sh` rebuilds only that client's stack, runs backend migrations during startup, and reloads Caddy after route validation.
 
-The workflow transfers a Git archive over SSH instead of requiring Git credentials on the VPS. It does not overwrite ignored client env files, database directories, uploads, or backups. A manual workflow dispatch can provide `client_env=.env.acme` to rebuild one client; an empty value deploys every active top-level `CLIENTS/.env.*` file.
+The workflow transfers a Git archive over SSH instead of requiring Git credentials on the VPS. It does not overwrite ignored client env files, database directories, uploads, or backups. A dispatch with an empty `client_env` deploys every active top-level `CLIENTS/.env.*` file from the branch the workflow was dispatched on.
+
+CI note: the workflow currently also auto-deploys successful pushes to `main` through its `workflow_run` gate. Under this distribution model, that gate should be removed (or reserved for the legacy demo target) so `main` never deploys to client stacks directly; this workflow change is a tracked follow-up. Until then, dispatch from the client branch — do not rely on `main` pushes to update clients.
 
 Configure these GitHub Actions secrets:
 
@@ -179,7 +207,7 @@ Configure these GitHub Actions secrets:
     VPS_CLIENT_ENV_DIR   usually CLIENTS
     VPS_CADDY_FILE       usually /opt/dashpoint/Caddyfile
 
-The workflow currently has one VPS target per run. A new client on the same VPS only needs another private `CLIENTS/.env.<client>` file. For a client on a separate VPS, use the manual deployment command unless you first extend `.github/workflows/deploy.yml` with a deployment matrix. Do not overwrite the existing target secrets.
+The workflow currently has one VPS target per run. A new client on the same VPS needs its own `clients/<client-slug>` branch and private `CLIENTS/.env.<client>` file; no workflow change is required — dispatch the workflow from the new branch with the new env filter. For a client on a separate VPS, use the manual deployment command unless you first extend `.github/workflows/deploy.yml` with a deployment matrix. Do not overwrite the existing target secrets.
 
 Client env files, JWT secrets, database passwords, uploads, and Caddy certificate data stay on the VPS. The deployment user should have only the permissions required to update the project directory and run the approved Docker Compose deployment. Do not recursively change ownership of a client's `DATA_DIR` to the deployment user: PostgreSQL data and TLS files must remain readable by the PostgreSQL container account, and uploads must remain writable by the backend container account.
 
@@ -189,6 +217,7 @@ For the existing demo during its migration, use `VPS_APP_DIR=/opt/dashpoint-demo
 
 ## Go-Live Checklist
 
+    [ ] clients/<client-slug> branch exists, is pushed, and contains the workflow file
     [ ] One client env file exists and is chmod 600
     [ ] PROJECT_NAME and DATA_DIR are unique
     [ ] Database credentials and JWT_SECRET are unique
@@ -201,3 +230,4 @@ For the existing demo during its migration, use `VPS_APP_DIR=/opt/dashpoint-demo
     [ ] Database and uploads backups exist
     [ ] Restore procedure is documented and tested
     [ ] CI/CD or the manual deployment command is selected
+    [ ] A deployment record exists (branch, deployed commit, desktop build version)
