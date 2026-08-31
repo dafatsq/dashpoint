@@ -27,7 +27,7 @@ jobs:
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main') ||
+       github.event.workflow_run.head_branch == 'dashpoint-demo') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
