@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dashpoint-demo
   pull_request:
   workflow_call:
 
@@ -42,7 +43,6 @@ jobs:
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_URL: /api/v1
-          NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS: 'false'
         run: npm run build
 
       - name: Build desktop frontend assets

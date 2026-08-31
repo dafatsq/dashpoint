@@ -81,7 +81,6 @@ Set unique values for:
     POSTGRES_DB=acme_prod
     JWT_SECRET=<at-least-32-random-characters>
     NEXT_PUBLIC_API_URL=/api/v1
-    NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=false
     PROXY_NETWORK=dashpoint_proxy
 
 ### Desktop API host
@@ -195,7 +194,7 @@ Database imports, seed data, and destructive resets require a separate explicit 
 
 The workflow transfers a Git archive over SSH instead of requiring Git credentials on the VPS. It does not overwrite ignored client env files, database directories, uploads, or backups. A dispatch with an empty `client_env` deploys every active top-level `CLIENTS/.env.*` file from the branch the workflow was dispatched on.
 
-CI note: the workflow currently also auto-deploys successful pushes to `main` through its `workflow_run` gate. Under this distribution model, that gate should be removed (or reserved for the legacy demo target) so `main` never deploys to client stacks directly; this workflow change is a tracked follow-up. Until then, dispatch from the client branch — do not rely on `main` pushes to update clients.
+CI note: automatic deploys fire only when CI succeeds for a push to `dashpoint-demo`, the demo deployment branch. Pushes to `main` never deploy to the VPS — a client is updated by dispatching the workflow from its own branch, as described above. Quick Demo Access on the login screen exists only on the `dashpoint-demo` branch; the core product has none.
 
 Configure these GitHub Actions secrets:
 

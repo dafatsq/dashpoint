@@ -85,7 +85,6 @@ JWT_SECRET=<unique-random-secret-at-least-32-characters>
 JWT_EXPIRY_MINUTES=15
 REFRESH_EXPIRY_HOURS=168
 NEXT_PUBLIC_API_URL=/api/v1
-NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=false
 PROXY_NETWORK=dashpoint_proxy
 ```
 
@@ -201,7 +200,7 @@ When the client needs a deployment, dispatch the **Test And Deploy** workflow fr
 
 A dispatch from the branch with an empty deployment filter rebuilds every active `CLIENTS/.env.*` file on that VPS from that branch; a filter targeting `.env.acme` rebuilds only this client.
 
-CI note: `deploy.yml` currently also auto-deploys successful pushes to `main` through its `workflow_run` gate. Under this distribution model that gate should be removed (or reserved for the legacy demo target) so `main` never deploys to client stacks directly — this workflow change is a tracked follow-up. Until then, dispatch from the client branch; do not rely on `main` pushes to update clients.
+CI note: automatic deploys fire only on pushes to `dashpoint-demo`, the demo deployment branch. `main` never deploys to client stacks; a client is updated by dispatching the workflow from its own branch. Quick Demo Access on the login screen exists only on the `dashpoint-demo` branch; the core product has none.
 
 For a second client on the same VPS, cut its own `clients/<slug>` branch and add its own private env file; no workflow change is required. For a client on a separate VPS, use the manual deployment procedure unless you first extend `.github/workflows/deploy.yml` with a deployment matrix. Do not replace the existing `VPS_*` secrets, or future deployments will be redirected away from the existing client.
 
@@ -226,7 +225,7 @@ build\bin\DashPoint.exe
 
 Record the branch commit the executable was built from alongside the build date — the desktop build is not tracked anywhere automatic. Transfer the executable to the client through a private distribution channel. Do not commit it to GitHub or publish it in a public release. The executable contains the shared frontend and public API URL only; it never contains database credentials, JWT secrets, SSH keys, or production `.env` files.
 
-The production desktop build has demo access disabled by default. Only use `-EnableQuickDemoAccess:$true` for an intentional demo build. Localhost builds require `-AllowLocalApi`.
+Quick Demo Access is not part of the core product; it exists only on the `dashpoint-demo` branch, and demo builds are produced from that branch. Localhost builds require `-AllowLocalApi`.
 
 ## 9. Updates and data safety
 
