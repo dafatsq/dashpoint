@@ -156,7 +156,7 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             "$VPS_USER@$VPS_HOST" \
-              "tar -xf - -C $remote_app"
+              "tar -xf - -C $remote_app" < <(git archive --format=tar "$SOURCE_SHA")
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             "$VPS_USER@$VPS_HOST" \
