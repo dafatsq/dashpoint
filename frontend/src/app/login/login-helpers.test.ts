@@ -5,7 +5,6 @@ import {
   getEffectiveSaveAccountDecision,
   getLoginInfoMessage,
   getSaveLoginControlState,
-  getShowDemoAccessPreference,
   isStoredPreferenceEnabled,
 } from "./login-helpers";
 
@@ -21,12 +20,10 @@ describe("login helpers", () => {
     expect(getLoginInfoMessage(null)).toBe("");
   });
 
-  test("parses trusted-device and demo-access preferences", () => {
+  test("parses the trusted-device preference", () => {
     expect(isStoredPreferenceEnabled("true")).toBe(true);
     expect(isStoredPreferenceEnabled("false")).toBe(false);
     expect(isStoredPreferenceEnabled(null)).toBe(false);
-    expect(getShowDemoAccessPreference(true)).toBe(true);
-    expect(getShowDemoAccessPreference(false)).toBe(false);
   });
 
   test("derives the default tab from saved-account presence", () => {

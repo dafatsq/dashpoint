@@ -28,10 +28,6 @@ export function isStoredPreferenceEnabled(value: string | null): boolean {
   return value === "true";
 }
 
-export function getShowDemoAccessPreference(envEnabled: boolean): boolean {
-  return envEnabled;
-}
-
 export function getDefaultLoginTab(hasSavedAccounts: boolean): LoginTab {
   return hasSavedAccounts ? "saved" : "email";
 }

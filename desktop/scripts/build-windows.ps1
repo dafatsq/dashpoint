@@ -1,6 +1,5 @@
 param(
     [string]$ApiBaseUrl = "",
-    [bool]$EnableQuickDemoAccess = $false,
     [switch]$AllowLocalApi
 )
 
@@ -196,7 +195,6 @@ try {
     }
 
     $env:NEXT_PUBLIC_API_URL = $resolvedApiUrl
-    $env:NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = $EnableQuickDemoAccess.ToString().ToLower()
 
     Write-Host "Building desktop app with API $resolvedApiUrl"
     Invoke-Checked "go" @("mod", "download")

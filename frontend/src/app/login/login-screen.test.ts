@@ -57,7 +57,6 @@ vi.mock("@/components/account-switcher", () => ({
 describe("LoginScreen", () => {
   let container: HTMLDivElement;
   let root: Root;
-  let originalDemoAccessEnv: string | undefined;
 
   beforeEach(() => {
     // Radix components expect these browser APIs in jsdom tests.
@@ -74,8 +73,6 @@ describe("LoginScreen", () => {
     routerPush.mockReset();
     loginMock.mockReset();
     searchParamsState.message = null;
-    originalDemoAccessEnv = process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS;
-    delete process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS;
   });
 
   afterEach(() => {
@@ -83,17 +80,21 @@ describe("LoginScreen", () => {
       root.unmount();
     });
     container.remove();
-    if (originalDemoAccessEnv === undefined) {
-      delete process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS;
-    } else {
-      process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = originalDemoAccessEnv;
-    }
   });
 
   async function renderScreen() {
     await act(async () => {
       root.render(createElement(LoginScreen));
     });
+  }
+
+  function setInputValue(input: HTMLInputElement, value: string) {
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   test("renders the logout message from the query string", async () => {
@@ -154,28 +155,21 @@ describe("LoginScreen", () => {
 
   test("uses the trusted-device preference in the effective save-account decision", async () => {
     window.localStorage.setItem("dashpoint_device_trusted", "true");
-    process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
-    process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON = JSON.stringify([{ role: "Owner", email: "owner@dashpoint.local", pass: "owner123" }]);
     loginMock.mockResolvedValue({ success: true });
 
     await renderScreen();
-    // Demo credentials load via a build-flag-gated dynamic import; wait for
-    // the button they render instead of relying on import timing.
-    const demoButton = await vi.waitFor(() => {
-      const button = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent?.includes("owner@dashpoint.local"),
-      );
-      if (!button) {
-        throw new Error("demo access button not rendered yet");
-      }
-      return button;
-    });
+
+    const emailInput = container.querySelector(
+      'input[type="email"]',
+    ) as HTMLInputElement;
+    const passwordInput = container.querySelector(
+      'input[type="password"]',
+    ) as HTMLInputElement;
     const form = container.querySelector("form");
 
     await act(async () => {
-      demoButton?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
+      setInputValue(emailInput, "owner@dashpoint.local");
+      setInputValue(passwordInput, "owner123");
     });
 
     await act(async () => {
@@ -190,41 +184,6 @@ describe("LoginScreen", () => {
       true,
     );
     expect(routerPush).toHaveBeenCalledWith("/");
-  });
-
-  test("demo autofill updates credentials without submitting", async () => {
-    process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS = "true";
-    process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON = JSON.stringify([{ role: "Owner", email: "owner@dashpoint.local", pass: "owner123" }]);
-
-    await renderScreen();
-    // Demo credentials load via a build-flag-gated dynamic import; wait for
-    // the button they render instead of relying on import timing.
-    const demoButton = await vi.waitFor(() => {
-      const button = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent?.includes("owner@dashpoint.local"),
-      );
-      if (!button) {
-        throw new Error("demo access button not rendered yet");
-      }
-      return button;
-    });
-
-    await act(async () => {
-      demoButton?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-    });
-
-    const emailInput = container.querySelector(
-      'input[type="email"]',
-    ) as HTMLInputElement;
-    const passwordInput = container.querySelector(
-      'input[type="password"]',
-    ) as HTMLInputElement;
-
-    expect(emailInput.value).toBe("owner@dashpoint.local");
-    expect(passwordInput.value).toBe("owner123");
-    expect(loginMock).not.toHaveBeenCalled();
   });
 
   test("switches back to Quick Access when saved accounts appear on focus refresh", async () => {
