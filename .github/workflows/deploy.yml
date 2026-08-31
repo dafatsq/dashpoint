@@ -17,7 +17,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashpoint-production-deploy
+  # Group per triggering branch so a push to one branch cannot supersede a
+  # queued run for another (GitHub cancels an older *pending* run in the
+  # same group when a newer event arrives, which previously swallowed the
+  # demo deploy when main and dashpoint-demo were pushed together).
+  group: dashpoint-production-deploy-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
