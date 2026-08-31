@@ -175,7 +175,29 @@ jobs:
           # (7 GB runner RAM) and stream the images to the VPS instead.
           # The tag is the source commit, so the VPS always knows exactly
           # what is running.
-          docker build --build-arg NEXT_PUBLIC_API_URL=/api/v1 \
+
+          # Demo-access build args must match what the client env file on
+          # the VPS says (the old VPS-side build read them from there).
+          # Values are passed straight into docker build, never echoed.
+          env_dir="${VPS_CLIENT_ENV_DIR:-CLIENTS}"
+          case "$env_dir" in /*) ;; *) env_dir="$VPS_APP_DIR/$env_dir";; esac
+          filter="${VPS_CLIENT_ENV_FILTER:-}"
+          if [[ -n "$filter" ]]; then
+            env_path=$(ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" \
+              "printf '%s\n' '$env_dir/$filter'")
+          else
+            env_path=$(ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" \
+              "ls '$env_dir'/.env.* 2>/dev/null | grep -v example | head -n1")
+          fi
+          demo_access=$(ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" \
+            "grep -E '^NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=' '$env_path' 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\"'") || demo_access=""
+          demo_creds=$(ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" \
+            "grep -E '^NEXT_PUBLIC_DEMO_CREDENTIALS_JSON=' '$env_path' 2>/dev/null | head -n1 | cut -d= -f2- | sed -E 's/^\"(.*)\"\$/\\1/'") || demo_creds=""
+
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=/api/v1 \
+            --build-arg NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS="${demo_access:-false}" \
+            --build-arg NEXT_PUBLIC_DEMO_CREDENTIALS_JSON="$demo_creds" \
             -t "dashpoint-frontend:$SOURCE_SHA" frontend
           docker build \
             -t "dashpoint-backend:$SOURCE_SHA" backend
