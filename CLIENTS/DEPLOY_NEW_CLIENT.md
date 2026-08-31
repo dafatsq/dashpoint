@@ -195,8 +195,8 @@ When the client needs a deployment, dispatch the **Test And Deploy** workflow fr
 1. Runs CI on the branch head.
 2. SSHs into the configured VPS.
 3. Copies that exact branch commit to `VPS_APP_DIR`.
-4. Preserves the ignored client env files and client data.
-5. Runs `scripts/deploy-vps.sh`.
+4. Builds both Docker images on the Actions runner and streams them to the VPS (`docker save` over SSH — the VPS never builds, which avoids OOM kills on small instances). Images are tagged with the source commit.
+5. Preserves the ignored client env files and client data, then runs `scripts/deploy-vps.sh`, which starts containers from the loaded images and reloads Caddy.
 
 A dispatch from the branch with an empty deployment filter rebuilds every active `CLIENTS/.env.*` file on that VPS from that branch; a filter targeting `.env.acme` rebuilds only this client.
 

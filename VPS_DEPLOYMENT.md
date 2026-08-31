@@ -204,6 +204,8 @@ The workflow transfers a Git archive over SSH instead of requiring Git credentia
 
 CI note: automatic deploys fire only when CI succeeds for a push to `dashpoint-demo`, the demo deployment branch. Pushes to `main` never deploy to the VPS — a client is updated by dispatching the workflow from its own branch, as described above. Quick Demo Access on the login screen exists only on the `dashpoint-demo` branch; the core product has none.
 
+CI builds both Docker images on the Actions runner (a small VPS cannot build Next.js without being OOM-killed) and streams them to the VPS with `docker save | ssh docker load`, tagged with the source commit. The deploy then sets `DEPLOY_TAG=<commit>` and `deploy-vps.sh` runs plain `up -d` against the loaded images; no container build happens on the VPS. A manual deploy without `DEPLOY_TAG` still falls back to building locally, but that requires a VPS with enough memory (2 GB plus swap). Old images accumulate under their commit tags — run `docker image prune -f` occasionally.
+
 Configure these GitHub Actions secrets:
 
     VPS_HOST             VPS address
