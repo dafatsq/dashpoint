@@ -9,6 +9,9 @@ COPY . .
 
 ARG NEXT_PUBLIC_API_URL=/api/v1
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# Cap the Node heap so `next build` fails gracefully under memory pressure
+# instead of triggering the kernel OOM killer on small VPS instances.
+ENV NODE_OPTIONS=--max-old-space-size=1536
 
 RUN npm run build
 
