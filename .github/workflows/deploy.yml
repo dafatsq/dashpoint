@@ -150,10 +150,16 @@ jobs:
         run: |
           set -euo pipefail
           printf -v remote_app '%q' "$VPS_APP_DIR"
-          git archive --format=tar "$SOURCE_SHA" | \
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+          # Keepalives keep NAT/firewall state alive during long remote builds;
+          # without them the SSH session can drop mid-deploy ("Timeout, server
+          # not responding").
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "$VPS_USER@$VPS_HOST" \
               "tar -xf - -C $remote_app"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "$VPS_USER@$VPS_HOST" \
             "printf '%s\\n' '$SOURCE_SHA' > $remote_app/.deploy-commit && chmod 600 $remote_app/.deploy-commit"
 
       - name: Deploy selected client stacks
@@ -164,5 +170,7 @@ jobs:
           printf -v remote_caddy_file '%q' "$VPS_CADDY_FILE"
           printf -v remote_filter '%q' "$VPS_CLIENT_ENV_FILTER"
           printf -v remote_script '%q' "$VPS_APP_DIR/scripts/deploy-vps.sh"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "$VPS_USER@$VPS_HOST" \
             "APP_DIR=$remote_app CLIENT_ENV_DIR=$remote_env_dir CADDY_FILE=$remote_caddy_file CLIENT_ENV_FILTER=$remote_filter $remote_script"
