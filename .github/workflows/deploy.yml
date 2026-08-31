@@ -193,6 +193,10 @@ jobs:
             "grep -E '^NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=' '$env_path' 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\"'") || demo_access=""
           demo_creds=$(ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" \
             "grep -E '^NEXT_PUBLIC_DEMO_CREDENTIALS_JSON=' '$env_path' 2>/dev/null | head -n1 | cut -d= -f2- | sed -E 's/^\"(.*)\"\$/\\1/'") || demo_creds=""
+          # Diagnostics: lengths only, never values.
+          echo "env_path resolved to: ${env_path:-<empty>}"
+          echo "demo_access length: ${#demo_access}"
+          echo "demo_creds length: ${#demo_creds}"
 
           docker build \
             --build-arg NEXT_PUBLIC_API_URL=/api/v1 \
