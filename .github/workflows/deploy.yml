@@ -31,12 +31,14 @@ jobs:
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'dashpoint-demo') ||
+       (startsWith(github.event.workflow_run.head_branch, 'clients/') ||
+        github.event.workflow_run.head_branch == 'dashpoint-demo')) ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       should_deploy: ${{ steps.scope.outputs.should_deploy }}
       source_sha: ${{ steps.scope.outputs.source_sha }}
+      client_env_filter: ${{ steps.scope.outputs.client_env_filter }}
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -50,9 +52,26 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           SOURCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
           printf 'source_sha=%s\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+          # A push to clients/<slug> deploys only that client: map the branch
+          # to its env file so co-located clients are never touched by
+          # another client's deploy.
+          filter=""
+          case "${WORKFLOW_RUN_HEAD_BRANCH:-}" in
+            clients/*)
+              slug="${WORKFLOW_RUN_HEAD_BRANCH#clients/}"
+              if [[ ! "$slug" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+                echo "Invalid client branch slug: $slug" >&2
+                exit 1
+              fi
+              filter=".env.$slug"
+              ;;
+          esac
+          printf 'client_env_filter=%s\n' "$filter" >> "$GITHUB_OUTPUT"
 
           if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
             echo 'should_deploy=true' >> "$GITHUB_OUTPUT"
@@ -123,7 +142,7 @@ jobs:
       VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
       VPS_CLIENT_ENV_DIR: ${{ secrets.VPS_CLIENT_ENV_DIR }}
       VPS_CADDY_FILE: ${{ secrets.VPS_CADDY_FILE }}
-      VPS_CLIENT_ENV_FILTER: ${{ inputs.client_env }}
+      VPS_CLIENT_ENV_FILTER: ${{ inputs.client_env || needs.scope.outputs.client_env_filter }}
       SOURCE_SHA: ${{ needs.scope.outputs.source_sha }}
     steps:
       - name: Check out pushed source
