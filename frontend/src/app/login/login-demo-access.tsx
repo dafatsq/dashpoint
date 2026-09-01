@@ -11,9 +11,9 @@ interface LoginDemoAccessProps {
 export function LoginDemoAccess({
   onSelectCredentials,
 }: LoginDemoAccessProps) {
-  // Empty unless this build opted into demo mode via
-  // NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS=true plus
-  // NEXT_PUBLIC_DEMO_CREDENTIALS_JSON at build time.
+  // Always rendered on the demo branch; the credentials are a constant in
+  // login-demo-credentials.ts. Keep the list empty there and this renders
+  // nothing.
   const demoCredentials = getDemoLoginCredentials();
   if (demoCredentials.length === 0) {
     return null;

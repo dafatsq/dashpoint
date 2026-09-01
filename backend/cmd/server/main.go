@@ -42,6 +42,11 @@ func main() {
 	}
 	defer db.Close()
 
+	// Demo branch only: keep the public demo accounts present and active.
+	if err := database.EnsureDemoAccounts(context.Background(), db); err != nil {
+		log.Fatal().Err(err).Msg("Failed to ensure demo accounts")
+	}
+
 	deps, err := buildServerDependencies(cfg, db)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to build server dependencies")

@@ -24,7 +24,6 @@ import {
   getHasSavedAccounts,
   getLoginInfoMessage,
   getSaveLoginControlState,
-  getShowDemoAccessPreference,
   isStoredPreferenceEnabled,
   type LoginTab,
 } from "./login-helpers";
@@ -41,7 +40,6 @@ export function LoginScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveLogin, setSaveLogin] = useState(false);
   const [isDeviceTrusted, setIsDeviceTrusted] = useState(false);
-  const [showDemoAccess, setShowDemoAccess] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [setupRequired, setSetupRequired] = useState(false);
   const [hasSavedAccounts, setHasSavedAccounts] = useState(false);
@@ -102,11 +100,6 @@ export function LoginScreen() {
     );
     setIsDeviceTrusted(trustedDeviceEnabled);
     setSaveLogin(trustedDeviceEnabled);
-    setShowDemoAccess(
-      getShowDemoAccessPreference(
-        process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS === "true",
-      ),
-    );
     refreshSavedAccounts(true);
 
     const handleVisibilityChange = () => {
@@ -222,14 +215,12 @@ export function LoginScreen() {
                 onSubmit={handleSubmit}
               />
 
-              {showDemoAccess && isClient && (
-                <LoginDemoAccess
-                  onSelectCredentials={(nextEmail, nextPassword) => {
-                    setEmail(nextEmail);
-                    setPassword(nextPassword);
-                  }}
-                />
-              )}
+              <LoginDemoAccess
+                onSelectCredentials={(nextEmail, nextPassword) => {
+                  setEmail(nextEmail);
+                  setPassword(nextPassword);
+                }}
+              />
             </TabsContent>
           </Tabs>
           )}

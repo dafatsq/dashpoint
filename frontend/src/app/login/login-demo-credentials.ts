@@ -1,39 +1,20 @@
-// Demo credentials are injected at BUILD time through
-// NEXT_PUBLIC_DEMO_CREDENTIALS_JSON (a JSON array of {role, email, pass}).
-// No credential literals exist in the repository source, so only builds that
-// opt into demo mode — and set the variable at build time, e.g. the demo
-// VPS client env — carry the values in their bundle. Every other build,
-// including the default production compose build, contains none.
 export interface DemoCredential {
   role: string;
   email: string;
   pass: string;
 }
 
-function parseDemoCredentials(raw: string | undefined): readonly DemoCredential[] {
-  if (!raw || process.env.NEXT_PUBLIC_ENABLE_QUICK_DEMO_ACCESS !== "true") {
-    return [];
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter(
-      (item): item is DemoCredential =>
-        typeof item === "object" &&
-        item !== null &&
-        typeof (item as DemoCredential).role === "string" &&
-        typeof (item as DemoCredential).email === "string" &&
-        typeof (item as DemoCredential).pass === "string",
-    );
-  } catch {
-    return [];
-  }
-}
+// Demo deployment only (dashpoint-demo branch): the login buttons always
+// exist and fill these accounts. The backend ensures these accounts exist
+// and stay active on every start (backend/internal/database/demo_accounts.go),
+// and the passwords ship in this public bundle by design — never put real
+// accounts here.
+const DEMO_CREDENTIALS: readonly DemoCredential[] = [
+  { role: "Owner", email: "demo-owner@dashpoint.local", pass: "demo1234" },
+  { role: "Manager", email: "demo-manager@dashpoint.local", pass: "demo1234" },
+  { role: "Cashier", email: "demo-cashier@dashpoint.local", pass: "demo1234" },
+];
 
-// Resolved on call so test bodies can set the env before rendering; in
-// production builds both NEXT_PUBLIC_* values are inlined at build time.
 export function getDemoLoginCredentials(): readonly DemoCredential[] {
-  return parseDemoCredentials(process.env.NEXT_PUBLIC_DEMO_CREDENTIALS_JSON);
+  return DEMO_CREDENTIALS;
 }
