@@ -270,3 +270,15 @@ Never use `down --volumes` or delete `DATA_DIR` unless the client's database and
 - [ ] GitHub Actions secrets are configured for the correct VPS, if automatic deployment is required.
 - [ ] A private desktop executable was built from the client's branch with the correct client API URL, if required.
 - [ ] A deployment record exists (branch, deployed commit, desktop build version).
+
+## Security requirements (mandatory per client)
+
+Every client environment MUST satisfy all of the following before go-live. Shared or copied secrets across clients are a cross-tenant compromise waiting to happen: one leaked secret must never expose another client.
+
+1. **Unique `JWT_SECRET`** — generate per client with `openssl rand -base64 48`. Never reuse a secret from another client, from the template repo, or from an old deployment. Rotate it whenever a team member with VPS access leaves.
+2. **Unique `POSTGRES_PASSWORD`** — generate per client with `openssl rand -base64 24`. Never copy from another client's env file.
+3. **`TRUSTED_PROXIES`** — set to the Docker proxy subnet (default `172.18.0.0/16`); verify with `docker network inspect` after first up. Missing or wrong values break client-IP logging and rate limiting.
+4. **Env file ownership** — `CLIENTS/.env.<client>` must be mode `600`, owned by the deploy user, and never committed to git (`.gitignore` covers it — keep it that way).
+5. **`CORS_ORIGINS`** — must exactly match the client's production origin(s) (scheme + host, no trailing slash). Wildcards are forbidden.
+6. **Env format parity** — the client env must contain every key in `CLIENTS/.env.example` (including `TRUSTED_PROXIES`, `CADDY_SITE_ADDRESS`, `CORS_ORIGINS`). Older client envs are missing keys — reconcile against the example before deploying.
+7. **Rotate any copied secret** — if a new client env was ever created by copying another client's file, rotate `JWT_SECRET` and `POSTGRES_PASSWORD` on BOTH clients at the next deploy window.
