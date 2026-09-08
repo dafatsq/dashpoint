@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 )
 
@@ -169,7 +170,7 @@ func (f *fakeExpenseProductStore) GetByID(ctx context.Context, id uuid.UUID) (*m
 }
 
 func TestListExpensesRejectsInvalidCategoryID(t *testing.T) {
-	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil, nil)
 	app := fiber.New()
 	app.Get("/expenses", handler.List)
 
@@ -184,7 +185,7 @@ func TestListExpensesRejectsInvalidCategoryID(t *testing.T) {
 }
 
 func TestListExpensesRejectsInvalidPagination(t *testing.T) {
-	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil, nil)
 	app := fiber.New()
 	app.Get("/expenses", handler.List)
 
@@ -200,7 +201,7 @@ func TestListExpensesRejectsInvalidPagination(t *testing.T) {
 }
 
 func TestCreateExpenseRejectsInvalidCategoryID(t *testing.T) {
-	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil, nil)
 	app := expenseHandlerTestApp(handler)
 
 	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","category_id":"bad-uuid"}`)
@@ -210,7 +211,7 @@ func TestCreateExpenseRejectsInvalidCategoryID(t *testing.T) {
 }
 
 func TestCreateExpenseRejectsUnknownField(t *testing.T) {
-	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil, nil)
 	app := expenseHandlerTestApp(handler)
 
 	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","unexpected":true}`)
@@ -220,7 +221,7 @@ func TestCreateExpenseRejectsUnknownField(t *testing.T) {
 }
 
 func TestCreateExpenseRejectsOversizedVendor(t *testing.T) {
-	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil, nil)
 	app := expenseHandlerTestApp(handler)
 
 	body := `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","vendor":"` + strings.Repeat("x", expenseVendorMaxLength+1) + `"}`
@@ -236,7 +237,7 @@ func TestCreateExpenseModelRejectsArchivedExpenseCategory(t *testing.T) {
 		getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
 			return &models.ExpenseCategory{ID: categoryID, Name: "Archived", IsActive: false}, nil
 		},
-	}, &fakeInventoryAdjuster{}, nil)
+	}, &fakeInventoryAdjuster{}, nil, nil)
 
 	_, err := handler.createExpenseModel(context.Background(), CreateExpenseRequest{
 		CategoryID:  stringPtr(categoryID.String()),
@@ -250,7 +251,7 @@ func TestCreateExpenseModelRejectsArchivedExpenseCategory(t *testing.T) {
 }
 
 func TestCreateExpenseRejectsInvalidProductID(t *testing.T) {
-	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil, nil)
 	app := expenseHandlerTestApp(handler)
 
 	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","product_id":"bad-uuid"}`)
@@ -260,7 +261,7 @@ func TestCreateExpenseRejectsInvalidProductID(t *testing.T) {
 }
 
 func TestCreateExpenseRejectsInvalidQuantity(t *testing.T) {
-	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(&fakeExpenseStore{}, &fakeInventoryAdjuster{}, nil, nil)
 	app := expenseHandlerTestApp(handler)
 
 	resp := performExpenseJSONRequest(t, app, http.MethodPost, "/expenses", `{"amount":"10.00","description":"Taxi","expense_date":"2026-05-14","quantity":"oops"}`)
@@ -285,7 +286,7 @@ func TestCreateInventoryPurchaseRequiresExpectedProductUpdatedAt(t *testing.T) {
 			product.UpdatedAt = time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
 			return product, nil
 		},
-	})
+	}, nil)
 	app := expenseHandlerTestApp(handler)
 
 	body := `{"category_id":"` + categoryID.String() + `","product_id":"` + productID.String() + `","quantity":"2","applies_inventory":true,"amount":"10.00","description":"Restock","expense_date":"2026-05-14"}`
@@ -313,7 +314,7 @@ func TestCreateInventoryPurchaseRejectsStaleProduct(t *testing.T) {
 			product.UpdatedAt = newUpdatedAt
 			return product, nil
 		},
-	})
+	}, nil)
 	app := expenseHandlerTestApp(handler)
 
 	body := `{"category_id":"` + categoryID.String() + `","product_id":"` + productID.String() + `","quantity":"2","applies_inventory":true,"amount":"10.00","description":"Restock","expense_date":"2026-05-14","expected_product_updated_at":"` + oldUpdatedAt.Format(time.RFC3339Nano) + `"}`
@@ -365,7 +366,7 @@ func TestUpdateInventoryPurchaseRejectsStaleProduct(t *testing.T) {
 			product.UpdatedAt = newProductUpdatedAt
 			return product, nil
 		},
-	})
+	}, nil)
 	app := fiber.New()
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("user_id", userID)
@@ -408,7 +409,7 @@ func TestUpdateExpenseRequiresExpectedUpdatedAt(t *testing.T) {
 			return nil, nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 	app := fiber.New()
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("user_id", userID)
@@ -450,7 +451,7 @@ func TestDeleteExpenseRequiresExpectedUpdatedAt(t *testing.T) {
 			return nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 	app := fiber.New()
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("user_id", userID)
@@ -478,7 +479,7 @@ func TestCreateExpenseModelRequiresProductAndQuantityForInventoryPurchase(t *tes
 		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
 			return testProduct(), nil
 		},
-	})
+	}, nil)
 
 	_, err := handler.createExpenseModel(context.Background(), CreateExpenseRequest{
 		CategoryID:  stringPtr(categoryID.String()),
@@ -516,7 +517,7 @@ func TestCreateExpenseModelSetsAppliesInventoryOnlyWhenRequested(t *testing.T) {
 		getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
 			return testProduct(), nil
 		},
-	})
+	}, nil)
 
 	expense, err := handler.createExpenseModel(context.Background(), CreateExpenseRequest{
 		CategoryID:       stringPtr(categoryID.String()),
@@ -553,7 +554,7 @@ func TestCreateExpenseModelRejectsArchivedProduct(t *testing.T) {
 			product.IsActive = false
 			return product, nil
 		},
-	})
+	}, nil)
 
 	_, err := handler.createExpenseModel(context.Background(), CreateExpenseRequest{
 		CategoryID:       stringPtr(categoryID.String()),
@@ -597,7 +598,7 @@ func TestDeleteCategoryAllowsArchivingInventoryPurchaseCategory(t *testing.T) {
 			return nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 
 	app := fiber.New()
 	app.Use(func(c *fiber.Ctx) error {
@@ -628,7 +629,7 @@ func TestListExpenseCategoriesRejectsInvalidStatus(t *testing.T) {
 			return nil, nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 	app := fiber.New()
 	app.Get("/expenses/categories", handler.ListCategories)
 
@@ -656,7 +657,7 @@ func TestSyncExpenseInventoryRejectsArchivedProduct(t *testing.T) {
 			product.IsActive = false
 			return product, nil
 		},
-	})
+	}, nil)
 
 	err := handler.syncExpenseInventory(context.Background(), nil, expenseID, uuid.New(), &models.Expense{
 		ID:               expenseID,
@@ -706,7 +707,7 @@ func TestUpdateExpenseAllowsUnchangedArchivedExpenseCategory(t *testing.T) {
 			return expense, nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 
 	app := fiber.New()
 	app.Use(func(c *fiber.Ctx) error {
@@ -763,7 +764,7 @@ func TestUpdateExpenseRejectsChangedArchivedExpenseCategory(t *testing.T) {
 			return nil, nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 
 	app := fiber.New()
 	app.Use(func(c *fiber.Ctx) error {
@@ -796,7 +797,7 @@ func TestUpdateExpenseCategoryRejectsArchivedCategoryWithoutRestore(t *testing.T
 			return nil, nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 
 	app := fiber.New()
 	app.Patch("/expenses/categories/:id", func(c *fiber.Ctx) error {
@@ -825,7 +826,7 @@ func TestUpdateExpenseCategoryRequiresExpectedUpdatedAt(t *testing.T) {
 			return nil, nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 
 	app := fiber.New()
 	app.Patch("/expenses/categories/:id", handler.UpdateCategory)
@@ -853,7 +854,7 @@ func TestDeleteExpenseCategoryRejectsAlreadyArchivedCategory(t *testing.T) {
 			return nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 
 	app := fiber.New()
 	app.Delete("/expenses/categories/:id", func(c *fiber.Ctx) error {
@@ -880,7 +881,7 @@ func TestDeleteExpenseCategoryRequiresExpectedUpdatedAt(t *testing.T) {
 			return nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 
 	app := fiber.New()
 	app.Delete("/expenses/categories/:id", handler.DeleteCategory)
@@ -906,7 +907,7 @@ func TestPermanentDeleteExpenseCategoryRejectsActiveCategory(t *testing.T) {
 			return nil
 		},
 	}
-	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil)
+	handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, nil)
 
 	app := fiber.New()
 	app.Delete("/expenses/categories/:id/permanent", handler.PermanentDeleteCategory)
@@ -945,4 +946,136 @@ func performExpenseJSONRequest(t *testing.T, app *fiber.App, method, path, body 
 func decimalPtr(value string) *decimal.Decimal {
 	parsed := decimal.RequireFromString(value)
 	return &parsed
+}
+
+// createExpenseFakeStore returns a real created expense so the create flow
+// can proceed to the stock adjustment.
+type createExpenseFakeStore struct {
+	fakeExpenseStore
+	productID uuid.UUID
+	quantity  string
+}
+
+func (f *createExpenseFakeStore) BeginTx(context.Context) (pgx.Tx, error) {
+	return &fakeExpenseTx{}, nil
+}
+
+func (f *createExpenseFakeStore) CreateWithTx(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error) {
+	qty := decimal.RequireFromString(f.quantity)
+	return &models.Expense{
+		ID:               uuid.New(),
+		ProductID:        &f.productID,
+		Quantity:         &qty,
+		AppliesInventory: true,
+	}, nil
+}
+
+func TestCreateExpenseWithInventoryPurchaseRequiresInventoryPermission(t *testing.T) {
+	categoryID := uuid.New()
+	productID := uuid.New()
+	denied := false
+	checker := middleware.PermissionChecker(func(_ *fiber.Ctx, _ uuid.UUID, permission string) (bool, error) {
+		return permission == "manage_inventory_page" && !denied, nil
+	})
+	// The default fake returns nil from CreateWithTx; the create flow
+	// dereferences the created expense for the stock adjustment, so provide
+	// a functional override.
+	purchaseStore := &createExpenseFakeStore{
+		fakeExpenseStore: fakeExpenseStore{
+			getCategoryByIDFunc: func(context.Context, uuid.UUID) (*models.ExpenseCategory, error) {
+				systemKey := inventoryPurchaseCategorySystemKey
+				return &models.ExpenseCategory{ID: categoryID, Name: "Inventory Purchase", SystemKey: &systemKey, IsActive: true}, nil
+			},
+		},
+		productID: productID,
+		quantity:  "2",
+	}
+
+	productUpdatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+
+	newApp := func(allowed bool) *fiber.App {
+		denied = !allowed
+		handler := NewExpenseHandler(purchaseStore, &fakeInventoryAdjuster{}, &fakeExpenseProductStore{
+			getByIDFunc: func(context.Context, uuid.UUID) (*models.Product, error) {
+				product := testProduct()
+				product.ID = productID
+				product.UpdatedAt = productUpdatedAt
+				return product, nil
+			},
+		}, checker)
+		app := fiber.New()
+		app.Use(func(c *fiber.Ctx) error {
+			c.Locals("user_id", uuid.New())
+			return c.Next()
+		})
+		app.Post("/expenses", handler.Create)
+		return app
+	}
+
+	body := `{"category_id":"` + categoryID.String() + `","product_id":"` + productID.String() + `","quantity":"2","applies_inventory":true,"amount":"10.00","description":"Restock","expense_date":"2026-05-14","expected_product_updated_at":"` + productUpdatedAt.Format(time.RFC3339Nano) + `"}`
+
+	resp := performExpenseJSONRequest(t, newApp(false), http.MethodPost, "/expenses", body)
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected inventory-purchase expense without inventory permission to be 403, got %d", resp.StatusCode)
+	}
+
+	resp = performExpenseJSONRequest(t, newApp(true), http.MethodPost, "/expenses", body)
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected inventory-purchase expense with permission to be 201, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateInventoryLinkedExpenseRequiresInventoryPermission(t *testing.T) {
+	expenseID := uuid.New()
+	userID := uuid.New()
+	updatedAt := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	inventoryLinked := &models.Expense{
+		ID:               expenseID,
+		Amount:           decimal.RequireFromString("10"),
+		Description:      "Restock",
+		ExpenseDate:      time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
+		CreatedBy:        userID,
+		UpdatedAt:        updatedAt,
+		AppliesInventory: true,
+	}
+	denied := false
+	checker := middleware.PermissionChecker(func(_ *fiber.Ctx, _ uuid.UUID, permission string) (bool, error) {
+		return permission == "manage_inventory_page" && !denied, nil
+	})
+
+	newApp := func(allowed bool) *fiber.App {
+		denied = !allowed
+		store := &fakeExpenseStore{
+			beginTxFunc: func(context.Context) (pgx.Tx, error) {
+				return &fakeExpenseTx{}, nil
+			},
+			getByIDWithTxFunc: func(context.Context, pgx.Tx, uuid.UUID) (*models.Expense, error) {
+				return inventoryLinked, nil
+			},
+			updateWithTxFunc: func(context.Context, pgx.Tx, *models.Expense) (*models.Expense, error) {
+				t.Fatal("expected update not to be called without inventory permission")
+				return nil, nil
+			},
+		}
+		handler := NewExpenseHandler(store, &fakeInventoryAdjuster{}, nil, checker)
+		app := fiber.New()
+		app.Use(func(c *fiber.Ctx) error {
+			c.Locals("user_id", userID)
+			return c.Next()
+		})
+		app.Patch("/expenses/:id", handler.Update)
+		return app
+	}
+
+	// Updating the description of an inventory-linked expense still syncs
+	// inventory state, so it requires the inventory privilege.
+	req := httptest.NewRequest(http.MethodPatch, "/expenses/"+expenseID.String(), strings.NewReader(`{"description":"New description","expected_updated_at":"`+updatedAt.Format(time.RFC3339Nano)+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := newApp(false).Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected inventory-linked update without inventory permission to be 403, got %d", resp.StatusCode)
+	}
 }

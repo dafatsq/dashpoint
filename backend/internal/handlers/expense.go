@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 )
 
@@ -43,17 +44,19 @@ type expenseProductStore interface {
 
 // ExpenseHandler handles expense-related HTTP requests.
 type ExpenseHandler struct {
-	repo          expenseStore
-	inventoryRepo expenseInventoryStore
-	productRepo   expenseProductStore
+	repo              expenseStore
+	inventoryRepo     expenseInventoryStore
+	productRepo       expenseProductStore
+	permissionChecker middleware.PermissionChecker
 }
 
 // NewExpenseHandler creates a new expense handler.
-func NewExpenseHandler(repo expenseStore, inventoryRepo expenseInventoryStore, productRepo expenseProductStore) *ExpenseHandler {
+func NewExpenseHandler(repo expenseStore, inventoryRepo expenseInventoryStore, productRepo expenseProductStore, permissionChecker middleware.PermissionChecker) *ExpenseHandler {
 	return &ExpenseHandler{
-		repo:          repo,
-		inventoryRepo: inventoryRepo,
-		productRepo:   productRepo,
+		permissionChecker: permissionChecker,
+		repo:              repo,
+		inventoryRepo:     inventoryRepo,
+		productRepo:       productRepo,
 	}
 }
 

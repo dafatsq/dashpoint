@@ -94,3 +94,13 @@ jobs:
             echo 'Potential secret material or real IP-derived origin found in the repository.' >&2
             exit 1
           fi
+          # Hardcoded weak JWT secrets or database passwords in committed env
+          # files (two-stage grep: match assignments, then exclude known
+          # placeholder values so CI fixtures and examples keep passing).
+          if grep -rInE '^(JWT_SECRET|POSTGRES_PASSWORD)=' \
+              --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.next \
+              --exclude-dir=dist --exclude-dir=build --exclude-dir=fixtures . 2>/dev/null | \
+              grep -vE '(CHANGE_ME|replace-with|ci-only|example|test|<unique-)' ; then
+            echo 'Hardcoded JWT_SECRET or POSTGRES_PASSWORD found in committed env file. Generate unique secrets per environment (openssl rand -base64 48).' >&2
+            exit 1
+          fi

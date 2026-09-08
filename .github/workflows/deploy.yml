@@ -217,8 +217,7 @@ jobs:
           # Building Next.js on a small VPS gets OOM-killed; build here
           # (7 GB runner RAM) and stream the images to the VPS instead.
           # The tag is the source commit, so the VPS always knows exactly
-          # what is running. Demo credentials are a constant in the demo
-          # branch's frontend code — no build args needed.
+          # what is running.
           docker build --build-arg NEXT_PUBLIC_API_URL=/api/v1 \
             -t "dashpoint-frontend:$SOURCE_SHA" frontend
           docker build \

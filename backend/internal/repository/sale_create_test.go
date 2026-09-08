@@ -170,3 +170,17 @@ func TestValidateSaleItemDiscountRejectsOutOfBoundsValues(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestValidateDiscountAgainstSubtotal(t *testing.T) {
+	subtotal := decimal.NewFromInt(100)
+
+	if err := validateDiscountAgainstSubtotal(subtotal, decimal.NewFromInt(101)); err == nil {
+		t.Fatalf("discount above subtotal must be rejected")
+	}
+	if err := validateDiscountAgainstSubtotal(subtotal, subtotal); err != nil {
+		t.Fatalf("discount equal to subtotal is an explicit full comp and must pass: %v", err)
+	}
+	if err := validateDiscountAgainstSubtotal(subtotal, decimal.NewFromInt(50)); err != nil {
+		t.Fatalf("normal discount must pass: %v", err)
+	}
+}

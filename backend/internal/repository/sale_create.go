@@ -38,6 +38,9 @@ func (r *SaleRepository) Create(ctx context.Context, req *CreateSaleRequest) (*m
 	}
 
 	discountAmount := calculateSaleDiscount(subtotal, itemDiscountAmount, req.DiscountType, req.DiscountValue)
+	if err := validateDiscountAgainstSubtotal(subtotal, discountAmount); err != nil {
+		return nil, err
+	}
 	totalAmount := subtotal.Add(taxAmount).Sub(discountAmount)
 	if err := validateSaleFinancialIntegrity(totalAmount, req.Payments); err != nil {
 		return nil, err
@@ -220,6 +223,15 @@ func loadSaleProductForUpdate(ctx context.Context, tx pgx.Tx, productID uuid.UUI
 	// A product without an inventory row sells as untracked stock (qty 0).
 	product.Inventory = &models.InventoryItem{Quantity: qty}
 	return &product, nil
+}
+
+// validateDiscountAgainstSubtotal refuses discounts larger than the goods
+// value: they would flip the sale total negative.
+func validateDiscountAgainstSubtotal(subtotal, discount decimal.Decimal) error {
+	if discount.GreaterThan(subtotal) {
+		return fmt.Errorf("discount cannot exceed the sale subtotal")
+	}
+	return nil
 }
 
 func calculateSaleDiscount(subtotal, itemDiscountAmount decimal.Decimal, discountType *string, discountValue *decimal.Decimal) decimal.Decimal {
