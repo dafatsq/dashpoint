@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -189,6 +190,10 @@ func validateUserEmail(email *string, required bool) string {
 	return ""
 }
 
+// userMinPasswordLen is the template-wide minimum; setup used to enforce it
+// while create/update/change paths accepted any non-empty value.
+const userMinPasswordLen = 8
+
 func validateUserPassword(password *string, required bool) string {
 	if password == nil {
 		if required {
@@ -203,6 +208,9 @@ func validateUserPassword(password *string, required bool) string {
 			return "Password is required"
 		}
 		return ""
+	}
+	if len(value) < userMinPasswordLen {
+		return fmt.Sprintf("Password must be at least %d characters long", userMinPasswordLen)
 	}
 	if len(value) > userMaxPasswordBytes {
 		return "Password is too long"
