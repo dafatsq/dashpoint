@@ -16,6 +16,7 @@ import {
   getDashboardFieldChanges,
   isDashboardImageField,
 } from "./dashboard-helpers";
+import { isSafeActivityImageUrl } from "./activity-helpers";
 
 interface DashboardChangesListProps {
   logs: AuditLog[];
@@ -103,7 +104,7 @@ export function DashboardChangesList({ logs, isLoading, error, sort, onRetry }: 
                       </span>
                       {isDashboardImageField(key) ? (
                         <div className="flex items-center gap-1.5">
-                          {oldVal !== undefined ? (
+                          {oldVal !== undefined && isSafeActivityImageUrl(oldVal) ? (
                             <div className="flex flex-col items-center gap-0.5">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={String(oldVal)} alt="old" className="h-8 w-8 object-cover rounded border border-red-300 opacity-60" />
@@ -111,7 +112,7 @@ export function DashboardChangesList({ logs, isLoading, error, sort, onRetry }: 
                             </div>
                           ) : null}
                           {oldVal !== undefined && newVal !== undefined ? <span className="text-muted-foreground">→</span> : null}
-                          {newVal !== undefined ? (
+                          {newVal !== undefined && isSafeActivityImageUrl(newVal) ? (
                             <div className="flex flex-col items-center gap-0.5">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={String(newVal)} alt="new" className="h-8 w-8 object-cover rounded border border-green-300" />
