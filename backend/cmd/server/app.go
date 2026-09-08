@@ -75,10 +75,12 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 	roleHandler := handlers.NewRoleHandler(roleRepo)
 	roleHandler.SetEventsHandler(eventsHandler)
 
+	permissionChecker := newPermissionChecker(userRepo)
+
 	deps := &serverDependencies{
 		jwtManager:        jwtManager,
 		userRepo:          userRepo,
-		permissionChecker: newPermissionChecker(userRepo),
+		permissionChecker: permissionChecker,
 		healthHandler:     healthHandler,
 		authHandler:       authHandler,
 		setupHandler:      setupHandler,
@@ -91,7 +93,7 @@ func buildServerDependencies(cfg *config.Config, db *database.DB) (*serverDepend
 		saleHandler:       handlers.NewSaleHandler(saleRepo, shiftRepo),
 		reportHandler:     handlers.NewReportHandler(reportRepo),
 		auditHandler:      handlers.NewAuditHandler(auditRepo),
-		expenseHandler:    handlers.NewExpenseHandler(expenseRepo, inventoryRepo, productRepo),
+		expenseHandler:    handlers.NewExpenseHandler(expenseRepo, inventoryRepo, productRepo, permissionChecker),
 		uploadHandler:     handlers.NewUploadHandler(uploadDirectory),
 		cashDrawerHandler: handlers.NewCashDrawerHandler(cashDrawerRepo, shiftRepo),
 		uploadDir:         uploadDirectory,

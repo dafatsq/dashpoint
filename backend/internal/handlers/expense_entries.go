@@ -71,6 +71,9 @@ func (h *ExpenseHandler) Create(c *fiber.Ctx) error {
 	}
 
 	userID := middleware.GetUserID(c)
+	if !h.requireInventoryPermission(c, userID, req.AppliesInventory) {
+		return nil
+	}
 	expense, err := h.createExpenseModel(c.Context(), req, userID)
 	if err != nil {
 		return expenseMessage(c, fiber.StatusBadRequest, err.Error())
@@ -230,6 +233,11 @@ func (h *ExpenseHandler) Update(c *fiber.Ctx) error {
 		}
 	}
 
+	// Gate before any inventory sync: inventory-linked updates need the
+	// inventory privilege whether stock is added, reverted, or adjusted.
+	if (finalAppliesInventory || existing.AppliesInventory) && !h.requireInventoryPermission(c, userID, true) {
+		return nil
+	}
 	if err := h.syncExpenseInventory(c.Context(), tx, id, userID, existing, finalAppliesInventory, finalProductID, finalQuantity); err != nil {
 		if expenseErr, ok := asSanitizedExpenseError(err); ok {
 			return expenseMessage(c, fiber.StatusBadRequest, expenseErr)
@@ -310,6 +318,10 @@ func (h *ExpenseHandler) Delete(c *fiber.Ctx) error {
 		return staleErr
 	}
 
+	// Deleting an inventory-linked expense reverts stock: inventory privilege.
+	if expense.AppliesInventory && expense.ProductID != nil && expense.Quantity != nil && !h.requireInventoryPermission(c, userID, true) {
+		return nil
+	}
 	if expense.AppliesInventory && expense.ProductID != nil && expense.Quantity != nil {
 		if err := h.ensureExpenseInventoryProductActive(c.Context(), expense.ProductID); err != nil {
 			return expenseMessage(c, fiber.StatusConflict, err.Error())

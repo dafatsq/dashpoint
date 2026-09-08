@@ -4,15 +4,37 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"dashpoint/backend/internal/middleware"
 	"dashpoint/backend/internal/models"
 )
 
 func expenseInventoryReason(action string, expenseID uuid.UUID) *string {
 	return stringPtr(fmt.Sprintf("Expense inventory %s %s", action, expenseID.String()))
+}
+
+// requireInventoryPermission gates inventory-mutating expense flows: an
+// expense category can adjust stock, which is an inventory privilege, not an
+// expenses privilege.
+// Returns false when the response has been written and the caller must stop.
+func (h *ExpenseHandler) requireInventoryPermission(c *fiber.Ctx, userID uuid.UUID, appliesInventory bool) bool {
+	if !appliesInventory || h.permissionChecker == nil {
+		return true // non-inventory expense, or test handlers without a wired checker
+	}
+	ok, err := h.permissionChecker(c, userID, "manage_inventory_page")
+	if err != nil {
+		expenseInternalError(c, err, "Failed to check permissions")
+		return false
+	}
+	if !ok {
+		middleware.JSONError(c, fiber.StatusForbidden, "FORBIDDEN", "You do not have the required permission: manage_inventory_page")
+		return false
+	}
+	return true
 }
 
 func (h *ExpenseHandler) isInventoryPurchaseCategory(ctx context.Context, categoryID *uuid.UUID) (bool, error) {
