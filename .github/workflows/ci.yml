@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - dashpoint-demo
   pull_request:
   workflow_call:
 
