@@ -1,6 +1,6 @@
 # Deploy a New DashPoint Client
 
-DashPoint is a reusable SaaS template. The application source, Docker Compose files, database schema, and Caddy configuration are shared. Each client is deployed from its own long-lived Git branch (`clients/<client-slug>`, cut from `main`) and is configured with a private environment file, isolated storage, unique credentials, a domain, and a client-specific desktop executable.
+DashPoint is a reusable SaaS template. The application source, Docker Compose files, database schema, and Caddy configuration are shared. Each client is deployed from its own long-lived Git branch (`clients/<client-slug>`, cut from `main`) and is configured with a private environment file, isolated storage, unique credentials, and a domain.
 
 This guide assumes one client instance on a new VPS. The same repository can also host multiple client env files on one VPS.
 
@@ -52,7 +52,7 @@ git push -u origin clients/acme
 Commit any client-specific code directly onto this branch; never merge it back into `main` without review. Keep the branch current with `main`:
 
 - **Bug fixes / patches** on `main` are cherry-picked onto `clients/acme` as soon as they are verified.
-- **New features** on `main` are merged into the branch only deliberately, after a compatibility review (API fields, permissions, migrations, desktop contract).
+- **New features** on `main` are merged into the branch only deliberately, after a compatibility review (API fields, permissions, migrations).
 
 Keep the distinction explicit in commit messages or PR labels (`fix` vs `feature`). The branch inherits `.github/workflows/deploy.yml` from `main`, which is what makes deployments dispatchable from it.
 
@@ -73,7 +73,7 @@ Set values similar to these:
 PROJECT_NAME=acme
 CADDY_SITE_ADDRESS=pos.acme.example.com
 CADDY_API_ONLY=false
-CORS_ORIGINS=https://pos.acme.example.com,wails://wails,http://wails.localhost
+CORS_ORIGINS=https://pos.acme.example.com
 
 DATA_DIR=/opt/dashpoint/clients/acme/data
 
@@ -89,14 +89,6 @@ PROXY_NETWORK=dashpoint_proxy
 ```
 
 Every client must have a different `PROJECT_NAME`, `DATA_DIR`, database credentials, and `JWT_SECRET`. The client env file is the main per-client configuration file and should remain on the VPS outside version control.
-
-If the client only uses the desktop application, `CADDY_API_ONLY=true` can be used with a dedicated API hostname. The hostname still needs DNS and HTTPS:
-
-```env
-CADDY_SITE_ADDRESS=api.acme.example.com
-CADDY_API_ONLY=true
-CORS_ORIGINS=wails://wails,http://wails.localhost
-```
 
 ## 4. Configure DNS and client storage
 
@@ -172,7 +164,7 @@ docker logs --tail=100 acme-backend-prod
 curl -fsS https://pos.acme.example.com/api/v1/health
 ```
 
-Then verify browser login, desktop login if applicable, refresh-token behavior, uploads, and one representative POS or inventory flow. Confirm PostgreSQL is not publicly exposed.
+Then verify browser login, refresh-token behavior, uploads, and one representative POS or inventory flow. Confirm PostgreSQL is not publicly exposed.
 
 ## 7. Configure GitHub Actions for this VPS
 
@@ -204,30 +196,7 @@ CI note: `main` never deploys to client stacks; a client is updated by dispatchi
 
 For a second client on the same VPS, cut its own `clients/<slug>` branch and add its own private env file; no workflow change is required. For a client on a separate VPS, use the manual deployment procedure unless you first extend `.github/workflows/deploy.yml` with a deployment matrix. Do not replace the existing `VPS_*` secrets, or future deployments will be redirected away from the existing client.
 
-Desktop-only changes do not deploy the VPS. Shared `frontend/`, `backend/`, migration, Docker, Caddy, or deployment changes are VPS-relevant.
-
-## 8. Build the client's desktop application
-
-On a private Windows build machine, check out the client's deployment branch and build with the client's public HTTPS API URL:
-
-```powershell
-git checkout clients/acme
-git pull
-.\desktop\scripts\build-windows.ps1 `
-  -ApiBaseUrl "https://pos.acme.example.com/api/v1"
-```
-
-The output is always:
-
-```text
-build\bin\DashPoint.exe
-```
-
-Record the branch commit the executable was built from alongside the build date — the desktop build is not tracked anywhere automatic. Transfer the executable to the client through a private distribution channel. Do not commit it to GitHub or publish it in a public release. The executable contains the shared frontend and public API URL only; it never contains database credentials, JWT secrets, SSH keys, or production `.env` files.
-
-Localhost builds require `-AllowLocalApi`.
-
-## 9. Updates and data safety
+## 8. Updates and data safety
 
 A client is always updated from its own branch. The update flow is:
 
@@ -238,7 +207,6 @@ feature      → compatibility review → merge into clients/<slug> → dispatch
 
 Never deploy a client from `main` directly. The VPS does not poll GitHub; deploys happen through the dispatched workflow or the manual command. The `.deploy-commit` file in the project folder records the last deployed source commit.
 
-The current desktop distribution is private and local: a frontend or backend update does not automatically replace an executable already distributed to a client. Rebuild from the client's branch and privately distribute a new executable when the desktop client needs the update.
 
 Rebuild one client without affecting other client stacks:
 
@@ -268,8 +236,7 @@ Never use `down --volumes` or delete `DATA_DIR` unless the client's database and
 - [ ] PostgreSQL is not publicly exposed.
 - [ ] Database and uploads backups exist.
 - [ ] GitHub Actions secrets are configured for the correct VPS, if automatic deployment is required.
-- [ ] A private desktop executable was built from the client's branch with the correct client API URL, if required.
-- [ ] A deployment record exists (branch, deployed commit, desktop build version).
+- [ ] A deployment record exists (branch, deployed commit).
 
 ## Security requirements (mandatory per client)
 

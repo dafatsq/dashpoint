@@ -59,9 +59,7 @@ data/
 # Frontend (Next.js/Node)
 node_modules/
 .next/
-frontend/dist/
 frontend/package.json.md5
-frontend/wailsjs/
 .turbo/
 .vercel/
 .npm

@@ -79,13 +79,9 @@ Open your favorite web browser and navigate to:
 
 You should now see the DashPoint frontend, successfully communicating with your local backend and database!
 
-## Desktop app
-
-To build the experimental Windows Wails client that uses the existing VPS backend and database, see [desktop/README.md](desktop/README.md).
-
 ## New client installation
 
-DashPoint is designed to be reused as a SaaS template. For a complete new-client installation—including VPS configuration, the private client environment file, DNS/Caddy, GitHub Actions deployment targets, and the client-specific desktop build—see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). For ongoing VPS operations, see [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md).
+DashPoint is designed to be reused as a SaaS template. For a complete new-client installation—including VPS configuration, the private client environment file, DNS/Caddy, and GitHub Actions deployment targets—see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). For ongoing VPS operations, see [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md).
 
 ---
 

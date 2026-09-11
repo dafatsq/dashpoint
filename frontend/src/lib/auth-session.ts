@@ -1,40 +1,30 @@
 import type { User } from "@/types";
 
 import { AccountManager } from "@/lib/account-manager";
-import { API_BASE_URL, IS_DESKTOP_BUILD } from "@/lib/config";
+import { API_BASE_URL } from "@/lib/config";
 import {
   clearSession,
-  getRememberMeKey,
   getSessionItem,
   removeSessionItem,
-  setSessionItem,
 } from "@/lib/session";
 
 import {
   AuthPayload,
-  hydrateStoredUser,
   normalizeUser,
   type ApiUserPayload,
 } from "./auth-user";
 
-// Web builds keep the raw JWT in module memory only: nothing writable by a
-// compromised script survives the page, and the httpOnly refresh cookie is
-// what actually persists a session across reloads. Desktop (Wails) builds
-// keep the legacy storage behavior until their cookie handling is verified.
+// The raw JWT lives in module memory only: nothing writable by a compromised
+// script survives the page, and the httpOnly refresh cookie is what actually
+// persists a session across reloads.
 let memoryAccessToken: string | null = null;
 let lastRefreshedUser: User | null = null;
 
 export function getAccessToken(): string | null {
-  if (IS_DESKTOP_BUILD) return getSessionItem("access_token");
   return memoryAccessToken ?? getSessionItem("access_token");
 }
 
 export function setAuthTokens(accessToken: string): void {
-  if (IS_DESKTOP_BUILD) {
-    setSessionItem("access_token", accessToken);
-    removeSessionItem("refresh_token");
-    return;
-  }
   memoryAccessToken = accessToken;
   // Scrub copies written by earlier versions of the app.
   removeSessionItem("access_token");
@@ -54,14 +44,11 @@ export function readRememberScope(): boolean {
 }
 
 export function writeRememberScope(value: boolean): void {
-  if (IS_DESKTOP_BUILD || typeof window === "undefined") return;
+  if (typeof window === "undefined") return;
   window.localStorage.setItem(REMEMBER_SCOPE_KEY, value ? "true" : "false");
 }
 
-export function persistUserSession(user: User): void {
-  if (!IS_DESKTOP_BUILD) return;
-  setSessionItem("user", JSON.stringify(user));
-}
+
 
 export function syncSavedAccount(user: User): void {
   if (!user.has_pin) return;
@@ -105,23 +92,11 @@ export function persistAuthUser(
     if (typeof window !== "undefined") {
       window.localStorage.setItem("dashpoint_device_trusted", "true");
     }
-    persistUserSession(user);
   } else {
     AccountManager.removeAccount(user.id);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("dashpoint_device_trusted");
     }
-    persistUserSession(user);
-  }
-
-  // Desktop only: getStorage() keys token persistence off this per-user
-  // preference, so keep it in sync or Save Login stops controlling whether
-  // tokens survive an app restart.
-  if (IS_DESKTOP_BUILD && typeof window !== "undefined") {
-    window.localStorage.setItem(
-      getRememberMeKey(user.id),
-      shouldSaveAccount ? "true" : "false",
-    );
   }
 
   return user;
@@ -145,24 +120,6 @@ export function clearAuthSession(): void {
   clearSession();
   memoryAccessToken = null;
   lastRefreshedUser = null;
-}
-
-export function loadStoredUser(): User | null {
-  const storedUser = getSessionItem("user");
-  if (!storedUser) return null;
-
-  const hydratedUser = normalizeStoredUser(storedUser);
-  if (!hydratedUser) {
-    removeSessionItem("user");
-    return null;
-  }
-
-  persistUserSession(hydratedUser);
-  return hydratedUser;
-}
-
-function normalizeStoredUser(storedUser: string): User | null {
-  return hydrateStoredUser(storedUser);
 }
 
 let refreshPromise: Promise<boolean> | null = null;

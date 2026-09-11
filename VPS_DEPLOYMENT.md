@@ -14,7 +14,7 @@ A client stack is always built from its own branch — never from `main` directl
 `main` changes reach a client branch in two ways:
 
 - **Bug fixes / patches** are cherry-picked from `main` onto every client branch as soon as they are verified, so all clients stay on a secure baseline without inheriting new features.
-- **New features** are merged into a client branch only deliberately, after a compatibility review (API fields, permissions, migrations, desktop contract).
+- **New features** are merged into a client branch only deliberately, after a compatibility review (API fields, permissions, migrations).
 
 Keep the distinction explicit in commit messages or PR labels (`fix` vs `feature`) so it is obvious which commits are safe to cherry-pick.
 
@@ -44,7 +44,7 @@ Each client gets one private env file, one Compose project name, one deployment 
 
 Real client env files and production secrets stay on the VPS and are ignored by Git.
 
-For the complete new-client installation procedure, see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). This document describes the shared VPS architecture and operational rules; the client guide covers first-time provisioning, CI/CD targeting, and desktop distribution.
+For the complete new-client installation procedure, see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). This document describes the shared VPS architecture and operational rules; the client guide covers first-time provisioning and CI/CD targeting.
 
 ## One-Time VPS Setup
 
@@ -82,7 +82,7 @@ Set unique values for:
 
     PROJECT_NAME=acme
     CADDY_SITE_ADDRESS=acme.example.com
-    CORS_ORIGINS=https://acme.example.com,wails://wails,http://wails.localhost
+    CORS_ORIGINS=https://acme.example.com
     DATA_DIR=/opt/dashpoint/clients/acme/data
     POSTGRES_USER=acme_db_user
     POSTGRES_PASSWORD=<long-random-password>
@@ -90,16 +90,6 @@ Set unique values for:
     JWT_SECRET=<at-least-32-random-characters>
     NEXT_PUBLIC_API_URL=/api/v1
     PROXY_NETWORK=dashpoint_proxy
-
-### Desktop API host
-
-For a desktop-only client deployment, use an API hostname instead of a website hostname:
-
-    CADDY_SITE_ADDRESS=api.example.com
-    CADDY_API_ONLY=true
-    CORS_ORIGINS=wails://wails,http://wails.localhost
-
-This generates HTTPS routes for `/api/v1/*` and `/uploads/*` while returning 404 for the site root. DNS for the API hostname must point to the VPS so Caddy can issue its certificate. The desktop executable still calls the same backend container and PostgreSQL database; it does not create a separate service. Keep HTTPS enabled because the Wails refresh cookie requires `Secure` and `SameSite=None`.
 
 DATA_DIR must be a unique absolute path for every client. It holds that client's PostgreSQL files, PostgreSQL TLS files, and backend uploads.
 
@@ -239,4 +229,4 @@ A fresh deployment should use the single project-folder layout shown above.
     [ ] Database and uploads backups exist
     [ ] Restore procedure is documented and tested
     [ ] CI/CD or the manual deployment command is selected
-    [ ] A deployment record exists (branch, deployed commit, desktop build version)
+    [ ] A deployment record exists (branch, deployed commit)

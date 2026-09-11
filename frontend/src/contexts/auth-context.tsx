@@ -21,14 +21,12 @@ import {
 } from "@/lib/auth-permissions";
 import {
   clearAuthSession,
-  loadStoredUser,
   persistAuthPayload,
   persistAuthUser,
   readRememberScope,
   refreshSessionUser,
   writeRememberScope,
 } from "@/lib/auth-session";
-import { IS_DESKTOP_BUILD } from "@/lib/config";
 import type { AuthPayload } from "@/lib/auth-user";
 import type { User } from "@/types";
 
@@ -181,19 +179,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     let cancelled = false;
 
-    if (IS_DESKTOP_BUILD) {
-      // Desktop (Wails) keeps the legacy storage-backed session.
-      const storedUser = loadStoredUser();
-      setUser(storedUser);
-      setIsLoading(false);
-      if (storedUser && !hasBootstrappedRefreshRef.current) {
-        hasBootstrappedRefreshRef.current = true;
-        requestUserRefresh();
-      }
-      return;
-    }
-
-    // Web: the access token only exists in memory, so every page load starts
+    // The access token only exists in memory, so every page load starts
     // empty and the httpOnly refresh cookie decides whether a session
     // survived the reload.
     void (async () => {

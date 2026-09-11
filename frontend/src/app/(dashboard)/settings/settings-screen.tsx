@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 
 import { reissueSessionCookie } from "@/lib/auth-session";
-import { IS_DESKTOP_BUILD } from "@/lib/config";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { readRememberScope, writeRememberScope } from "@/lib/auth-session";
@@ -157,15 +156,13 @@ export function SettingsScreen() {
     // Web builds store no tokens locally, so remember-me is enforced by the
     // refresh cookie — re-mint it unconditionally on save so the scope change
     // applies to THIS browser session instead of the next login.
-    if (!IS_DESKTOP_BUILD) {
-      try {
-        await reissueSessionCookie(effectiveRemember);
-      } catch {
-        showError(
-          "Preference Not Applied",
-          "Could not update your session scope. Log out and back in for it to take effect.",
-        );
-      }
+    try {
+      await reissueSessionCookie(effectiveRemember);
+    } catch {
+      showError(
+        "Preference Not Applied",
+        "Could not update your session scope. Log out and back in for it to take effect.",
+      );
     }
 
     setPreferences(workingPreferences);
