@@ -56,6 +56,9 @@ jobs:
           gunzip -c /tmp/demo_seed.sql.gz | docker exec -i "$PG" psql -U dashpoint_demo_user -d dashpoint_demo_prod -v ON_ERROR_STOP=1
           docker cp /tmp/demo_upload.jpg "$APP":/app/uploads/52e688b2-dd4d-4cfb-8bf0-e7d2546d0fad.jpg
           docker exec -u root "$APP" chown dashpoint:dashpoint /app/uploads/52e688b2-dd4d-4cfb-8bf0-e7d2546d0fad.jpg || true
+          docker restart "$APP"
+          sleep 8
+          docker logs "$APP" 2>&1 | tail -5
           rm -f /tmp/demo_seed.sql.gz /tmp/demo_upload.jpg
           echo IMPORT-DONE
           REMOTEOF
