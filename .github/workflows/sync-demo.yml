@@ -1,0 +1,142 @@
+name: Sync Demo From Main
+
+# Auto-forwards main into dashpoint-demo once main's CI is green. The push to
+# demo uses the DEMO_SYNC_TOKEN PAT (GITHUB_TOKEN pushes do not trigger the
+# CI -> deploy chain). After the push, the existing machinery takes over:
+# demo CI runs, then "Test And Deploy" ships it to the VPS if the changed
+# files are deploy-relevant.
+#
+# Invariant checks run BEFORE every push: the merge must preserve the demo
+# branch's deliberate divergence (demo login UI, demo account seeding, and
+# the dashpoint-demo CI trigger). A merge that silently takes main's side of
+# any of those fails this workflow loudly instead of shipping a broken demo.
+#
+# TEMPLATE NOTE: this workflow is the template maintainer's own demo-site
+# wiring — drop it (and the DEMO_SYNC_TOKEN secret) when forking.
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-sync
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: Merge main into dashpoint-demo
+    # Only auto-forward green, push-built main commits.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out demo branch with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: dashpoint-demo
+          fetch-depth: 0
+
+      - name: Merge main into dashpoint-demo
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Nothing to do if demo already contains main.
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "dashpoint-demo already contains main; nothing to merge."
+            exit 0
+          fi
+
+          if ! git merge origin/main --no-edit; then
+            echo "::error::Merge conflict merging main into dashpoint-demo." >&2
+            echo "::error::Resolve manually and push dashpoint-demo, then re-run this workflow:" >&2
+            echo "::error::  git fetch origin && git checkout dashpoint-demo && git merge origin/main" >&2
+            git status --short || true
+            exit 1
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Verify demo-branch invariants
+        if: steps.merge.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          fail() {
+            echo "::error::Demo invariant violated: $1" >&2
+            echo "::error::Resolve the merge on dashpoint-demo so the demo divergence is preserved, then push and re-run." >&2
+            exit 1
+          }
+
+          # 1. The demo branch must keep its own CI push trigger, or the
+          #    post-push CI -> deploy chain never fires (silent-stale demo).
+          grep -q -- '- dashpoint-demo' .github/workflows/ci.yml \
+            || fail ".github/workflows/ci.yml no longer runs CI on dashpoint-demo pushes"
+
+          # 2. Demo feature files must still exist.
+          test -f frontend/src/app/login/login-demo-access.tsx \
+            || fail "frontend/src/app/login/login-demo-access.tsx is missing"
+          test -f frontend/src/app/login/login-demo-credentials.ts \
+            || fail "frontend/src/app/login/login-demo-credentials.ts is missing"
+          test -f backend/internal/database/demo_accounts.go \
+            || fail "backend/internal/database/demo_accounts.go is missing"
+
+          # 3. The wiring that activates those files must survive the merge.
+          grep -q LoginDemoAccess frontend/src/app/login/login-screen.tsx \
+            || fail "login-screen.tsx no longer renders the demo access panel"
+          grep -q EnsureDemoAccounts backend/cmd/server/main.go \
+            || fail "main.go no longer seeds the demo accounts"
+
+          # 4. The demo branch's divergence from main must stay exactly the
+          #    known set — a new or vanished divergent file means the merge
+          #    (or a future main commit) changed the shape of the demo branch.
+          expected=".github/workflows/ci.yml
+          backend/cmd/server/main.go
+          backend/internal/database/demo_accounts.go
+          frontend/src/app/login/login-demo-access.tsx
+          frontend/src/app/login/login-demo-credentials.ts
+          frontend/src/app/login/login-screen.test.ts
+          frontend/src/app/login/login-screen.tsx"
+          if ! diff <(printf '%s\n' "$expected" | sed 's/^[[:space:]]*//' | sort -u) \
+                    <(git diff --name-only origin/main HEAD | sort); then
+            fail "dashpoint-demo diverges from main by a different file set than expected (see diff above)"
+          fi
+
+          echo "All demo invariants hold."
+
+      - name: Push dashpoint-demo
+        if: steps.merge.outputs.skip != 'true'
+        env:
+          DEMO_SYNC_SSH_KEY: ${{ secrets.DEMO_SYNC_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DEMO_SYNC_SSH_KEY" ]]; then
+            echo "::error::DEMO_SYNC_SSH_KEY secret is not set — the sync bot cannot push." >&2
+            exit 1
+          fi
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEMO_SYNC_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          # github.com host key from GitHub's published key list (verified
+          # fingerprints at https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints).
+          grep -q '^github.com ' ~/.ssh/known_hosts 2>/dev/null || \
+            ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          # Deploy-key push so the event fires the demo CI -> deploy chain.
+          # GITHUB_TOKEN pushes never trigger other workflows.
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          git push origin HEAD:dashpoint-demo
+          echo "Pushed dashpoint-demo. Demo CI and (if deploy-relevant) the VPS deploy will follow."
