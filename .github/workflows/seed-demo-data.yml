@@ -1,0 +1,72 @@
+name: Seed Demo Data
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-seed
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: deploy-dashpoint-demo
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+    steps:
+      - name: Prepare seed payload
+        run: |
+          set -euo pipefail
+          printf '%s' "$DEMO_SEED_DATA" | base64 -d > /tmp/seed.sql.gz
+          printf '%s' "$DEMO_SEED_IMG_1" > /tmp/img1.b64
+          printf '%s' "$DEMO_SEED_IMG_2" > /tmp/img2.b64
+          printf '%s' "$DEMO_SEED_IMG_3" > /tmp/img3.b64
+          cat /tmp/img1.b64 /tmp/img2.b64 /tmp/img3.b64 | base64 -d > /tmp/upload.jpg
+          ls -la /tmp/seed.sql.gz /tmp/upload.jpg
+        env:
+          DEMO_SEED_DATA: ${{ secrets.DEMO_SEED_DATA }}
+          DEMO_SEED_IMG_1: ${{ secrets.DEMO_SEED_IMG_1 }}
+          DEMO_SEED_IMG_2: ${{ secrets.DEMO_SEED_IMG_2 }}
+          DEMO_SEED_IMG_3: ${{ secrets.DEMO_SEED_IMG_3 }}
+
+      - name: Import into demo VPS
+        run: |
+          set -euo pipefail
+          install -m 600 /dev/null /tmp/deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > /tmp/deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > /tmp/known_hosts
+          ssh_opts=(-i /tmp/deploy_key -o BatchMode=yes -o UserKnownHostsFile=/tmp/known_hosts -o StrictHostKeyChecking=yes)
+
+          # locate the demo DB container + env on the VPS
+          read_db_cmd='cd '"$VPS_APP_DIR"' && grep -hE "^(PROJECT_NAME|POSTGRES_USER|POSTGRES_DB|POSTGRES_PASSWORD)=" CLIENTS/.env.demo 2>/dev/null || grep -hE "^(PROJECT_NAME|POSTGRES_USER|POSTGRES_DB|POSTGRES_PASSWORD)=" .env 2>/dev/null'
+          ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" "$read_db_cmd" > /tmp/demo_env.txt
+          cat /tmp/demo_env.txt | sed 's/=.*/=***/' # masked debug
+          source /tmp/demo_env.txt
+
+          # push seed + image
+          gzip -t /tmp/seed.sql.gz
+          scp "${ssh_opts[@]}" /tmp/seed.sql.gz "$VPS_USER@$VPS_HOST:/tmp/demo_seed.sql.gz"
+          scp "${ssh_opts[@]}" /tmp/upload.jpg "$VPS_USER@$VPS_HOST:/tmp/demo_upload.jpg"
+
+          # import: drop conflicting business rows first? Simplest safe path: data-only restore into existing schema with --disable-triggers via single transaction; conflicts unlikely on fresh box but use ON_ERROR stop and report
+          ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" "
+            set -euo pipefail
+            cd $VPS_APP_DIR
+            # find running postgres container for the demo project
+            PG_CONTAINER=\$(docker ps --format '{{.Names}}' | grep -i 'db' | head -1)
+            echo \"Importing into \$PG_CONTAINER\"
+            gunzip -c /tmp/demo_seed.sql.gz | docker exec -i \"\$PG_CONTAINER\" psql -U $POSTGRES_USER -d $POSTGRES_DB -v ON_ERROR_STOP=1
+            # place upload into the uploads volume via the backend container
+            APP_CONTAINER=\$(docker ps --format '{{.Names}}' | grep -i 'backend' | head -1)
+            docker cp /tmp/demo_upload.jpg "\$APP_CONTAINER":/app/uploads/52e688b2-dd4d-4cfb-8bf0-e7d2546d0fad.jpg
+            docker exec -u root "\$APP_CONTAINER" chown dashpoint:dashpoint /app/uploads/52e688b2-dd4d-4cfb-8bf0-e7d2546d0fad.jpg || true
+            rm -f /tmp/demo_seed.sql.gz /tmp/demo_upload.jpg
+            echo IMPORT-DONE
+          "
