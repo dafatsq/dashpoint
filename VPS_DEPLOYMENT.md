@@ -202,7 +202,7 @@ Database imports, seed data, and destructive resets require a separate explicit 
 
 The workflow transfers a Git archive over SSH instead of requiring Git credentials on the VPS. It does not overwrite ignored client env files, database directories, uploads, or backups. A dispatch with an empty `client_env` deploys every active top-level `CLIENTS/.env.*` file from the branch the workflow was dispatched on.
 
-CI note: automatic deploys fire when CI succeeds for a push to `dashpoint-demo` (the demo deployment branch) or to a `clients/<slug>` deployment branch. A push to `clients/<slug>` deploys **only that client** — the branch maps to its own env file (`.env.<slug>`), so co-located clients are never touched by another client's deploy. Pushes to `main` never deploy to the VPS — a client can also be updated by dispatching the workflow from its own branch with an explicit `client_env` filter. Quick Demo Access on the login screen exists only on the `dashpoint-demo` branch; the core product has none.
+CI note: automatic deploys fire when CI succeeds for a push to a `clients/<slug>` deployment branch. A push to `clients/<slug>` deploys **only that client** — the branch maps to its own env file (`.env.<slug>`), so co-located clients are never touched by another client's deploy. Pushes to `main` never deploy to the VPS — a client can also be updated by dispatching the workflow from its own branch with an explicit `client_env` filter.
 
 CI builds both Docker images on the Actions runner (a small VPS cannot build Next.js without being OOM-killed) and streams them to the VPS with `docker save | ssh docker load`, tagged with the source commit. The deploy then sets `DEPLOY_TAG=<commit>` and `deploy-vps.sh` runs plain `up -d` against the loaded images; no container build happens on the VPS. A manual deploy without `DEPLOY_TAG` still falls back to building locally, but that requires a VPS with enough memory (2 GB plus swap). Old images accumulate under their commit tags — run `docker image prune -f` occasionally.
 
@@ -222,7 +222,7 @@ Client env files, JWT secrets, database passwords, uploads, and Caddy certificat
 
 The deployment script validates the Compose configuration, rebuilds the selected client stack, reloads Caddy, and then checks `https://<client-domain>/api/v1/health` through the local Caddy listener. A deployment fails if the backend is crash-looping or the public route cannot reach a healthy database-backed backend.
 
-For the existing demo during its migration, use `VPS_APP_DIR=/opt/dashpoint-demo` and `VPS_CADDY_FILE=/opt/caddy/Caddyfile`. A fresh deployment should use the single project-folder layout shown above.
+A fresh deployment should use the single project-folder layout shown above.
 
 ## Go-Live Checklist
 

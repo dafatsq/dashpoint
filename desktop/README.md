@@ -50,7 +50,7 @@ Local API access requires an explicit development flag:
   -AllowLocalApi
 ```
 
-Demo access is not part of the core product. It exists only on the `dashpoint-demo` deployment branch; build demo executables from that branch. Production API URLs must use HTTPS. The executable contains only the public API URL and shared frontend assets. It never contains database credentials, JWT secrets, SSH keys, VPS secrets, or production `.env` files.
+Production API URLs must use HTTPS. The executable contains only the public API URL and shared frontend assets. It never contains database credentials, JWT secrets, SSH keys, VPS secrets, or production `.env` files.
 
 ## Mac development
 
