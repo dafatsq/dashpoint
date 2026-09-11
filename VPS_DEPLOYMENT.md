@@ -14,7 +14,7 @@ A client stack is always built from its own branch — never from `main` directl
 `main` changes reach a client branch in two ways:
 
 - **Bug fixes / patches** are cherry-picked from `main` onto every client branch as soon as they are verified, so all clients stay on a secure baseline without inheriting new features.
-- **New features** are merged into a client branch only deliberately, after a compatibility review (API fields, permissions, migrations, desktop contract).
+- **New features** are merged into a client branch only deliberately, after a compatibility review (API fields, permissions, migrations).
 
 Keep the distinction explicit in commit messages or PR labels (`fix` vs `feature`) so it is obvious which commits are safe to cherry-pick.
 
@@ -44,7 +44,7 @@ Each client gets one private env file, one Compose project name, one deployment 
 
 Real client env files and production secrets stay on the VPS and are ignored by Git.
 
-For the complete new-client installation procedure, see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). This document describes the shared VPS architecture and operational rules; the client guide covers first-time provisioning, CI/CD targeting, and desktop distribution.
+For the complete new-client installation procedure, see [CLIENTS/DEPLOY_NEW_CLIENT.md](CLIENTS/DEPLOY_NEW_CLIENT.md). This document describes the shared VPS architecture and operational rules; the client guide covers first-time provisioning and CI/CD targeting.
 
 ## One-Time VPS Setup
 
@@ -82,7 +82,7 @@ Set unique values for:
 
     PROJECT_NAME=acme
     CADDY_SITE_ADDRESS=acme.example.com
-    CORS_ORIGINS=https://acme.example.com,wails://wails,http://wails.localhost
+    CORS_ORIGINS=https://acme.example.com
     DATA_DIR=/opt/dashpoint/clients/acme/data
     POSTGRES_USER=acme_db_user
     POSTGRES_PASSWORD=<long-random-password>
@@ -90,16 +90,6 @@ Set unique values for:
     JWT_SECRET=<at-least-32-random-characters>
     NEXT_PUBLIC_API_URL=/api/v1
     PROXY_NETWORK=dashpoint_proxy
-
-### Desktop API host
-
-For a desktop-only client deployment, use an API hostname instead of a website hostname:
-
-    CADDY_SITE_ADDRESS=api.example.com
-    CADDY_API_ONLY=true
-    CORS_ORIGINS=wails://wails,http://wails.localhost
-
-This generates HTTPS routes for `/api/v1/*` and `/uploads/*` while returning 404 for the site root. DNS for the API hostname must point to the VPS so Caddy can issue its certificate. The desktop executable still calls the same backend container and PostgreSQL database; it does not create a separate service. Keep HTTPS enabled because the Wails refresh cookie requires `Secure` and `SameSite=None`.
 
 DATA_DIR must be a unique absolute path for every client. It holds that client's PostgreSQL files, PostgreSQL TLS files, and backend uploads.
 
@@ -202,7 +192,7 @@ Database imports, seed data, and destructive resets require a separate explicit 
 
 The workflow transfers a Git archive over SSH instead of requiring Git credentials on the VPS. It does not overwrite ignored client env files, database directories, uploads, or backups. A dispatch with an empty `client_env` deploys every active top-level `CLIENTS/.env.*` file from the branch the workflow was dispatched on.
 
-CI note: automatic deploys fire when CI succeeds for a push to `dashpoint-demo` (the demo deployment branch) or to a `clients/<slug>` deployment branch. A push to `clients/<slug>` deploys **only that client** — the branch maps to its own env file (`.env.<slug>`), so co-located clients are never touched by another client's deploy. Pushes to `main` never deploy to the VPS — a client can also be updated by dispatching the workflow from its own branch with an explicit `client_env` filter. Quick Demo Access on the login screen exists only on the `dashpoint-demo` branch; the core product has none.
+CI note: automatic deploys fire when CI succeeds for a push to a `clients/<slug>` deployment branch. A push to `clients/<slug>` deploys **only that client** — the branch maps to its own env file (`.env.<slug>`), so co-located clients are never touched by another client's deploy. Pushes to `main` never deploy to the VPS — a client can also be updated by dispatching the workflow from its own branch with an explicit `client_env` filter.
 
 CI builds both Docker images on the Actions runner (a small VPS cannot build Next.js without being OOM-killed) and streams them to the VPS with `docker save | ssh docker load`, tagged with the source commit. The deploy then sets `DEPLOY_TAG=<commit>` and `deploy-vps.sh` runs plain `up -d` against the loaded images; no container build happens on the VPS. A manual deploy without `DEPLOY_TAG` still falls back to building locally, but that requires a VPS with enough memory (2 GB plus swap). Old images accumulate under their commit tags — run `docker image prune -f` occasionally.
 
@@ -222,7 +212,7 @@ Client env files, JWT secrets, database passwords, uploads, and Caddy certificat
 
 The deployment script validates the Compose configuration, rebuilds the selected client stack, reloads Caddy, and then checks `https://<client-domain>/api/v1/health` through the local Caddy listener. A deployment fails if the backend is crash-looping or the public route cannot reach a healthy database-backed backend.
 
-For the existing demo during its migration, use `VPS_APP_DIR=/opt/dashpoint-demo` and `VPS_CADDY_FILE=/opt/caddy/Caddyfile`. A fresh deployment should use the single project-folder layout shown above.
+A fresh deployment should use the single project-folder layout shown above.
 
 ## Go-Live Checklist
 
@@ -239,4 +229,4 @@ For the existing demo during its migration, use `VPS_APP_DIR=/opt/dashpoint-demo
     [ ] Database and uploads backups exist
     [ ] Restore procedure is documented and tested
     [ ] CI/CD or the manual deployment command is selected
-    [ ] A deployment record exists (branch, deployed commit, desktop build version)
+    [ ] A deployment record exists (branch, deployed commit)

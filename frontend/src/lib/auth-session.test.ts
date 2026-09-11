@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AccountManager } from "@/lib/account-manager";
 
-import { getAccessToken, loadStoredUser, persistAuthPayload, refreshSessionTokens } from "./auth-session";
+import { getAccessToken, persistAuthPayload, refreshSessionTokens } from "./auth-session";
 
 describe("persistAuthPayload", () => {
   beforeEach(() => {

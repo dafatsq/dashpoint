@@ -46,9 +46,7 @@ const (
 	// page routes, not just /api/v1/auth. The cookie stays httpOnly,
 	// SameSite=Strict, and host-only, so widening the path does not expose
 	// it to JavaScript or other hosts.
-	refreshTokenPath   = "/"
-	wailsCustomOrigin  = "wails://wails"
-	wailsWindowsOrigin = "http://wails.localhost"
+	refreshTokenPath = "/"
 )
 
 var errEmptyAuthBody = errors.New("empty auth request body")
@@ -60,7 +58,7 @@ type LoginRequest struct {
 	// RememberMe opts the browser session into a persistent refresh cookie.
 	// When explicitly false the cookie is session-scoped and disappears when
 	// the browser closes. Absent keeps the historical persistent default so
-	// existing clients (desktop, older web bundles) are unaffected.
+	// existing clients (older web bundles) are unaffected.
 	RememberMe *bool `json:"remember_me"`
 }
 
@@ -144,11 +142,6 @@ func refreshTokenFromCookie(c *fiber.Ctx) string {
 }
 
 func refreshCookieSameSite(c *fiber.Ctx) string {
-	origin := strings.TrimSpace(c.Get("Origin"))
-	if strings.EqualFold(origin, wailsCustomOrigin) || strings.EqualFold(origin, wailsWindowsOrigin) {
-		return fiber.CookieSameSiteNoneMode
-	}
-
 	return fiber.CookieSameSiteStrictMode
 }
 

@@ -121,7 +121,7 @@ Errors must be handled centrally and predictably.
 ## Universal Frontend Consistency Protocol
 
 **TARGET AUDIENCE:** Agentic AI Coding Assistants
-**PURPOSE:** To enforce strict, zero-deviation architectural and visual consistency across the entire frontend ecosystem (Web, Mobile, Desktop) within this repository.
+**PURPOSE:** To enforce strict, zero-deviation architectural and visual consistency across the entire frontend ecosystem within this repository.
 
 ### 1. Core Directives (The "Consumer" Rule)
 When generating, editing, or refactoring frontend code, you are a **CONSUMER** of the existing architecture, never an **INVENTOR**.
@@ -134,7 +134,6 @@ All platforms use a centralized token system. You are strictly forbidden from ha
 
 * **NO hardcoded Hex/RGB codes or arbitrary dimensions** (e.g., `#FF5733`, `w-[324px]`).
 * **Web (Tailwind):** Use predefined styling classes from `tailwind.config.ts`.
-* **Mobile/Desktop:** Use the global theme provider.
 * **Component Reuse:** Never instantiate raw HTML or native elements if a system abstraction exists in the `/ui` or `/components` directory. If a component lacks a feature, update the base component (via a backward-compatible prop) rather than building a custom variant on the page level.
 
 ### 3. Data Fetching & Mutations

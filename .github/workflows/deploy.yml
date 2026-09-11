@@ -19,14 +19,16 @@ permissions:
 concurrency:
   # Group per triggering branch so a push to one branch cannot supersede a
   # queued run for another (GitHub cancels an older *pending* run in the
-  # same group when a newer event arrives, which previously swallowed the
-  # demo deploy when main and dashpoint-demo were pushed together).
+  # same group when a newer event arrives, which previously swallowed a
+  # queued deploy when two deployment branches were pushed together).
   group: dashpoint-production-deploy-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   scope:
     name: Select deployment source
+    # TEMPLATE NOTE: the dashpoint-demo branch in this condition is the
+    # template maintainer's own demo wiring — drop it when forking.
     if: >-
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
@@ -78,6 +80,12 @@ jobs:
           # environment (deploy-<slug>) holding that VPS's VPS_* secrets.
           # Environments without their own secrets fall back to the
           # repository-level VPS_* secrets.
+          #
+          # TEMPLATE NOTE: the "dashpoint-demo" branch references below are
+          # the template maintainer's own demo-site wiring. When forking this
+          # repo as a client template, remove that branch from the scope
+          # condition (and its default environment) — client deployments
+          # only need the clients/* mapping.
           branch="${WORKFLOW_RUN_HEAD_BRANCH:-${GITHUB_REF_NAME}}"
           env_name="deploy-dashpoint-demo"
           case "$branch" in
